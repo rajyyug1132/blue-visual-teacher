@@ -1,4 +1,5 @@
 # orchestrator/planner.py
+import copy
 import json
 import os
 import re
@@ -10,20 +11,19 @@ from pydantic import ValidationError
 
 from orchestrator.cache import load_plan, save_plan
 from orchestrator.fallbacks import build_safe_fallback_lesson
+from orchestrator.mathcheck import MathCheckError, make_qualitative, verify_plan
 from orchestrator.prompts import FEW_SHOT_MESSAGES, SYSTEM_PROMPT
-from orchestrator.schema import LessonPlan
+from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, WORDS_MIN, LessonPlan
+from orchestrator.spoken import to_spoken
 
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")  # Or "llama3.2:3b" / "gemma4:e4b" / "qwen3:4b"
+MODEL_NAME = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")  # GPU gets the planner; TTS/MT run on CPU (DEVICE)
 THINKING_MODEL_PREFIXES = ("qwen3", "gemma")  # only these get think=False
-TARGET_WORDS = (100, 140)
-SAFE_WORDS = (70, 180)  # still lands inside 30-90 s of audio at ~2.3 words/s
 KEEP_ALIVE = -1  # must be a number: the string "-1" is rejected by the server ("missing unit in duration")
 
 # Pinned to localhost so a stray OLLAMA_HOST can never route planning off the machine.
 _client = ollama.Client(host="http://127.0.0.1:11434", timeout=120)
 
 LLM_ERRORS = (ollama.ResponseError, ConnectionError, httpx.HTTPError)
-REPAIR_MAX_WORDS = 30
 CLAUSE_BREAK = re.compile(r",\s+(?:where|which|while|so|and|but)\b|;\s+")
 
 
@@ -48,30 +48,71 @@ def _shorten_narration(text: str) -> str | None:
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     kept = []
     for sentence in sentences:
-        if len(" ".join(kept + [sentence]).split()) > REPAIR_MAX_WORDS:
+        if len(" ".join(kept + [sentence]).split()) > WORDS_MAX:
             break
         kept.append(sentence)
-    if kept:
+    if kept and len(" ".join(kept).split()) >= WORDS_MIN:
         return " ".join(kept)
-    # One long sentence (often cut off by the grammar's maxLength): keep the longest main clause that fits.
-    heads = [sentences[0][:m.start()] for m in CLAUSE_BREAK.finditer(sentences[0])]
-    heads = [h for h in heads if 8 <= len(h.split()) <= REPAIR_MAX_WORDS]
+    # Whole sentences don't fit (one long sentence, often cut off by the grammar's maxLength, or a short sentence
+    # followed by a long one): keep the longest prefix that ends at a clause break and fits.
+    full = text.strip()
+    heads = [full[:m.start()] for m in CLAUSE_BREAK.finditer(full)]
+    heads = [h for h in heads if WORDS_MIN <= len(h.split()) <= WORDS_MAX]
     return heads[-1].rstrip(" ,;:") + "." if heads else None
 
 
-def _parse_plan(content: str) -> tuple[LessonPlan, bool]:
-    """Validate the model output; if only narrations are too long, repair them. Returns (plan, repaired)."""
+def _parse_plan(content: str, last_attempt: bool) -> tuple[LessonPlan, bool, dict]:
+    """parse -> verify math (digits still present) -> to_spoken -> trim -> schema validate.
+
+    Returns (plan, repaired, math). Raises ValidationError, or MathCheckError unless this is the last attempt,
+    in which case an unverifiable worked example is swapped for a qualitative one.
+    """
     try:
-        return LessonPlan.model_validate_json(content), False
-    except ValidationError as exc:
-        try:
-            data = json.loads(content)
-            for scene in data["scenes"]:
-                if len(scene["narration"].split()) > 42:
-                    scene["narration"] = _shorten_narration(scene["narration"]) or scene["narration"]
-            return LessonPlan.model_validate(data), True
-        except (ValueError, KeyError, TypeError, ValidationError):
-            raise exc from None
+        data = json.loads(content)
+        scenes = data["scenes"]
+        assert isinstance(scenes, list) and all(isinstance(s, dict) for s in scenes)
+    except (ValueError, KeyError, TypeError, AssertionError):
+        return LessonPlan.model_validate_json(content), False, {}  # raises a ValidationError describing the shape
+
+    try:
+        math = verify_plan(data)
+    except MathCheckError as exc:
+        if not last_attempt:
+            exc.salvage = _salvage(data)  # used if the retry fails for any reason
+            raise
+        math = make_qualitative(data)
+    except (KeyError, TypeError, AttributeError):
+        math = {"status": "unchecked"}  # malformed scene; schema validation below reports it
+
+    plan, repaired = _spoken_and_validate(data)
+    return plan, repaired, math
+
+
+def _salvage(data: dict) -> tuple[LessonPlan, bool, dict] | None:
+    """This plan with its worked example made qualitative, if that makes it valid."""
+    data = copy.deepcopy(data)
+    math = make_qualitative(data)
+    try:
+        plan, repaired = _spoken_and_validate(data)
+    except ValidationError:
+        return None
+    return plan, repaired, math
+
+
+def _spoken_and_validate(data: dict) -> tuple[LessonPlan, bool]:
+    """Spell out digits/symbols, trim overlong narrations, then validate against the schema."""
+    repaired = False
+    for scene in data["scenes"]:
+        narration = scene.get("narration")
+        if not isinstance(narration, str):
+            continue
+        if NOT_SPOKEN.search(narration):
+            narration = to_spoken(narration)  # spelling out can add words, so trim after
+        if len(narration.split()) > WORDS_MAX:
+            narration = _shorten_narration(narration) or narration
+        repaired |= narration != scene["narration"]
+        scene["narration"] = narration
+    return LessonPlan.model_validate(data), repaired
 
 
 def _validation_feedback(exc: ValidationError) -> str:
@@ -82,8 +123,12 @@ def _validation_feedback(exc: ValidationError) -> str:
         if len(loc) >= 3 and loc[0] == "scenes" and loc[2] == "narration":
             lines.append(
                 f"Scene {loc[1] + 1} narration is invalid ({err['msg']}). Rewrite it as 1-2 complete sentences "
-                "of 18-28 words. Put formulas and variable definitions in visual.params.labels, not in narration."
+                "of 18-28 spoken words, with every number written in words. Put digits, formulas and variable "
+                "definitions in visual.params.labels, not in narration."
             )
+        elif not loc and "total" in err["msg"]:
+            lines.append(f"{err['msg']}. Lengthen or shorten scenes so all narrations add up to "
+                         f"{TOTAL_MIN}-{TOTAL_MAX} words.")
         else:
             lines.append(f"{'.'.join(map(str, loc)) or 'JSON'}: {err['msg']}")
     return "Validation failed:\n- " + "\n- ".join(lines)
@@ -103,8 +148,8 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True) -
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + FEW_SHOT_MESSAGES + [
         {"role": "user", "content": f"Concept: {concept.strip()}"}
     ]
-    best = None  # schema-valid plan whose word total missed the target but is still safe
     errors = []
+    salvage = None  # attempt 1 with a qualitative worked example, if only its math was untrustworthy
     for attempt in range(2):
         resp = None
         try:
@@ -115,8 +160,7 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True) -
                 keep_alive=KEEP_ALIVE,
                 options={"temperature": 0.0 if attempt == 0 else 0.2, "num_ctx": 4096, "num_predict": 850},
             )
-            plan, repaired = _parse_plan(resp.message.content or "")
-            words = total_words(plan)
+            plan, repaired, math = _parse_plan(resp.message.content or "", last_attempt=attempt == 1)
             telemetry = {
                 "attempt": attempt + 1,
                 "cache_hit": False,
@@ -124,21 +168,21 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True) -
                 "output_tokens": resp.eval_count or 0,
                 "load_sec": round((resp.load_duration or 0) / 1e9, 3),
                 "eval_sec": round((resp.eval_duration or 0) / 1e9, 3),
-                "total_words": words,
+                "total_words": total_words(plan),
                 "repaired": repaired,
+                "math": math,
                 "fallback_used": False,
             }
-            if TARGET_WORDS[0] <= words <= TARGET_WORDS[1]:
-                return _finish(concept, plan, telemetry, t0, use_cache)
-            if SAFE_WORDS[0] <= words <= SAFE_WORDS[1]:
-                best = (plan, telemetry)
-            problem = f"Total narration is {words} words; it must be {TARGET_WORDS[0]}-{TARGET_WORDS[1]} words."
+            return _finish(concept, plan, telemetry, t0, use_cache)
         except LLM_ERRORS as exc:
             # Daemon down or HTTP error: there is no model output to correct, so just retry.
             errors.append(f"{type(exc).__name__}: {exc}")
             continue
         except ValidationError as exc:
             problem = _validation_feedback(exc)
+        except MathCheckError as exc:
+            problem = f"Math check failed: {exc}"
+            salvage = getattr(exc, "salvage", None) or salvage
         errors.append(problem)
         messages.append({"role": "assistant", "content": resp.message.content or "{}"})
         messages.append({
@@ -146,8 +190,11 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True) -
             "content": f"{problem}\nReturn the full corrected JSON with 4-6 scenes and 18-30 words per narration.",
         })
 
-    if best is not None:
-        return _finish(concept, best[0], best[1], t0, use_cache)
+    if salvage is not None:
+        plan, repaired, math = salvage
+        return _finish(concept, plan, {"attempt": 2, "cache_hit": False, "total_words": total_words(plan),
+                                       "repaired": repaired, "math": math, "salvaged": True,
+                                       "fallback_used": False, "errors": errors}, t0, use_cache)
 
     # Deterministic safe template fallback if both LLM attempts fail. Never cached, so a later run can retry the LLM.
     plan = build_safe_fallback_lesson(concept)

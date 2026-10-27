@@ -20,6 +20,7 @@ import wave
 from pathlib import Path
 
 from orchestrator.cache import topic_slug
+from orchestrator.pipeline import duration_gate
 from orchestrator.schema import LessonPlan
 
 ROOT = Path(__file__).resolve().parent
@@ -113,7 +114,8 @@ def run(topic: str | None, lang: str = "en") -> Path:
     timing_manifest = tts.synthesize_all_scenes(plan.scenes, lang, str(wav_path))
     timings["tts"] = time.perf_counter() - t
 
-    total_sec = timing_manifest[-1]["end_sec"]
+    total_sec = duration_gate(timing_manifest)  # raises before rendering if the real audio is outside 30-90 s
+    print(f"  total_sec: {total_sec} (duration gate OK)")
     manifest = {
         "title": plan.title, "lang": lang, "total_sec": total_sec,
         "audio": wav_path.name, "sample_rate": SAMPLE_RATE, "scenes": timing_manifest,
@@ -124,8 +126,6 @@ def run(topic: str | None, lang: str = "en") -> Path:
     mp4 = export(PLAYER_HTML, timing_manifest, plan.title, wav_path, out_dir / "lesson.mp4")
     timings["export"] = time.perf_counter() - t
 
-    in_window = "OK" if 30.0 <= total_sec <= 90.0 else "OUT OF 30-90s WINDOW"
-    print(f"  total_sec: {total_sec} ({in_window})")
     print("  stage sec: " + ", ".join(f"{k}={v:.2f}" for k, v in timings.items()))
     print(f"  artifacts: {out_dir}" + (f"\n  mp4:       {mp4}" if mp4 else ""))
     return out_dir
