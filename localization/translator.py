@@ -73,6 +73,10 @@ def ensure_word_budget(text: str, lang: str, min_words: int = 8, max_words: int 
             prefix = "ಇಲ್ಲಿ ಗಮನಿಸಿ, ಸರಳವಾಗಿ ಹೇಳುವುದಾದರೆ "
         elif lang in ("hi", "hin_Deva"):
             prefix = "ध्यान दें कि, सरल शब्दों में "
+        elif lang in ("ta", "tam_Taml"):
+            prefix = "இங்கே கவனியுங்கள், எளிய முறையில் சொன்னால் "
+        elif lang in ("te", "tel_Telu"):
+            prefix = "ఇక్కడ గమనించండి, సరళంగా చెప్పాలంటే "
         else:
             prefix = "Notice that, in simple terms "
         expanded = prefix + text.strip()
