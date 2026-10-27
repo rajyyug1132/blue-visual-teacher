@@ -1,5 +1,6 @@
 // server.js — Zero-dependency local development server for Blue Visual Teacher
-// Serves static assets, routes root / to player.html, and enables local offline browser usage.
+// Serves the static app, the bundled fonts and the cached lessons, and routes / to the web UI.
+// Mirrors the mounts in exporter/app.py so the browser behaves the same against either server.
 
 const http = require('http');
 const fs = require('fs');
@@ -24,10 +25,11 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml'
 };
 
+const ROOT_REDIRECT = '/web/index.html?mock=1';
+
 // URL prefixes that map onto a directory outside their own URL path, mirroring the mounts in
-// exporter/app.py so the static dev server behaves like the FastAPI backend:
-//   /renderer/assets/fonts/*  ->  assets/fonts/*   (player.html asks for assets/fonts relative to itself)
-//   /artifacts/*              ->  cache/artifacts/* (tier-2 cached lessons: manifest, wav, mp4)
+// exporter/app.py: player.html asks for assets/fonts relative to itself, and cached lessons live
+// in cache/artifacts while being served under /artifacts.
 const ALIASES = [
   ['/renderer/assets/fonts/', path.join(REPO_ROOT, 'assets', 'fonts')],
   ['/assets/fonts/', path.join(REPO_ROOT, 'assets', 'fonts')],
@@ -48,93 +50,101 @@ function isInside(root, target) {
   return target === root || target.startsWith(base);
 }
 
-function createServer() {
-  return http.createServer((req, res) => {
-    try {
-      const parsedUrl = new URL(req.url, `http://127.0.0.1:${PORT}`);
-      let pathname = decodeURIComponent(parsedUrl.pathname);
+function sendText(res, status, message) {
+  res.writeHead(status, { 'Content-Type': 'text/plain' });
+  res.end(message);
+}
 
-      // Route root to the web UI (FARHAN_BLUEPRINT.md §7 / AYUSH_BLUEPRINT.md §4)
-      if (pathname === '/') {
-        res.writeHead(302, {
-          'Location': '/web/index.html?mock=1'
-        });
-        return res.end();
-      }
+// Resolves a "bytes=" header against the file size. Returns {start, end} when the client asked for
+// a slice that exists, and null for a malformed or unsatisfiable request (the caller answers 416).
+function parseByteRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(header).trim());
+  if (!match || (match[1] === '' && match[2] === '')) return null;
 
-      if (pathname === '/favicon.ico') {
-        res.writeHead(204);
-        return res.end();
-      }
+  let start;
+  let end;
+  if (match[1] === '') {                       // suffix form: "bytes=-500" means the last 500 bytes
+    start = Math.max(0, size - parseInt(match[2], 10));
+    end = size - 1;
+  } else {
+    start = parseInt(match[1], 10);
+    end = match[2] === '' ? size - 1 : Math.min(parseInt(match[2], 10), size - 1);
+  }
+  return start > end || start >= size ? null : { start, end };
+}
 
-      const safePath = path.normalize(resolveFile(pathname));
-      if (!isInside(REPO_ROOT, safePath)) {
-        res.writeHead(403, { 'Content-Type': 'text/plain' });
-        return res.end('403 Forbidden: Access outside repository root is denied.');
-      }
+// Writes a file and returns false when there is nothing to serve, so the caller can answer 404.
+// Byte ranges are required for <audio>/<video> seeking and for the browser to report a real
+// duration; without them a WAV served here shows duration NaN.
+function sendFile(req, res, filePath) {
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch (err) {
+    return false;
+  }
+  if (!stat.isFile()) return false;
 
-      let stat = null;
-      try {
-        stat = fs.statSync(safePath);
-      } catch (e) {
-        stat = null;
-      }
+  const size = stat.size;
+  const headers = {
+    'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+    'Accept-Ranges': 'bytes',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-cache'
+  };
 
-      if (!stat || !stat.isFile()) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        return res.end(`404 Not Found: ${pathname}`);
-      }
-
-      const ext = path.extname(safePath).toLowerCase();
-      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-      const size = stat.size;
-      const headers = {
-        'Content-Type': contentType,
-        'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-cache'
-      };
-
-      // Byte ranges are required for <audio>/<video> seeking and for Safari/Chromium to report
-      // a real duration; without them a WAV served over this server shows duration NaN.
-      const range = req.headers.range;
-      if (range) {
-        const match = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
-        let start = match && match[1] !== '' ? parseInt(match[1], 10) : null;
-        let end = match && match[2] !== '' ? parseInt(match[2], 10) : null;
-
-        if (!match || (start === null && end === null)) {
-          res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
-          return res.end();
-        }
-        if (start === null) {              // suffix range: last N bytes
-          start = Math.max(0, size - end);
-          end = size - 1;
-        } else if (end === null || end >= size) {
-          end = size - 1;
-        }
-        if (start > end || start >= size) {
-          res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
-          return res.end();
-        }
-
-        res.writeHead(206, {
-          ...headers,
-          'Content-Range': `bytes ${start}-${end}/${size}`,
-          'Content-Length': String(end - start + 1)
-        });
-        if (req.method === 'HEAD') return res.end();
-        return fs.createReadStream(safePath, { start, end }).pipe(res);
-      }
-
-      res.writeHead(200, { ...headers, 'Content-Length': String(size) });
-      if (req.method === 'HEAD') return res.end();
-      return fs.createReadStream(safePath).pipe(res);
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      return res.end(`500 Internal Server Error: ${err.message}`);
+  if (req.headers.range) {
+    const range = parseByteRange(req.headers.range, size);
+    if (!range) {
+      res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
+      res.end();
+      return true;
     }
-  });
+    res.writeHead(206, {
+      ...headers,
+      'Content-Range': `bytes ${range.start}-${range.end}/${size}`,
+      'Content-Length': String(range.end - range.start + 1)
+    });
+    if (req.method === 'HEAD') res.end();
+    else fs.createReadStream(filePath, range).pipe(res);
+    return true;
+  }
+
+  res.writeHead(200, { ...headers, 'Content-Length': String(size) });
+  if (req.method === 'HEAD') res.end();
+  else fs.createReadStream(filePath).pipe(res);
+  return true;
+}
+
+function handle(req, res) {
+  try {
+    const pathname = decodeURIComponent(new URL(req.url, `http://127.0.0.1:${PORT}`).pathname);
+
+    if (pathname === '/') {
+      res.writeHead(302, { 'Location': ROOT_REDIRECT });
+      return res.end();
+    }
+    if (pathname === '/favicon.ico') {
+      res.writeHead(204);
+      return res.end();
+    }
+
+    const filePath = path.normalize(resolveFile(pathname));
+    if (!isInside(REPO_ROOT, filePath)) {
+      return sendText(res, 403, '403 Forbidden: Access outside repository root is denied.');
+    }
+    if (!sendFile(req, res, filePath)) {
+      return sendText(res, 404, `404 Not Found: ${pathname}`);
+    }
+  } catch (err) {
+    // Headers are already on the wire when a stream fails mid-file, so only report what we still can.
+    if (res.headersSent) return res.destroy();
+    return sendText(res, 500, `500 Internal Server Error: ${err.message}`);
+  }
+}
+
+function createServer() {
+  return http.createServer(handle);
 }
 
 if (require.main === module) {
