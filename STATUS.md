@@ -30,7 +30,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 | Owner | Module | State | Last check | Next |
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. **CC-2 part 2 landed 2026-10-28: `level` + `target_sec` wired through prompt, plan-cache key, tier-2 artifact key, and the exporter job; budget = target_sec × 2.3 words ±15%.** | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Audited repo against the 5 problem-statement requirements: `code_walkthrough` absent, level/target_sec absent, next/replay missing, English voice American, CPU path OK for translate/TTS/render. CC-2 raised; handoffs to FARHAN/TARUN. Vercel deferred past the freeze. |
-| FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
+| FARHAN | renderer/ web/ | Handover documented & published to GitHub branch farhan/handover (FARHAN_CODE_CHANGES_HANDOVER.md): 34/34 renderer tests PASS, 5/5 topic integrity checks PASS, OFL Noto fonts dual-mounted, PR #7 audited (9 dummy strings flagged), Next.js integration guide prepared. | 2026-10-28 · npm test 34/34 PASS · node tests/test_topic_integrity.js 5/5 PASS · Chromium font checks PASS | Handover ready for Yyug's Claude Code |
 | TARUN | localization/ | Done (All 5 punch list items resolved: Native listen log, voice cache audit & hf_alpha rating, anti-silent-tone guard, speech rate benchmark, model licenses) | 183 unit tests green + 5 real neural tests green (D4/D5) | Merged into v1 |
 | AYUSH | exporter/ | Exporter pipeline, FastAPI app, Next.js UI integration, e2e tests (test_e2e_offline.py 6 passed) | 2026-10-28 00:10 · D8 PASS · D10 PASS · test_e2e_offline PASS | V1-Keeper loop active, ready for 06:00 review |
 
@@ -46,6 +46,8 @@ No model got its own worked-example arithmetic right; the guard corrects it. Inv
 qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon ("fifty-five degrees Celsius").
 
 ## Handoffs
+
+- FARHAN -> YYUG · FARHAN_CODE_CHANGES_HANDOVER.md (GitHub branch farhan/handover) · Complete code changes, diffs, OFL font fix, topic integrity guards, and PR #7 audit uploaded for Claude Code context ingestion · blocking? n
 
 - YYUG -> TARUN · localization/translator.py · add `"bn": "ben_Beng"` to LANG_CODE_MAP on tarun/localization (already patched on v1) · Bengali replaced Telugu everywhere except this map, so IndicTrans2 got the raw tag `bn` and test_multilingual_sync failed with "Invalid target language tag: bn" whenever the real model is loaded · blocking? n (fixed on v1)
 
