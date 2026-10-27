@@ -1,0 +1,70 @@
+{
+  "title": "Ohm's Law: Voltage, Current, and Resistance",
+  "language_neutral": true,
+  "scenes": [
+    {
+      "id": 1,
+      "narration": "Why does your phone charger get warm while fast-charging, or a ceiling fan slow down when voltage drops during summer in Bengaluru?",
+      "visual": {
+        "type": "title",
+        "params": {
+          "labels": ["Ohm's Law", "V = I × R", "Voltage, Current & Resistance"],
+          "steps": ["Everyday Electricity in India"]
+        }
+      },
+      "caption_key": "narration"
+    },
+    {
+      "id": 2,
+      "narration": "Think of an overhead water tank on your house roof. Water height is Voltage, water flow through the pipe is Current, and a narrow tap is Resistance.",
+      "visual": {
+        "type": "compare",
+        "params": {
+          "labels": ["Roof Tank Height → Voltage (V)", "Pipe Water Flow → Current (I)", "Narrow Tap → Resistance (R)"],
+          "steps": ["Higher pressure pushes more flow", "Narrower pipe restricts flow"]
+        }
+      },
+      "caption_key": "narration"
+    },
+    {
+      "id": 3,
+      "narration": "Georg Ohm discovered that Voltage equals Current multiplied by Resistance: V equals I times R. Doubling voltage doubles the current if resistance stays constant.",
+      "visual": {
+        "type": "equation",
+        "params": {
+          "labels": ["V = I × R", "V : Voltage (Volts)", "I : Current (Amperes)", "R : Resistance (Ohms Ω)"],
+          "steps": ["I = V / R", "R = V / I"]
+        }
+      },
+      "caption_key": "narration"
+    },
+    {
+      "id": 4,
+      "narration": "Let's test a 230-Volt Indian wall socket connected to an iron box with 46 Ohms resistance. Dividing 230 Volts by 46 Ohms gives exactly 5 Amperes of current.",
+      "visual": {
+        "type": "flow",
+        "params": {
+          "labels": ["Supply: V = 230 V", "Heater Coil: R = 46 Ω", "Formula: I = V / R", "Result: I = 5 A"],
+          "steps": ["230 V ÷ 46 Ω = 5 Amperes"]
+        }
+      },
+      "caption_key": "narration"
+    },
+    {
+      "id": 5,
+      "narration": "To recap: Voltage pushes electrons, Resistance opposes them, and Current is the resulting flow governed by V equals I times R.",
+      "visual": {
+        "type": "bullets",
+        "params": {
+          "labels": ["Key Takeaways: Ohm's Law"],
+          "steps": [
+            "Voltage (V): Electrical pressure in Volts",
+            "Resistance (R): Opposition to flow in Ohms (Ω)",
+            "Current (I = V / R): Flow rate in Amperes"
+          ]
+        }
+      },
+      "caption_key": "narration"
+    }
+  ]
+}
