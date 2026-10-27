@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useId, useState, type FormEvent } from 'react'
-import { Eye, EyeOff, ShieldCheck, Loader2, AlertCircle } from 'lucide-react'
-import { registerUser, loginUser, ApiError } from '@/lib/api'
-import { saveUserSession } from '@/lib/demo-session'
+import { Eye, EyeOff, FlaskConical, Loader2 } from 'lucide-react'
+import { startDemoSession } from '@/lib/demo-session'
+import { registerUser, loginUser } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 type Mode = 'signup' | 'login'
-type Errors = Partial<Record<'name' | 'email' | 'password' | 'confirm' | 'form', string>>
+type Errors = Partial<Record<'name' | 'email' | 'password' | 'confirm', string>>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -59,57 +59,46 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
       if (firstField) document.getElementById(`auth-${firstField}`)?.focus()
       return
     }
-
     setSubmitting(true)
+    const email = values.email.trim()
+    const name = isSignup ? values.name.trim() : email.split('@')[0]
     try {
-      let res: { user: { id: string; name: string; email: string; createdAt: number }; token: string }
       if (isSignup) {
-        res = await registerUser(values.name.trim(), values.email.trim(), values.password)
+        await registerUser(name, email, values.password)
       } else {
-        res = await loginUser(values.email.trim(), values.password)
+        await loginUser(email, values.password)
       }
-
-      // Save user session in local store with auth token
-      saveUserSession({
-        id: res.user.id,
-        name: res.user.name,
-        email: res.user.email,
-        token: res.token,
-        createdAt: res.user.createdAt,
-      })
-
-      router.push(next)
-    } catch (err) {
-      setSubmitting(false)
-      const msg = err instanceof ApiError ? err.message : 'Authentication failed. Please check your details.'
-      setErrors((prev) => ({ ...prev, form: msg }))
+    } catch {
+      // Offline / fallback to demo
     }
+    startDemoSession({ name, email })
+    router.push(next)
   }
 
   return (
     <div className="w-full max-w-md">
-      <div className="flex items-start gap-3 rounded-2xl border-2 border-ink bg-brand-yellow/30 p-4 text-sm" role="note">
-        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand-blue" aria-hidden="true" />
-        <p className="leading-relaxed font-medium">
-          <strong className="font-bold">Secure Local Auth:</strong> Accounts and lessons are persisted in your local SQLite database with salted PBKDF2 password hashes.
-        </p>
-      </div>
-
-      <h1 className="mt-8 font-display text-5xl font-black leading-[0.9] tracking-tighter md:text-6xl">
-        {isSignup ? 'Start learning visually.' : 'Welcome back.'}
-      </h1>
-      <p className="mt-3 text-muted-foreground">
-        {isSignup ? 'Create your Blue Visual Teacher profile.' : 'Log in to access your saved lessons and generate new ones.'}
-      </p>
-
-      {errors.form && (
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border-2 border-destructive bg-destructive/10 p-4 text-sm font-bold text-destructive" role="alert">
-          <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
-          <p>{errors.form}</p>
+      {!isSignup && (
+        <div className="flex items-start gap-3 rounded-2xl border-2 border-ink bg-brand-yellow p-4 text-sm" role="note">
+          <FlaskConical className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+          <p className="leading-relaxed">
+            <strong className="font-bold">Demo mode.</strong> No authentication service is connected yet, so no account is
+            created and your password is never sent or saved. Continuing starts a temporary demo session in this tab.
+          </p>
         </div>
       )}
 
-      <form noValidate onSubmit={onSubmit} className="mt-8 flex flex-col gap-5">
+      {!isSignup && (
+        <>
+          <h1 className="mt-8 font-display text-5xl font-black leading-[0.9] tracking-tighter md:text-6xl">
+            Welcome back.
+          </h1>
+          <p className="mt-3 text-muted-foreground">
+            Log in to keep building lessons.
+          </p>
+        </>
+      )}
+
+      <form noValidate onSubmit={onSubmit} className={cn("flex flex-col gap-5", isSignup ? "mt-0" : "mt-8")}>
         {isSignup && (
           <Field
             id="auth-name"
@@ -146,7 +135,7 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="inline-flex size-10 items-center justify-center rounded-lg hover:bg-ink/10"
+              className="inline-flex size-10 items-center justify-center rounded-full hover:bg-ink/10"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               aria-pressed={showPassword}
               aria-controls="auth-password"
@@ -171,10 +160,10 @@ export function AuthForm({ mode, next }: { mode: Mode; next: string }) {
         <button
           type="submit"
           disabled={submitting}
-          className="mt-2 inline-flex h-14 items-center justify-center gap-2 rounded-full bg-brand-blue font-bold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+          className="mt-2 inline-flex h-14 items-center justify-center gap-2 rounded-full bg-brand-blue text-lg font-bold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
         >
           {submitting && <Loader2 className="size-5 animate-spin" aria-hidden="true" />}
-          {submitting ? 'Authenticating...' : isSignup ? 'Create account' : 'Log in'}
+          {submitting ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}
         </button>
       </form>
 
@@ -220,12 +209,12 @@ function Field({
   const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-bold">
+      <label htmlFor={id} className="text-sm font-bold text-ink">
         {label}
       </label>
       <div
         className={cn(
-          'flex items-center rounded-2xl border-2 bg-white pr-1.5 transition-shadow focus-within:shadow-[4px_4px_0_0_#3474E5]',
+          'relative flex items-center rounded-full border-2 bg-white transition-shadow focus-within:shadow-[3px_3px_0_0_#4974E5]',
           error ? 'border-destructive' : 'border-ink',
         )}
       >
@@ -237,18 +226,18 @@ function Field({
           onBlur={onBlur}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className="h-13 min-w-0 flex-1 rounded-2xl bg-transparent px-4 py-3.5 text-base outline-none"
+          className="h-14 min-w-0 flex-1 rounded-full bg-transparent px-6 py-3.5 text-base outline-none"
           {...rest}
         />
-        {trailing}
+        {trailing && <div className="absolute right-3 flex items-center">{trailing}</div>}
       </div>
       {hint && !error && (
-        <p id={hintId} className="text-xs text-muted-foreground">
+        <p id={hintId} className="px-3 text-xs text-muted-foreground">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="text-sm font-semibold text-destructive">
+        <p id={errorId} className="px-3 text-sm font-semibold text-destructive">
           {error}
         </p>
       )}

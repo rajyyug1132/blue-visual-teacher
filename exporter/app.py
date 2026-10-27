@@ -119,6 +119,7 @@ def _run(job_id: str) -> None:
                 job["stage_times"][job["stage"]] = round(time.perf_counter() - stage_started["t"], 2)
             stage_started["t"] = time.perf_counter()
             job["stage"] = stage
+        job["status"] = "processing"
         job["pct"] = int(pct)
         # Update SQLite if job belongs to a registered user
         if job.get("user_id"):
@@ -135,7 +136,7 @@ def _run(job_id: str) -> None:
             if tel.exists():
                 import json
                 job["telemetry"] = json.loads(tel.read_text(encoding="utf-8"))
-            job.update(stage="done", pct=100)
+            job.update(stage="done", status="completed", pct=100)
             if job.get("user_id"):
                 auth_db.record_lesson(
                     job_id, job["user_id"], job["topic"], job["lang"],
@@ -145,7 +146,7 @@ def _run(job_id: str) -> None:
         except Exception as exc:
             log.error("job %s failed:\n%s", job_id, traceback.format_exc())
             err_msg = FRIENDLY.get(type(exc).__name__, "Something went wrong while making this lesson. Please retry.")
-            job.update(stage="error", error=err_msg)
+            job.update(stage="error", status="failed", error=err_msg)
             if job.get("user_id"):
                 auth_db.record_lesson(
                     job_id, job["user_id"], job["topic"], job["lang"],
@@ -159,7 +160,7 @@ def _startup() -> None:
     def load():
         try:
             pipeline.warmup()
-            state["languages"] = pipeline.available_languages() or ["en"]
+            state["languages"] = list(dict.fromkeys((pipeline.available_languages() or []) + ["en", "hi", "kn"]))
             state["models_loaded"] = True
         except Exception:
             log.error("warmup failed:\n%s", traceback.format_exc())
@@ -239,7 +240,7 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
 
     job = {
         "job_id": job_id, "user_id": user_id, "topic": topic, "lang": target_lang,
-        "stage": "queued", "pct": 0, "stage_times": {}, "telemetry": {}, "error": None,
+        "status": "queued", "stage": "queued", "pct": 0, "stage_times": {}, "telemetry": {}, "error": None,
         "mp4_url": None, "manifest_url": None, "audio_url": None, "cached": False
     }
     jobs[job_id] = job
@@ -251,7 +252,7 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
     hit = pipeline.cached_artifact(topic, target_lang)
     if hit:
         _urls(job, hit)
-        job.update(stage="done", pct=100, cached=True)
+        job.update(stage="done", status="completed", pct=100, cached=True)
         if user_id:
             auth_db.record_lesson(
                 job_id, user_id, topic, target_lang,
@@ -260,7 +261,16 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
             )
     else:
         threading.Thread(target=_run, args=(job_id,), daemon=True).start()
-    return {"job_id": job_id}
+    return {
+        "job_id": job_id,
+        "id": job_id,
+        "status": job["status"],
+        "stage": job["stage"],
+        "pct": job["pct"],
+        "mp4_url": job.get("mp4_url"),
+        "video_url": job.get("mp4_url"),
+        "manifest_url": job.get("manifest_url"),
+    }
 
 
 @app.get("/api/status/{job_id}")

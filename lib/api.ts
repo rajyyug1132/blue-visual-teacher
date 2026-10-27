@@ -13,6 +13,7 @@ export type Job = {
   message: string | null
   error: string | null
   videoUrl: string | null
+  manifestUrl?: string | null
   topic: string | null
   language: string | null
   pct?: number
@@ -134,7 +135,7 @@ export function normalizeStatus(raw: string | null): JobStatus {
   if (!raw) return 'unknown'
   const s = raw.toLowerCase()
   if (['queued', 'pending', 'waiting', 'created', 'submitted'].includes(s)) return 'queued'
-  if (['processing', 'running', 'in_progress', 'in-progress', 'started', 'rendering', 'generating', 'exporting'].includes(s))
+  if (['processing', 'running', 'in_progress', 'in-progress', 'started', 'rendering', 'generating', 'exporting', 'plan', 'tts', 'render'].includes(s))
     return 'processing'
   if (['completed', 'complete', 'done', 'success', 'succeeded', 'finished', 'ready'].includes(s)) return 'completed'
   if (['failed', 'failure', 'error', 'errored', 'cancelled', 'canceled'].includes(s)) return 'failed'
@@ -158,7 +159,9 @@ function parseJob(body: unknown, fallbackId?: string): Job {
   if (!id) throw new ApiError('The server did not return a job id.', 'malformed')
   const rawStatus = pickString(body, ['status', 'state', 'stage'])
   const videoKeys = ['video_url', 'mp4_url', 'output_url', 'artifact_url', 'download_url', 'url', 'video', 'mp4', 'output_path']
+  const manifestKeys = ['manifest_url', 'manifestUrl', 'manifest']
   const videoUrl = pickString(body, videoKeys) ?? pickString(nested, videoKeys)
+  const manifestUrl = pickString(body, manifestKeys) ?? pickString(nested, manifestKeys)
 
   return {
     id,
@@ -168,6 +171,7 @@ function parseJob(body: unknown, fallbackId?: string): Job {
     message: pickString(body, ['message', 'detail_message']),
     error: pickString(body, ['error', 'error_message', 'detail']),
     videoUrl: resolveArtifactUrl(videoUrl),
+    manifestUrl: resolveArtifactUrl(manifestUrl),
     topic: pickString(body, ['topic', 'title', 'prompt']),
     language: pickString(body, ['language', 'lang', 'language_code']),
     pct: typeof body.pct === 'number' ? body.pct : undefined,
