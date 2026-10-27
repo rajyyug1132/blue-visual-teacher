@@ -92,7 +92,8 @@ def test_good_response_returns_plan_and_caches(fake):
     plan, tel = planner.plan_lesson("Ohm's Law")
     assert tel["fallback_used"] is False and tel["attempt"] == 1 and tel["total_words"] == 122
     call = client.calls[0]
-    assert call["keep_alive"] == -1 and call["think"] is False
+    assert call["keep_alive"] == -1 and call["model"] == planner.MODEL_NAME
+    assert "think" not in call  # qwen2.5 is not a thinking model
     assert call["format"] == LessonPlan.model_json_schema()
     assert cache.load_plan("ohm's law  ") == plan
 
@@ -122,11 +123,28 @@ def test_daemon_down_falls_back_without_crashing(fake):
     assert all(m["role"] != "assistant" or m in FEW_SHOT_MESSAGES for m in client.calls[1]["messages"])
 
 
+@pytest.mark.parametrize("model", ["qwen3:4b", "gemma4:e4b"])
+def test_thinking_models_get_think_false(fake, model):
+    client = fake(GOLDEN_JSON)
+    planner.plan_lesson("Ohm's Law", model=model)
+    assert client.calls[0]["think"] is False
+
+
 def test_model_rejecting_think_is_retried_without_flag(fake):
-    client = fake(ollama.ResponseError('"fake" does not support thinking'), GOLDEN_JSON)
-    _, tel = planner.plan_lesson("Ohm's Law")
-    assert tel["fallback_used"] is False
-    assert "think" not in client.calls[1]
+    client = fake(ollama.ResponseError('"gemma2" does not support thinking'), GOLDEN_JSON)
+    _, tel = planner.plan_lesson("Ohm's Law", model="gemma2:2b")
+    assert tel["fallback_used"] is False and tel["attempt"] == 1
+    assert client.calls[0]["think"] is False and "think" not in client.calls[1]
+
+
+def test_model_name_comes_from_env(monkeypatch):
+    import importlib
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:3b")
+    try:
+        assert importlib.reload(planner).MODEL_NAME == "llama3.2:3b"
+    finally:
+        monkeypatch.delenv("OLLAMA_MODEL")
+        importlib.reload(planner)
 
 
 def test_word_total_out_of_target_retries_then_keeps_safe_plan(fake):
@@ -168,3 +186,57 @@ def test_stub_pipeline_timing_matches_blueprint(tmp_path):
     assert manifest[-1]["end_sec"] == pytest.approx(54.79, abs=0.01)
     with wave.open(str(wav)) as w:
         assert w.getnframes() / w.getframerate() == pytest.approx(54.79, abs=0.01)
+
+
+def test_retry_names_the_overlong_scene(fake):
+    plan = json.loads(GOLDEN_JSON)
+    plan["scenes"][2]["narration"] = " ".join(["word"] * 45)
+    client = fake(json.dumps(plan), GOLDEN_JSON)
+    _, tel = planner.plan_lesson("Ohm's Law")
+    feedback = client.calls[1]["messages"][-1]["content"]
+    assert "Scene 3 narration" in feedback and "18-28 words" in feedback
+    assert tel["attempt"] == 2 and tel["fallback_used"] is False
+
+
+GRAMMAR_CUT = ("The formula for Compound Interest is A equals P times (1 plus r over n) to the power of nt, where A is "
+               "the final amount, P is the principal, r is the annual interest rate, n is the number of times interest "
+               "is compounded per year, and t is a")
+
+
+def test_overlong_single_sentence_is_cut_at_main_clause():
+    assert planner._shorten_narration(GRAMMAR_CUT) == (
+        "The formula for Compound Interest is A equals P times (1 plus r over n) to the power of nt.")
+
+
+def test_overlong_narration_keeps_whole_sentences():
+    text = "Interest grows on interest. " + " ".join(["more"] * 40) + "."
+    assert planner._shorten_narration(text) == "Interest grows on interest."
+
+
+def test_repaired_plan_is_used_without_retry(fake):
+    plan = json.loads(GOLDEN_JSON)
+    plan["scenes"][2]["narration"] = GRAMMAR_CUT
+    client = fake(json.dumps(plan))
+    result, tel = planner.plan_lesson("Compound Interest")
+    assert len(client.calls) == 1 and tel["repaired"] is True and tel["fallback_used"] is False
+    assert result.scenes[2].narration.endswith("power of nt.")
+
+
+def test_unrepairable_narration_still_retries(fake):
+    plan = json.loads(GOLDEN_JSON)
+    plan["scenes"][2]["narration"] = " ".join(["word"] * 45)  # no sentence or clause break to cut at
+    client = fake(json.dumps(plan), json.dumps(plan))
+    _, tel = planner.plan_lesson("Ohm's Law")
+    assert len(client.calls) == 2 and tel["fallback_used"] is True
+
+
+def test_device_env(monkeypatch):
+    from orchestrator.device import get_device
+
+    monkeypatch.setenv("DEVICE", "CPU")
+    assert get_device() == "cpu"
+    monkeypatch.setenv("DEVICE", "cuda")
+    assert get_device() in ("cuda", "cpu")  # cpu when torch/CUDA is missing
+    monkeypatch.setenv("DEVICE", "tpu")
+    with pytest.raises(ValueError):
+        get_device()

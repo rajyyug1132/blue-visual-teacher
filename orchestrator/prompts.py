@@ -14,6 +14,7 @@ STRICT RULES:
 2. Each scene's "narration" MUST be 1-2 short spoken sentences (18-30 words). Total words across all 5 scenes MUST be 100-140 words so audio lasts 45-65 seconds.
 3. Spell out spoken math in "narration" (write "V equals I times R", not raw LaTeX), and put symbolic formulas ("V = I × R") inside visual.params.labels.
 4. Keep visual.params.labels (2-4 items) and visual.params.steps (1-4 items) under 6 words each so they translate cleanly into Hindi and Kannada without overflowing the canvas.
+5. Never define every symbol in "narration". State the rule in words and put symbol definitions ("P : Principal") in visual.params.labels. Every narration must end with a complete sentence.
 """
 
 FEW_SHOT_MESSAGES = [

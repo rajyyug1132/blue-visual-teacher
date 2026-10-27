@@ -17,4 +17,12 @@ HARD RULES
 
 OLLAMA NOTES (verified against ollama-python 0.6.3 / ollama 0.40.11)
 - keep_alive must be the number -1, NOT the string "-1" (server returns 400 "missing unit in duration").
-- think=False is accepted even by non-thinking models (qwen2.5:3b).
+- Model comes from env OLLAMA_MODEL (default qwen2.5:3b). think=False is sent only to qwen3*/gemma* models.
+- Benchmark a model: OLLAMA_MODEL=llama3.2:3b python -m orchestrator.bench
+
+DEMO LAPTOP BUDGET (16 GB RAM, RTX 3050 6 GB VRAM, ~3.5 GB free)
+- qwen2.5:3b runs on GPU via Ollama (~2.2 GB at num_ctx 4096). Nothing else may push it off the GPU.
+- Kokoro-82M, IndicTrans2 dist-200M and MMS-TTS share the remaining ~1.3 GB: use fp16 on cuda.
+- Every torch model picks its device with orchestrator.device.get_device() (env DEVICE=cuda|cpu, default
+  cuda, auto-cpu if CUDA is missing). Set DEVICE=cpu to move all of them off the GPU without code changes.
+- Load every model ONCE at process startup (warm_up_ollama + module-level engines). Never load per request.
