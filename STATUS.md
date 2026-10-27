@@ -30,6 +30,8 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - YYUG -> TARUN · localization/translator.py · `SceneSpec.check` (expr/result) is new and optional; do NOT translate it, leave it as-is · keeps math intact · blocking? n
 - YYUG -> FARHAN, AYUSH · fixtures/golden_ohms_law.json · scene 4 narration now reads "two hundred thirty volt ... forty-six ohms ... five amperes" (29 words); stub total moves 54.79 s -> 55.23 s; labels/steps unchanged · fixture had digits, which the spoken-words rule now rejects · blocking? n
 - YYUG -> FARHAN · renderer · ignore the optional `check` key on scenes; never render it · it is planner metadata · blocking? n
+- YYUG -> TARUN · localization/tts_engine.py · run `orchestrator.spoken.speak_forms(text)` on every string right before TTS (NFKC + CO2 -> carbon dioxide, km² -> square kilometres) · safety net if IndicTrans2 reintroduces digits/formulas · blocking? n
+- YYUG -> AYUSH · README.md "Known limits" · add: "Descriptive topics (history, geography, processes) carry no numbers: the planner blocks digits, number words above ten, units and formulas there. Numeric worked examples are arithmetic-checked, but formulas outside a verified bank are not asserted as fact." · judges score honest limits over hidden bugs · blocking? n
 
 ## CONTRACT CHANGE proposals
 
@@ -38,8 +40,8 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 **What changes in `orchestrator/schema.py`**
 
 1. `SceneSpec.narration`: 14-32 words (was 8-42), max 320 chars (was 240), and spoken words only: no digits or
-   symbols (`0-9 = × ÷ + / % Ω < >`). Numbers are written in words ("two hundred thirty"); figures and formulas
-   stay in `visual.params.labels/steps`.
+   symbols (`0-9 = × ÷ + / % Ω < > ° √ π`), checked after Unicode NFKC so `CO₂` and `km²` count as digits.
+   Numbers are written in words ("two hundred thirty"); figures and formulas stay in `visual.params.labels/steps`.
 2. `LessonPlan` model validator: 85-150 narration words per lesson and an estimated 35-85 s of audio
    (words / 2.3 + 0.35 s per scene).
 3. New optional field `SceneSpec.check: Optional[Check] = None`, `Check{expr: str (<=60 chars), result: str (<=30 chars)}`.

@@ -31,6 +31,11 @@ No name given -> [ASK: who are you?]
 - Narration = spoken words only: after orchestrator.spoken.to_spoken() it has no digits or symbols (0-9 = × ÷ + / % Ω < >).
   Numbers are written in words; figures and formulas live in visual.params.labels/steps. 14–32 words per scene, 85–150 per lesson.
 - Worked-example math is verified, never trusted: check.expr is evaluated by an AST whitelist in orchestrator/mathcheck.py (never eval()).
+  Wrong results are replaced only at their result position ("= X", "gives X"), never by global replace.
+- Number policy per topic (orchestrator/numeric_guard.py), from one classify call: "none" = descriptive topic, no digits,
+  no number words above ten, no units, no "=" anywhere; "checked" = every number comes from the verified worked example,
+  and its narration must say the answer. Integers up to ten are always fine. All checks run after NFKC (CO₂ -> CO2).
+  Ladder: plan -> retry with the problem list -> regenerate in qualitative mode -> safe template.
 - Audio is master: scene duration = speech + 0.35s tail. TTS appends the tail inside the WAV and duration_sec includes it;
   nobody adds it a second time. Total 30–90s, enforced after TTS by orchestrator.pipeline.duration_gate() before rendering.
 - Ollama: model from env OLLAMA_MODEL (default qwen2.5:7b; qwen2.5:3b is the fast fallback). Call warm_up_ollama() once at

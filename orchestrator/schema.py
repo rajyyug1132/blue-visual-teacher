@@ -6,6 +6,7 @@
 #   pipeline.duration_gate       -> real measured audio length after TTS
 #   mathcheck.verify_plan        -> worked-example arithmetic (check.expr vs check.result), before to_spoken
 import re
+import unicodedata
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -13,7 +14,7 @@ WORDS_MIN, WORDS_MAX = 14, 32
 TOTAL_MIN, TOTAL_MAX = 85, 150
 SPEECH_WPS, TAIL = 2.3, 0.35
 EST_SEC_MIN, EST_SEC_MAX = 35, 85
-NOT_SPOKEN = re.compile(r"[0-9=×÷+<>%Ω/\\]")
+NOT_SPOKEN = re.compile(r"[0-9=×÷+<>%Ω/\\°√π]")  # matched after NFKC, so CO₂ and km² count as digits
 
 VisualType = Literal[
     "flow", "bullets", "equation", "labeled_diagram",
@@ -61,8 +62,9 @@ class SceneSpec(BaseModel):
         n = len(v.split())
         if not WORDS_MIN <= n <= WORDS_MAX:
             raise ValueError(f"narration must be {WORDS_MIN}-{WORDS_MAX} words, got {n}")
-        if NOT_SPOKEN.search(v):
-            raise ValueError("narration must be spoken words only: no digits or symbols")
+        if NOT_SPOKEN.search(unicodedata.normalize("NFKC", v)):
+            raise ValueError("narration must be spoken words only: no digits or symbols "
+                             "(write carbon dioxide, square kilometres, degrees in words)")
         return v
 
 class LessonPlan(BaseModel):

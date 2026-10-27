@@ -13,10 +13,12 @@ from orchestrator import cache, planner, schema
 from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.prompts import FEW_SHOT_MESSAGES
 from orchestrator.schema import LessonPlan
+from orchestrator.spoken import shorten_narration
 
 ROOT = Path(__file__).resolve().parent.parent
 GOLDEN_JSON = (ROOT / "fixtures" / "golden_ohms_law.json").read_text(encoding="utf-8")
 GOOD_JSON = FEW_SHOT_MESSAGES[1]["content"]  # Ohm's Law as a model reply: the fixture plus a worked-example check
+DESCRIPTIVE_JSON = FEW_SHOT_MESSAGES[3]["content"]  # Binary Search, policy "none": no quantities anywhere
 
 TOPICS = [
     "Photosynthesis", "Newton's Third Law", "Binary Search", "Supply and Demand", "DNA Replication",
@@ -40,27 +42,42 @@ def tmp_cache(tmp_path, monkeypatch):
 
 
 class FakeClient:
-    """Stands in for ollama.Client; each queued item is returned (str content) or raised (exception)."""
+    """Stands in for ollama.Client; each queued plan is returned (str content) or raised (exception).
 
-    def __init__(self, *outputs):
+    The topic-classify call is answered from `has_formula` without using the queue, and `calls` only records
+    planning calls. An empty queue behaves like a dead daemon (ConnectionError), so the ladder can run out.
+    """
+
+    def __init__(self, *outputs, has_formula=True):
         self.outputs = list(outputs)
         self.calls = []
+        self.classify_calls = []
+        self.has_formula = has_formula
 
     def chat(self, **kwargs):
+        if "has_formula" in json.dumps(kwargs.get("format")):
+            self.classify_calls.append(kwargs)
+            return self._response(json.dumps({"has_formula": self.has_formula}))
         self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
+        if not self.outputs:
+            raise ConnectionError("fake daemon: no more queued outputs")
         out = self.outputs.pop(0)
         if isinstance(out, Exception):
             raise out
+        return self._response(out)
+
+    @staticmethod
+    def _response(content):
         return ollama.ChatResponse(
-            model="fake", message=ollama.Message(role="assistant", content=out),
+            model="fake", message=ollama.Message(role="assistant", content=content),
             prompt_eval_count=10, eval_count=20, eval_duration=1_000_000, load_duration=0,
         )
 
 
 @pytest.fixture
 def fake(monkeypatch):
-    def install(*outputs):
-        client = FakeClient(*outputs)
+    def install(*outputs, has_formula=True):
+        client = FakeClient(*outputs, has_formula=has_formula)
         monkeypatch.setattr(planner, "_client", client)
         return client
     return install
@@ -101,15 +118,19 @@ def test_good_response_returns_plan_and_caches(fake):
     assert cache.load_plan("ohm's law  ") == plan
 
 
-def test_bad_json_then_retry_then_fallback(fake):
-    client = fake("not json at all", '{"title": "x"}')
+def test_bad_json_climbs_the_whole_ladder_to_the_template(fake):
+    client = fake("not json at all", '{"title": "x"}', '{"title": "y"}')
     plan, tel = planner.plan_lesson("Ohm's Law")
-    assert tel["fallback_used"] is True and tel["attempt"] == 3
-    assert len(client.calls) == 2
-    # The retry carries the bad output and the validation error back to the model.
+    assert tel["fallback_used"] is True and tel["attempt"] == 4 and tel["stage"] == "template"
+    assert len(client.calls) == 3
+    # The retry carries the bad output and the problems back to the model.
     retry_msgs = client.calls[1]["messages"]
     assert retry_msgs[-2] == {"role": "assistant", "content": "not json at all"}
-    assert "Validation failed" in retry_msgs[-1]["content"]
+    assert retry_msgs[-1]["content"].startswith("Problems:")
+    # Qualitative mode starts a fresh conversation without the failed drafts.
+    qual_msgs = client.calls[2]["messages"]
+    assert "QUALITATIVE MODE" in qual_msgs[-1]["content"] and "Number policy: none" in qual_msgs[-1]["content"]
+    assert all(m["content"] not in ("not json at all", '{"title": "x"}') for m in qual_msgs)
     assert cache.load_plan("Ohm's Law") is None  # fallbacks are never cached
 
 
@@ -120,9 +141,9 @@ def test_bad_json_then_good_retry(fake):
 
 
 def test_daemon_down_falls_back_without_crashing(fake):
-    client = fake(ConnectionError("refused"), ConnectionError("refused"))
+    client = fake(ConnectionError("refused"), ConnectionError("refused"), ConnectionError("refused"))
     plan, tel = planner.plan_lesson("Monsoon")
-    assert tel["fallback_used"] is True and len(tel["errors"]) == 2
+    assert tel["fallback_used"] is True and len(tel["errors"]) == 3
     assert all(m["role"] != "assistant" or m in FEW_SHOT_MESSAGES for m in client.calls[1]["messages"])
 
 
@@ -242,19 +263,19 @@ GRAMMAR_CUT = ("The formula for Compound Interest is A equals P times (one plus 
 
 
 def test_overlong_single_sentence_is_cut_at_main_clause():
-    assert planner._shorten_narration(GRAMMAR_CUT) == (
+    assert shorten_narration(GRAMMAR_CUT) == (
         "The formula for Compound Interest is A equals P times (one plus r over n) to the power of nt.")
 
 
 def test_overlong_narration_keeps_whole_sentences():
     first = "Compound interest means the bank pays interest on your savings and also on the interest already earned."
     text = first + " " + " ".join(["more"] * 40) + "."
-    assert planner._shorten_narration(text) == first
+    assert shorten_narration(text) == first
 
 
 def test_too_short_kept_sentences_are_not_used():
     text = "Interest grows on interest. " + " ".join(["more"] * 40) + "."
-    assert planner._shorten_narration(text) is None  # four words would fail the per-scene minimum
+    assert shorten_narration(text) is None  # four words would fail the per-scene minimum
 
 
 def test_repaired_plan_is_used_without_retry(fake):
@@ -269,14 +290,14 @@ def test_repaired_plan_is_used_without_retry(fake):
 def test_unrepairable_narration_still_retries(fake):
     plan = json.loads(GOOD_JSON)
     plan["scenes"][2]["narration"] = " ".join(["word"] * 45)  # no sentence or clause break to cut at
-    client = fake(json.dumps(plan), json.dumps(plan))
+    client = fake(json.dumps(plan), json.dumps(plan), json.dumps(plan))
     _, tel = planner.plan_lesson("Ohm's Law")
-    assert len(client.calls) == 2 and tel["fallback_used"] is True
+    assert len(client.calls) == 3 and tel["fallback_used"] is True
 
 
 @pytest.mark.parametrize("text, spoken", [
     ("Dividing 230 Volts by 46 Ω gives 5 A.", "Dividing two hundred thirty Volts by forty-six ohms gives five A."),
-    ("Plants turn 6CO2 and 6H2O into sugar.", "Plants turn six CO two and six H two O into sugar."),
+    ("Plants turn 6CO2 and 6H2O into sugar.", "Plants turn six carbon dioxide and six water into sugar."),
     ("Rs. 10,000 at 5% grows to Rs. 12,762.82.",
      "ten thousand rupees at five percent grows to twelve thousand seven hundred sixty-two point eight two rupees."),
     ("India became free in 1947, and in 2005 had 1,00,000 users.",
@@ -370,52 +391,62 @@ def test_wrong_result_is_replaced_everywhere(fake):
     assert scene.check.result == "5"
 
 
-def test_wrong_result_written_in_words_is_replaced(fake):
+def _compound_interest(result="425", spoken_answer="four hundred twenty-five"):
+    """Ohm's plan with a self-consistent compound-interest worked example in scene 4."""
     plan = json.loads(GOOD_JSON)
     scene = plan["scenes"][3]
-    scene["check"] = {"expr": "100 * (1 + 0.05) ** 10", "result": "425"}
+    scene["check"] = {"expr": "100 * (1 + 0.05) ** 10", "result": result}
     scene["narration"] = ("Save one hundred rupees at five percent interest for ten years, "
-                          "and the amount grows to four hundred twenty-five rupees.")
-    fake(json.dumps(plan))
+                          f"and the amount grows to {spoken_answer} rupees.")
+    scene["visual"]["params"] = {"labels": ["P = 100", "r = 5%", "t = 10"],
+                                 "steps": [f"100 × (1 + 0.05)^10 = {result}"]}
+    return plan
+
+
+def test_wrong_result_written_in_words_is_replaced(fake):
+    fake(json.dumps(_compound_interest()))
     result, tel = planner.plan_lesson("Compound Interest")
     assert tel["math"]["status"] == "fixed" and tel["math"]["computed"] == pytest.approx(162.8895)
-    assert result.scenes[3].narration.endswith(
-        "grows to one hundred sixty-two point eight nine rupees.")
+    assert result.scenes[3].narration.endswith("grows to one hundred sixty-two point eight nine rupees.")
+    assert result.scenes[3].visual.params.steps == ["100 × (1 + 0.05)^10 = 162.89"]
 
 
 def test_correct_result_within_tolerance_is_kept(fake):
-    plan = json.loads(GOOD_JSON)
-    plan["scenes"][3]["check"] = {"expr": "100 * (1 + 0.05) ** 10", "result": "163"}  # 0.07 % off
-    fake(json.dumps(plan))
+    fake(json.dumps(_compound_interest("163", "one hundred sixty-three")))  # 0.07 % off
     _, tel = planner.plan_lesson("Compound Interest")
-    assert tel["math"]["status"] == "ok"
+    assert tel["math"]["status"] == "ok" and tel["attempt"] == 1
+
+
+def _descriptive(narration4=None, params4=None):
+    """The policy-"none" Binary Search few-shot, optionally with a different scene 4."""
+    plan = json.loads(DESCRIPTIVE_JSON)
+    if narration4:
+        plan["scenes"][3]["narration"] = narration4
+    if params4:
+        plan["scenes"][3]["visual"]["params"] = params4
+    return plan
 
 
 def test_photosynthesis_without_numbers_passes(fake):
-    plan = json.loads(GOOD_JSON)
-    scene = plan["scenes"][3]
-    scene.pop("check")
-    scene["narration"] = ("Inside a mango leaf, sunlight splits water, oxygen escapes through the stomata, "
-                          "and carbon dioxide is built into glucose for the tree.")
-    scene["visual"]["params"] = {"labels": ["Step 1: Light absorbed", "2. Water split", "3. Glucose built"],
-                                 "steps": ["Oxygen released"]}
-    fake(json.dumps(plan))
+    fake(json.dumps(_descriptive(
+        "Inside a mango leaf, sunlight splits water, oxygen escapes through the stomata, "
+        "and carbon dioxide is built into glucose for the tree.",
+        {"labels": ["Step 1: Light absorbed", "2. Water split", "3. Glucose built"], "steps": ["Oxygen released"]})),
+        has_formula=False)
     _, tel = planner.plan_lesson("Photosynthesis")
-    assert tel["math"]["status"] == "none" and tel["attempt"] == 1 and tel["fallback_used"] is False
+    assert tel["policy"] == "none" and tel["stage"] == "plan" and tel["fallback_used"] is False
 
 
-def test_invented_quantities_retry_then_become_qualitative(fake):
-    plan = json.loads(GOOD_JSON)
-    scene = plan["scenes"][3]
-    scene.pop("check")
-    scene["narration"] = ("If a plant uses one hundred units of water and one hundred units of carbon dioxide, "
-                          "it produces one hundred units of glucose.")
-    client = fake(json.dumps(plan), json.dumps(plan))
+def test_invented_quantities_retry_then_qualitative_mode(fake):
+    invented = json.dumps(_descriptive(
+        "If a plant uses one hundred units of water and one hundred units of carbon dioxide, "
+        "it produces one hundred units of glucose."))
+    client = fake(invented, invented, DESCRIPTIVE_JSON, has_formula=False)
     result, tel = planner.plan_lesson("Photosynthesis")
-    assert "computes an amount but has no check" in client.calls[1]["messages"][-1]["content"]
-    assert tel["attempt"] == 2 and tel["math"]["status"] == "template" and tel["fallback_used"] is False
-    assert result.scenes[3].narration.startswith("Let's walk through it step by step")
-    assert result.scenes[3].check is None and result.scenes[3].visual.type == "flow"
+    assert "has quantities 100, 100, 100" in client.calls[1]["messages"][-1]["content"]
+    assert "QUALITATIVE MODE" in client.calls[2]["messages"][-1]["content"]
+    assert tel["stage"] == "qualitative" and tel["attempt"] == 3 and tel["fallback_used"] is False
+    assert all(s.check is None for s in result.scenes)
 
 
 def test_unparseable_expr_retries_with_the_error(fake):
@@ -438,35 +469,27 @@ def test_short_sentence_plus_long_sentence_is_cut_at_a_clause():
     text = ("Why do mango leaves look green in Bengaluru? Because chlorophyll inside them absorbs red and blue light, "
             "reflects green light back to our eyes, and turns sunlight into food for the whole tree every day.")
     assert len(text.split()) == 35  # first sentence alone is 8 words, both together too long
-    assert planner._shorten_narration(text) == (
+    assert shorten_narration(text) == (
         "Why do mango leaves look green in Bengaluru? Because chlorophyll inside them absorbs red and blue light, "
         "reflects green light back to our eyes.")
 
 
-def test_check_without_any_formula_is_treated_as_invented(fake):
+def test_math_failing_twice_regenerates_in_qualitative_mode(fake):
     plan = json.loads(GOOD_JSON)
-    for scene in plan["scenes"]:  # strip every formula from the lesson, keep the worked example's check
-        params = scene["visual"]["params"]
-        params["labels"] = ["Monsoon winds", "Rain over land"]
-        params["steps"] = ["Moist air rises"]
-    plan["scenes"][3]["check"] = {"expr": "200 * 10 * 100", "result": "200000"}
-    client = fake(json.dumps(plan), json.dumps(plan))
-    result, tel = planner.plan_lesson("Monsoon")
-    assert "this topic has no formula" in client.calls[1]["messages"][-1]["content"]
-    assert tel["math"]["status"] == "template" and result.scenes[3].check is None
-
-
-def test_math_failure_then_invalid_retry_keeps_attempt_one_qualitative(fake):
-    plan = json.loads(GOOD_JSON)
-    plan["scenes"][3]["check"]["expr"] = "V / R"  # unparseable: attempt 1 fails only on math
-    retry = json.loads(GOOD_JSON)
-    retry["scenes"][0]["narration"] = "Why does your phone charger get warm while charging today?"  # 10 words
-    client = fake(json.dumps(plan), json.dumps(retry))
+    plan["scenes"][3]["check"]["expr"] = "V / R"  # names are rejected by the AST whitelist
+    client = fake(json.dumps(plan), json.dumps(plan), DESCRIPTIVE_JSON)
     result, tel = planner.plan_lesson("Ohm's Law")
-    assert len(client.calls) == 2
-    assert tel["salvaged"] is True and tel["fallback_used"] is False and tel["math"]["status"] == "template"
-    assert result.scenes[0].narration.startswith("Why does your phone charger get warm while fast-charging")
-    assert result.scenes[3].narration.startswith("Let's walk through it step by step")
+    assert "Math check failed" in client.calls[1]["messages"][-1]["content"]
+    assert tel["stage"] == "qualitative" and tel["policy"] == "none" and tel["fallback_used"] is False
+
+
+def test_classify_failure_means_policy_none(fake, monkeypatch):
+    client = fake(DESCRIPTIVE_JSON)
+    monkeypatch.setattr(client, "has_formula", "maybe")  # anything but a JSON true
+    _, tel = planner.plan_lesson("Monsoon")
+    assert tel["policy"] == "none" and len(client.classify_calls) == 1
+    assert client.calls[0]["messages"][-1]["content"].endswith("Number policy: none")
+    assert client.classify_calls[0]["options"]["num_ctx"] == client.calls[0]["options"]["num_ctx"]  # no reload
 
 
 def test_answer_shown_in_steps_is_fixed_even_when_check_result_differs(fake):
