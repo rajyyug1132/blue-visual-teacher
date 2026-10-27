@@ -137,7 +137,36 @@
     ctx.restore();
   }
 
-  const TEMPLATES = {
+  // Templates draw only the lesson's own words. Every string a template draws must be made of words that appear in
+// the scene's labels, steps or code; anything else is invented chrome or filler ("BUS-L", "PROPERTY SET A",
+// "[ SCIENTIFIC SCHEMATIC ]") and is dropped, in every language. topic_en is a hint for picking illustrations and is
+// never drawn. Numbers, symbols and words under three letters always pass.
+function lessonWords(params) {
+  const words = new Set();
+  const sources = [].concat(params.labels || [], params.steps || [], params.code || []);
+  (params.trace || []).forEach(step => (step.vars || []).forEach(v => sources.push(v.name, v.value)));
+  sources.forEach(text => (String(text).toLowerCase().match(/[a-z]{3,}/g) || []).forEach(w => words.add(w)));
+  return words;
+}
+
+function onlyLessonText(ctx, words) {
+  return new Proxy(ctx, {
+    get(target, prop) {
+      if (prop === 'fillText') {
+        return (text, x, y, maxWidth) => {
+          const used = String(text).toLowerCase().match(/[a-z]{3,}/g) || [];
+          if (used.some(w => !words.has(w))) return;
+          return maxWidth === undefined ? target.fillText(text, x, y) : target.fillText(text, x, y, maxWidth);
+        };
+      }
+      const value = target[prop];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, prop, value) { target[prop] = value; return true; }
+  });
+}
+
+const TEMPLATES = {
     // -------------------------------------------------------------------------
     // 1. TITLE TEMPLATE (Cover layout: Left editorial text & key takeaway, Right vector illustration)
     // -------------------------------------------------------------------------
@@ -232,7 +261,7 @@
       ctx.fillText('[ SCIENTIFIC SCHEMATIC ]', rightX + rightW / 2, rightY + 24);
 
       // Content-aware vector illustration selection (precise phrase matching; collision exclusions)
-      const topicStr = (mainTitle + ' ' + kicker + ' ' + explanation).toLowerCase();
+      const topicStr = ((params.topic_en || '') + ' ' + mainTitle + ' ' + kicker + ' ' + explanation).toLowerCase();
 
       // Explicit exclusions for known ambiguous collisions (route to neutral scientific composition)
       const isElectrochem = topicStr.includes('electrochemical') || topicStr.includes('galvanic') || topicStr.includes('electrolyte') || topicStr.includes('electrochemistry');
@@ -280,6 +309,7 @@
       );
 
       ctx.save();
+      this.lastIllustration = isCircuitTopic ? 'circuit' : isWaterOrCycleTopic ? 'water' : isBioTopic ? 'cell' : 'neutral';
       if (isCircuitTopic) {
         // Circuit Diagram Illustration
         const cLeft = rightX + 60;
@@ -953,7 +983,7 @@
           theme.drawCard(ctx, illusX, illusY, illusW, illusH, 12, isLeftCard ? '#F1F5F9' : '#FEF3C7', theme.colors.border, 1.5);
 
           // Topic-sensitive illustration selection
-          const compareContext = (heading + ' ' + kicker + ' ' + colLabels.join(' ') + ' ' + colSteps.join(' ')).toLowerCase();
+          const compareContext = ((params.topic_en || '') + ' ' + heading + ' ' + kicker + ' ' + colLabels.join(' ') + ' ' + colSteps.join(' ')).toLowerCase();
           const isDCAC = (compareContext.includes('direct current') || compareContext.includes('alternating current') ||
                          (compareContext.includes('dc') && compareContext.includes('ac')) ||
                          (colLabels[0].toLowerCase().includes('dc') && colLabels[1].toLowerCase().includes('ac')));
@@ -2108,11 +2138,7 @@
       if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
 
       // Central stage interface blocks connecting buses
-      const loopBoxes = [
-        { x: centerAreaX - 60, y: centerAreaY + 140, w: 75, h: 40, label: 'BUS-L' },
-        { x: centerAreaX + centerAreaW - 15, y: centerAreaY + 140, w: 75, h: 40, label: 'BUS-R' },
-        { x: nodeCenterX - 45, y: centerAreaY + 285, w: 90, h: 34, label: 'NEXUS' }
-      ];
+      const loopBoxes = [];  // the BUS-L / BUS-R / NEXUS schematic was invented chrome, not lesson content
       loopBoxes.forEach(b => {
         theme.drawCard(ctx, b.x, b.y, b.w, b.h, 8, '#FFFFFF', theme.colors.border, 1.5);
         ctx.font = `700 10px ${font}`;
@@ -2901,15 +2927,16 @@
         labels: Array.isArray(source.labels) ? [...new Set(source.labels)] : source.labels,
         steps: Array.isArray(source.steps) ? [...new Set(source.steps)] : source.steps
       });
+      const lessonCtx = onlyLessonText(ctx, lessonWords(deduped));
       if (typeof this[type] === 'function') {
         try {
-          this[type](ctx, deduped, lt, dur, theme, lang);
+          this[type](lessonCtx, deduped, lt, dur, theme, lang);
           return;
         } catch (err) {
           console.warn(`[Templates] Exception in template "${type}", falling back to bullets:`, err);
         }
       }
-      this.bullets(ctx, deduped, lt, dur, theme, lang);
+      this.bullets(lessonCtx, deduped, lt, dur, theme, lang);
     }
   };
 
