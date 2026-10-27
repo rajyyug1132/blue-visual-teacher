@@ -775,11 +775,11 @@ class OfflineTTSEngine:
                     raw_segments.append(c_wav)
 
                     if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
-                        pause_durs.append(0.40)  # Sentence-end teacher pause
+                        pause_durs.append(0.20)  # Sentence-end teacher pause
                     elif any(p in delim for p in [",", ";", ":"]):
-                        pause_durs.append(0.25)  # Breath/clause pause
+                        pause_durs.append(0.08)  # Breath/clause pause
                     else:
-                        pause_durs.append(0.08)
+                        pause_durs.append(0.04)
 
                 if not raw_segments:
                     return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)

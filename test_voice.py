@@ -92,7 +92,7 @@ def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_d
         w.setsampwidth(2)
         w.setframerate(24000)
                 # 0.35s head padding prevents DAC / media player latency from swallowing the first word
-        head_pad = [0] * int(0.35 * 24000)
+        head_pad = [0] * int(0.04 * 24000)
         samples = head_pad + [max(-32768, min(32767, int(s * 32767.0))) for s in wav]
         w.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
