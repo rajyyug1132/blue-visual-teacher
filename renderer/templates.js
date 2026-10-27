@@ -2717,6 +2717,93 @@
       ctx.restore();
     },
 
+    // Code lines and the trace are data. Draw the strings; never eval them.
+    code_walkthrough(ctx, params, lt, dur, theme, lang) {
+      const rawCode = Array.isArray(params.code) ? params.code : [];
+      const rawTrace = Array.isArray(params.trace) ? params.trace : [];
+      if (rawCode.length > 12) theme.reportCapacityViolation('code_walkthrough', 'code_lines', rawCode.length, 12);
+      if (rawTrace.length > 6) theme.reportCapacityViolation('code_walkthrough', 'trace_steps', rawTrace.length, 6);
+
+      const code = rawCode.slice(0, 12).map(line => String(line).slice(0, 80));
+      const trace = rawTrace.slice(0, 6).map(step => ({
+        line: Number(step && step.line) || 0,
+        vars: (Array.isArray(step && step.vars) ? step.vars : []).slice(0, 4).map(pair => ({
+          name: String(pair && pair.name != null ? pair.name : '').slice(0, 24),
+          value: String(pair && pair.value != null ? pair.value : '').slice(0, 24)
+        }))
+      }));
+
+      const span = dur > 0 ? dur : 1;
+      const u = Math.max(0, Math.min(Number(lt) || 0, span)) / span;
+      const stepIdx = trace.length <= 1 ? 0 : Math.min(trace.length - 1, Math.floor(u * trace.length));
+      const step = trace[stepIdx] || { line: 0, vars: [] };
+      const labelFont = theme.getFont(lang);
+      const codeFont = '"Noto Sans", ui-monospace, Consolas, monospace';
+      const cardY = 68;
+      const cardH = 516;
+      const codeX = 64;
+      const codeW = 760;
+      const varX = 840;
+      const varW = 376;
+
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      theme.drawCard(ctx, codeX, cardY, codeW, cardH, 14);
+      theme.drawCard(ctx, varX, cardY, varW, cardH, 14);
+
+      const title = (params.labels && params.labels[0]) || 'Code';
+      const titleFit = theme.fitText(ctx, String(title), { width: codeW - 32, height: 28 }, 18, 14, 700, lang, { label: 'code_walkthrough.title' });
+      ctx.font = `700 ${titleFit.fontSize}px ${labelFont}`;
+      ctx.fillStyle = theme.colors.text;
+      theme.drawFittedLines(ctx, titleFit, codeX + 16, cardY + 14);
+
+      const lineH = 36;
+      const lineTop = cardY + 52;
+      const textX = codeX + 56;
+      const textW = codeW - 72;
+      code.forEach((line, i) => {
+        const rowY = lineTop + i * lineH;
+        const active = step.line === i + 1;
+        if (active) {
+          ctx.fillStyle = '#DBEAFE';
+          ctx.fillRect(codeX + 12, rowY - 6, codeW - 24, 32);
+        }
+        ctx.font = `700 16px ${codeFont}`;
+        ctx.fillStyle = active ? theme.colors.accent : theme.colors.muted;
+        ctx.fillText(String(i + 1), codeX + 20, rowY);
+        ctx.fillStyle = theme.colors.text;
+        ctx.font = `600 16px ${codeFont}`;
+        if (ctx.measureText(line).width > textW) {
+          const fit = theme.fitText(ctx, line, { width: textW, height: 22 }, 16, 12, 600, 'en', { label: 'code_walkthrough.line' });
+          ctx.font = `600 ${fit.fontSize}px ${codeFont}`;
+          theme.drawFittedLines(ctx, fit, textX, rowY);
+        } else {
+          ctx.fillText(line, textX, rowY);
+        }
+      });
+
+      const varTitle = (params.labels && params.labels[1]) || 'Variables';
+      const varFit = theme.fitText(ctx, String(varTitle), { width: varW - 32, height: 28 }, 18, 14, 700, lang, { label: 'code_walkthrough.vars' });
+      ctx.font = `700 ${varFit.fontSize}px ${labelFont}`;
+      ctx.fillStyle = theme.colors.text;
+      theme.drawFittedLines(ctx, varFit, varX + 16, cardY + 14);
+      ctx.font = `700 14px ${codeFont}`;
+      ctx.fillStyle = theme.colors.muted;
+      ctx.fillText(trace.length ? (stepIdx + 1) + '/' + trace.length : '0/0', varX + 16, cardY + 48);
+
+      step.vars.forEach((pair, i) => {
+        const y = cardY + 84 + i * 48;
+        ctx.font = `700 16px ${codeFont}`;
+        ctx.fillStyle = theme.colors.accent;
+        ctx.fillText(pair.name, varX + 16, y);
+        ctx.font = `600 16px ${codeFont}`;
+        ctx.fillStyle = theme.colors.text;
+        ctx.fillText(pair.value, varX + 16, y + 22);
+      });
+      ctx.restore();
+    },
+
     // -------------------------------------------------------------------------
     // Universal Dispatcher with Graceful Fallback to Bullets
     // -------------------------------------------------------------------------

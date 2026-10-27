@@ -743,8 +743,64 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   assert.strictEqual(theme.getOverflows().length, 0, 'theme.clearDiagnostics() resets diagnostic state completely');
   console.log('✓ Standard templates actively render overflow badge, deduplicate repeated scrubbing, and avoid false positives.');
 
+  // 35. code_walkthrough: Python for-loop trace, moving highlight, deterministic, inside the frame
+  console.log('\nTest 35: code_walkthrough Python loop trace');
+  const loopParams = {
+    labels: ['A for loop', 'Variables'],
+    code: ['total = 0', 'for i in range(3):', '    total = total + i', 'print(total)'],
+    trace: [
+      { line: 1, vars: [{ name: 'total', value: '0' }] },
+      { line: 2, vars: [{ name: 'i', value: '0' }, { name: 'total', value: '0' }] },
+      { line: 4, vars: [{ name: 'i', value: '2' }, { name: 'total', value: '3' }] }
+    ]
+  };
+  function highlightYs(ops) {
+    return ops.filter(op => op.startsWith('fillRect(')).map(op => op.split(',')[1]);
+  }
+  function insideFrame(ops) {
+    ops.forEach(op => {
+      const m = op.match(/^fillRect\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/);
+      if (!m) return;
+      const x = Number(m[1]);
+      const y = Number(m[2]);
+      const w = Number(m[3]);
+      const h = Number(m[4]);
+      assert(x >= 0 && y >= 0 && x + w <= 1280 && y + h <= 720, 'code highlight must stay inside 1280x720: ' + op);
+    });
+  }
+  theme.clearDiagnostics();
+  const loopEarly = new MockCanvasContext();
+  templates.code_walkthrough(loopEarly, loopParams, 0.5, 9, theme, 'en');
+  const loopMid = new MockCanvasContext();
+  templates.code_walkthrough(loopMid, loopParams, 4, 9, theme, 'en');
+  const loopLate = new MockCanvasContext();
+  templates.code_walkthrough(loopLate, loopParams, 8, 9, theme, 'en');
+  assert(loopEarly.ops.some(op => op.includes('fillText("total = 0"')), 'source line must be drawn as text');
+  assert(loopEarly.ops.some(op => op.includes('fillText("0"')), 'first step must show total = 0');
+  assert(loopLate.ops.some(op => op.includes('fillText("3"')), 'last step must show total = 3');
+  assert.notDeepStrictEqual(highlightYs(loopEarly.ops), highlightYs(loopMid.ops), 'highlight must move to the next traced line');
+  assert.notDeepStrictEqual(highlightYs(loopMid.ops), highlightYs(loopLate.ops), 'highlight must move again on the last step');
+  const loopAgain = new MockCanvasContext();
+  templates.code_walkthrough(loopAgain, loopParams, 4, 9, theme, 'en');
+  assert.deepStrictEqual(loopMid.ops, loopAgain.ops, 'the same t must draw an identical frame');
+  insideFrame(loopEarly.ops);
+  insideFrame(loopLate.ops);
+  ['en', 'hi', 'kn'].forEach(lang => {
+    const label = lang === 'hi' ? 'लूप' : lang === 'kn' ? 'ಲೂಪ್' : 'A for loop';
+    const ctxLang = new MockCanvasContext();
+    theme.clearDiagnostics();
+    templates.draw(ctxLang, 'code_walkthrough', {
+      labels: [label, 'Variables'],
+      code: loopParams.code,
+      trace: loopParams.trace
+    }, 4, 9, theme, lang);
+    insideFrame(ctxLang.ops);
+    assert.strictEqual(theme.hasOverflows(), false, lang + ' code_walkthrough must not overflow');
+  });
+  console.log('✓ code_walkthrough draws the loop, moves the highlight, repeats a frame, and stays inside the canvas.');
+
   console.log('\n=======================================');
-  console.log('ALL 34 RENDERER TESTS PASSED CLEANLY');
+  console.log('ALL 35 RENDERER TESTS PASSED CLEANLY');
   console.log('=======================================');
 }).catch(err => {
   console.error('\n❌ TEST RUN FAILED:', err);
