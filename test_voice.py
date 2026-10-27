@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings("ignore")
 """test_voice.py — Interactive Voice Testing CLI for Localization TTS Engine.
 
 Usage:
