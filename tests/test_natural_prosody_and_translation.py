@@ -537,3 +537,36 @@ def test_feature2_indian_accented_english_voice_aliases():
 
     tts_in_female = OfflineTTSEngine(voice_en="enif")
     assert tts_in_female.voice_en == "hf_alpha"
+
+
+def test_modernize_indic_stem_vocabulary_across_all_languages():
+    """Verify archaic textbook terms are modernized to spoken classroom terms across HI, KN, TA, BN."""
+    from localization.normalize import modernize_indic_stem_vocabulary, clean_for_mms
+
+    # Hindi: विद्युत धारा -> करंट, विभवांतर -> वोल्टेज, प्रतिरोध -> रेजिस्टेंस
+    hi_text = "इस परिपथ में विद्युत धारा बढ़ती है जब विभवांतर बढ़ता है और प्रतिरोध स्थिर रहता है।"
+    hi_mod = modernize_indic_stem_vocabulary(hi_text, "hi")
+    assert "करंट" in hi_mod
+    assert "वोल्टेज" in hi_mod
+    assert "रेजिस्टेंस" in hi_mod
+
+    # Kannada: ವಿದ್ಯುತ್ ಪ್ರವಾಹ -> ಕರೆಂಟ್, ವಿಭವಾಂತರ -> ವೋಲ್ಟೇಜ್, ಪ್ರತಿರೋಧ -> ರೆಸಿಸ್ಟೆನ್ಸ್
+    kn_text = "ಈ ಸರ್ಕ್ಯೂಟ್‌ನಲ್ಲಿ ವಿದ್ಯುತ್ ಪ್ರವಾಹ ಹರಿಯುತ್ತದೆ ಮತ್ತು ವಿಭವಾಂತರ ಹೆಚ್ಚಾದಾಗ ಪ್ರತಿರೋಧ ಇರುತ್ತದೆ."
+    kn_mod = modernize_indic_stem_vocabulary(kn_text, "kn")
+    assert "ಕರೆಂಟ್" in kn_mod
+    assert "ವೋಲ್ಟೇಜ್" in kn_mod
+    assert "ರೆಸಿಸ್ಟೆನ್ಸ್" in kn_mod
+
+    # Tamil: மின்னோட்டம் -> கரண்ட், மின்னழுத்தம் -> வோல்டேஜ், மின்தடை -> ரெசிஸ்டன்ஸ்
+    ta_text = "இந்த சுற்றில் மின்னோட்டம் பாய்கிறது மற்றும் மின்னழுத்தம் அதிகரிக்கும் போது மின்தடை மாறாது."
+    ta_mod = modernize_indic_stem_vocabulary(ta_text, "ta")
+    assert "கரண்ட்" in ta_mod
+    assert "வோல்டேஜ்" in ta_mod
+    assert "ரெசிஸ்டன்ஸ்" in ta_mod
+
+    # Bengali: তড়িৎ প্রবাহ -> কারেন্ট, বিভব পার্থক্য -> ভোল্টেজ, রোধ -> রেজিস্ট্যান্স
+    bn_text = "এই বর্তনীতে তড়িৎ প্রবাহ বৃদ্ধি পায় যখন বিভব পার্থক্য বাড়ে এবং রোধ স্থির থাকে।"
+    bn_mod = modernize_indic_stem_vocabulary(bn_text, "bn")
+    assert "কারেন্ট" in bn_mod
+    assert "ভোল্টেজ" in bn_mod
+    assert "রেজিস্ট্যান্স" in bn_mod

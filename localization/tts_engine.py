@@ -757,18 +757,38 @@ class OfflineTTSEngine:
                 tokenizer = self.mms_tokenizers[mms_lang]
                 model = self.mms_models[mms_lang]
 
-                # Split by punctuation to create natural teacher phrasing and breath pauses
-                parts = re.split(r'([,\;:\.\?\!\u0964\u0965]+)', mms_input_text)
+                # Intelligent clause grouping for natural prosody and teacher breath rhythm
+                # Avoid splitting tiny 1-3 word fragments that break melodic flow
+                raw_parts = re.split(r'([,\;:\.\?\!\u0964\u0965]+)', mms_input_text)
+                clauses = []
+                delims = []
+                curr = ""
+                idx = 0
+                while idx < len(raw_parts):
+                    chunk = raw_parts[idx].strip()
+                    sep = raw_parts[idx + 1] if idx + 1 < len(raw_parts) else ""
+                    idx += 2
+                    if not chunk:
+                        continue
+                    curr = f"{curr} {chunk}".strip() if curr else chunk
+                    words = curr.split()
+                    # Group words into meaningful clauses (at least 4 words or followed by sentence terminator)
+                    if len(words) >= 4 or any(p in sep for p in [".", "!", "?", "\u0964", "\u0965"]) or idx >= len(raw_parts):
+                        clauses.append(curr)
+                        delims.append(sep)
+                        curr = ""
+                if curr:
+                    if clauses:
+                        clauses[-1] = f"{clauses[-1]} {curr}"
+                    else:
+                        clauses.append(curr)
+                        delims.append(".")
+
                 raw_segments = []
                 pause_durs = []
-                idx = 0
-                while idx < len(parts):
-                    clause = parts[idx].strip()
-                    delim = parts[idx + 1] if idx + 1 < len(parts) else ""
-                    idx += 2
-                    if not clause:
-                        continue
-                    clean_clause = re.sub(r'[,\.\?\!\:\;\|\-\—\–\u0964\u0965]', ' ', clause).strip()
+                for clause, delim in zip(clauses, delims):
+                    # MMS vocabulary contains no punctuation codepoints; strip for clean G2P
+                    clean_clause = re.sub(r'[^\w\s]', ' ', clause, flags=re.UNICODE).strip()
                     if not clean_clause:
                         continue
                     inputs = tokenizer(clean_clause, return_tensors="pt").to(self.device)
@@ -781,15 +801,16 @@ class OfflineTTSEngine:
                         old_len = len(out)
                         new_len = int(old_len * 1.5)
                         c_wav = np.interp(np.linspace(0, old_len, new_len), np.arange(old_len), out).astype(np.float32)
-                    c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=4.0, release_ms=4.0)
+                    c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=3.0, release_ms=3.0)
                     raw_segments.append(c_wav)
 
+                    # Natural human pause cadence: 0.10s for comma/breath, 0.25s for sentence terminator
                     if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
-                        pause_durs.append(0.40)  # Sentence-end teacher pause
+                        pause_durs.append(0.25)
                     elif any(p in delim for p in [",", ";", ":"]):
-                        pause_durs.append(0.25)  # Breath/clause pause
+                        pause_durs.append(0.10)
                     else:
-                        pause_durs.append(0.08)
+                        pause_durs.append(0.06)
 
                 if not raw_segments:
                     return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)

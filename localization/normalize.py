@@ -808,6 +808,62 @@ def expand_stem_classroom_terms(text: str, lang: str) -> str:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Classroom STEM Vocabulary Modernizer (Textbook Formal -> Spoken Classroom)
+# Replaces archaic, Sanskritized, or formal bookish terms with conversational
+# modern terms used by CBSE/ICSE teachers across all Indic languages.
+# ---------------------------------------------------------------------------
+CLASSROOM_SPOKEN_REPLACEMENTS: dict[str, list[tuple[re.Pattern, str]]] = {
+    "hi": [
+        (re.compile(r"विद्युत\s+धारा"), "करंट"),
+        (re.compile(r"विभवांतर"), "वोल्टेज"),
+        (re.compile(r"प्रतिरोधक"), "रेजिस्टर"),
+        (re.compile(r"प्रतिरोध"), "रेजिस्टेंस"),
+        (re.compile(r"प्रकाश\s+संश्लेषण"), "फ़ोटोसिंथेसिस"),
+        (re.compile(r"दिष्ट\s+धारा"), "डीसी करंट"),
+        (re.compile(r"प्रत्यावर्ती\s+धारा"), "एसी करंट"),
+        (re.compile(r"चालक"), "कंडक्टर"),
+        (re.compile(r"अचालक"), "इंसुलेटर"),
+    ],
+    "kn": [
+        (re.compile(r"ವಿದ್ಯುತ್\s+ಪ್ರವಾಹ(?:ವು|ವನ್ನು|ದ)?"), "ಕರೆಂಟ್"),
+        (re.compile(r"ವಿಭವಾಂತರ(?:ವು|ವನ್ನು|ದ)?"), "ವೋಲ್ಟೇಜ್"),
+        (re.compile(r"ಪ್ರತಿರೋಧ(?:ವು|ವನ್ನು|ದ)?"), "ರೆಸಿಸ್ಟೆನ್ಸ್"),
+        (re.compile(r"(?:ರೋಧಕ|ಪ್ರತಿರೋಧಕ)(?:ವು|ವನ್ನು|ದ|ಗೆ)?"), "ರೆಸಿಸ್ಟರ್"),
+        (re.compile(r"ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ"), "ಫೋಟೋಸಿಂಥೆಸಿಸ್"),
+        (re.compile(r"ವಾಹಕ(?:ವು|ವನ್ನು|ದ)?"), "ಕಂಡಕ್ಟರ್"),
+    ],
+    "ta": [
+        (re.compile(r"மின்னோட்டம்"), "கரண்ட்"),
+        (re.compile(r"மின்னழுத்தம்"), "வோல்டேஜ்"),
+        (re.compile(r"மின்தடையம்"), "ரெசிஸ்டர்"),
+        (re.compile(r"மின்தடை"), "ரெசிஸ்டன்ஸ்"),
+        (re.compile(r"ஒளிச்சேர்க்கை"), "போட்டோசிந்தசிஸ்"),
+        (re.compile(r"கடத்தி"), "கண்டக்டர்"),
+    ],
+    "bn": [
+        (re.compile(r"তড়িৎ\s+প্রবাহ"), "কারেন্ট"),
+        (re.compile(r"বিভব\s+পার্থক্য"), "ভোল্টেজ"),
+        (re.compile(r"রোধক"), "রেজিস্টার"),
+        (re.compile(r"রোধ"), "রেজিস্ট্যান্স"),
+        (re.compile(r"সালোকসংশ্লেষ"), "ফটোসিন্থেসিস"),
+        (re.compile(r"পরিবাহী"), "কন্ডাক্টর"),
+    ],
+}
+
+
+def modernize_indic_stem_vocabulary(text: str, lang: str) -> str:
+    """Replace archaic, textbook formal Indic terms with natural spoken classroom terms."""
+    lang_key = lang.split("_")[0]
+    replacements = CLASSROOM_SPOKEN_REPLACEMENTS.get(lang_key, [])
+    if not replacements:
+        return text
+    out = text
+    for pat, rep in replacements:
+        out = pat.sub(rep, out)
+    return out
+
+
 DISCOURSE_MARKERS: dict[str, list[str]] = {
     "hi": [
         "लेकिन", "किन्तु", "परन्तु", "क्योंकि", "इसलिए", "अतः", "अर्थात",
@@ -893,7 +949,8 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
       7. Strips unsupported symbols and brackets ([] {} () <> _ ^ ` ~).
     """
     # 0. Expand STEM classroom terms and acronyms so characters don't get garbled or dropped
-    out = expand_stem_classroom_terms(text, lang)
+    out = modernize_indic_stem_vocabulary(text, lang)
+    out = expand_stem_classroom_terms(out, lang)
     out = expand_stem_acronyms(out, lang)
 
     # Normalize compound word hyphens (e.g. fast-charging -> fast charging)
@@ -1023,7 +1080,8 @@ def has_ascii_digits(text: str) -> bool:
 
 def expand_numbers_and_symbols(text: str, lang: str) -> str:
     """Expand numbers, scientific units, and mathematical symbols into spoken words."""
-    out = expand_stem_classroom_terms(text, lang)
+    out = modernize_indic_stem_vocabulary(text, lang)
+    out = expand_stem_classroom_terms(out, lang)
     out = expand_stem_acronyms(out, lang)
     if lang in ("kn", "kan_Knda"):
         # Math operators
