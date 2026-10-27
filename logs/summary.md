@@ -1,5 +1,5 @@
-# DONE checks · 2026-10-27 14:09
+# DONE checks · 2026-10-27 14:57
 
 | D# | check | state | owner | detail | evidence |
 |---|---|---|---|---|---|
-| D7 | export 20 topics x en/hi/kn | MISSING | AYUSH | not in repo: exporter/export_mp4.py, exporter/test_harness.py | logs/D7.log |
+| D2 | planner ladder, 20 topics | PASS | YYUG | valid 19/20, P50 15.1s, final failures 0, unspoken answers 0 | logs/D2.log |
