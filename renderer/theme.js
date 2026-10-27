@@ -43,6 +43,7 @@
       kn: '"Noto Sans Kannada", "Nirmala UI", "Noto Sans", sans-serif',
       ta: '"Noto Sans Tamil", "Nirmala UI", "Noto Sans", sans-serif',
       te: '"Noto Sans Telugu", "Nirmala UI", "Noto Sans", sans-serif',
+      bn: '"Noto Sans Bengali", "Noto Sans", sans-serif',
     },
 
     getFont(lang) {
@@ -317,7 +318,7 @@
 
     fitText(ctx, text, box, maxPx, minPx, weight = 600, lang = 'en', options = {}) {
       const family = this.getFont(lang);
-      const isIndic = lang === 'hi' || lang === 'kn' || lang === 'ta' || lang === 'te';
+      const isIndic = lang === 'hi' || lang === 'kn' || lang === 'ta' || lang === 'te' || lang === 'bn';
       const lineMultiplier = isIndic ? 1.35 : 1.25;
       const tag = options.label || 'text';
       const wrapOpts = { breakWords: isIndic || Boolean(options.breakWords) };

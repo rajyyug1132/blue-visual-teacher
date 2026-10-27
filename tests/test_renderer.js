@@ -818,8 +818,12 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   assert.deepStrictEqual(report, {}, 'templates drew text that is not in the lesson: ' + JSON.stringify(report, null, 1));
   console.log('✓ every template draws only lesson text in an all-Hindi lesson (topic_en is never drawn).');
 
+  console.log('\nTest 37: Bengali theme font names Noto Sans Bengali');
+  assert(theme.getFont('bn').includes('Noto Sans Bengali'), theme.getFont('bn'));
+  console.log('✓ bn font stack names Noto Sans Bengali.');
+
   console.log('\n=======================================');
-  console.log('ALL 36 RENDERER TESTS PASSED CLEANLY');
+  console.log('ALL 37 RENDERER TESTS PASSED CLEANLY');
   console.log('=======================================');
 }).catch(err => {
   console.error('\n❌ TEST RUN FAILED:', err);
