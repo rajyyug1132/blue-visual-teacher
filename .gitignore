@@ -1,0 +1,13 @@
+﻿__pycache__/
+.venv/
+.env
+cache/
+*.mp4
+*.wav
+*.pt
+*.safetensors
+*.onnx
+*.bin
+models/
+node_modules/
+reports/
