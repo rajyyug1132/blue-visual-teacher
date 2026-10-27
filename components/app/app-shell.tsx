@@ -46,16 +46,16 @@ export function AppShell({ children, next }: { children: (session: DemoSession) 
                 className="ml-1 inline-flex size-10 items-center justify-center rounded-full border border-ink hover:bg-ink hover:text-cream"
               >
                 <LogOut className="size-4" aria-hidden="true" />
-                <span className="sr-only">End demo session</span>
+                <span className="sr-only">Sign out</span>
               </button>
             </nav>
           )}
         </div>
-        {session && (
+        {session && !session.token && (
           <div className="border-t border-ink/20 bg-brand-yellow/70">
             <p className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-1.5 text-xs font-semibold md:px-6">
               <FlaskConical className="size-3.5 shrink-0" aria-hidden="true" />
-              Demo session for {session.email}. Authentication is not connected yet.
+              Local demo session for {session.email}. Sign in to save lessons to your account.
             </p>
           </div>
         )}
