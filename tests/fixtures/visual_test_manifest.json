@@ -1,0 +1,190 @@
+{
+  "title": "Comprehensive Visual Test Suite: All Eight Templates",
+  "lang": "en",
+  "total_sec": 80.0,
+  "audio": "test_audio.wav",
+  "sample_rate": 24000,
+  "scenes": [
+    {
+      "id": 1,
+      "start_sec": 0.0,
+      "end_sec": 10.0,
+      "duration_sec": 10.0,
+      "narration": "In a modern computing architecture, the central processor coordinates arithmetic operations, instruction decoding, memory management, and peripheral bus communication.",
+      "visual": {
+        "type": "labeled_diagram",
+        "params": {
+          "labels": [
+            "Central Processing Unit",
+            "Arithmetic Logic Unit",
+            "Control Unit",
+            "Level 1 Cache",
+            "Register Array",
+            "System Bus Interface"
+          ],
+          "steps": [
+            "Fetch Instruction",
+            "Decode Microcode",
+            "Execute ALU Task",
+            "Writeback Result"
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "start_sec": 10.0,
+      "end_sec": 20.0,
+      "duration_sec": 10.0,
+      "narration": "Scientific discovery follows an empirical sequence: initial observation leads to hypothesis formation, controlled experiments, data acquisition, quantitative analysis, and peer-reviewed verification.",
+      "visual": {
+        "type": "timeline",
+        "params": {
+          "labels": [
+            "1. Observation",
+            "2. Hypothesis",
+            "3. Experiment",
+            "4. Measurement",
+            "5. Analysis",
+            "6. Verification"
+          ],
+          "steps": [
+            "Observe phenomena",
+            "Formulate model",
+            "Setup apparatus",
+            "Record measurements",
+            "Compute statistics",
+            "Confirm validity"
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "start_sec": 20.0,
+      "end_sec": 30.0,
+      "duration_sec": 10.0,
+      "narration": "Measuring current across three resistor materials reveals distinct conductivity ratings under identical 24-volt potential differences.",
+      "visual": {
+        "type": "graph",
+        "params": {
+          "labels": [
+            "Resistor Material Type",
+            "Measured Current (A)"
+          ],
+          "steps": [
+            "Carbon Film: 2 A",
+            "Metal Oxide: 5 A",
+            "Wirewound Coil: 8 A",
+            "Superconductor: 12 A"
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "start_sec": 30.0,
+      "end_sec": 40.0,
+      "duration_sec": 10.0,
+      "narration": "When considering thermodynamics and gas compression at constant temperature, pressure and volume exhibit an inverse relationship where compressing the container increases molecular collision frequency against chamber boundaries.",
+      "visual": {
+        "type": "graph",
+        "params": {
+          "labels": [
+            "Chamber Pressure (P)",
+            "Enclosed Volume (V)"
+          ],
+          "steps": [
+            "Pressure is inversely proportional to volume under isothermal conditions",
+            "Decreasing volume increases wall collision frequency proportionally",
+            "Boyle's law: Product of pressure and volume remains constant"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "start_sec": 40.0,
+      "end_sec": 50.0,
+      "duration_sec": 10.0,
+      "narration": "Welcome to quantum electrodynamics, the unified relativistic field theory governing electromagnetic interactions between charged fundamental particles.",
+      "visual": {
+        "type": "title",
+        "params": {
+          "labels": [
+            "Quantum Electrodynamics",
+            "Field Theory",
+            "Feynman Diagrams",
+            "Photon Coupling"
+          ],
+          "steps": [
+            "Relativistic Quantum Mechanics of Charged Leptons"
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "start_sec": 50.0,
+      "end_sec": 60.0,
+      "duration_sec": 10.0,
+      "narration": "Direct current maintains unidirectional electron flow from negative to positive terminals, whereas alternating current periodically reverses direction with sinusoidal voltage oscillation.",
+      "visual": {
+        "type": "compare",
+        "params": {
+          "labels": [
+            "Direct Current (DC)",
+            "Alternating Current (AC)"
+          ],
+          "steps": [
+            "Steady constant voltage from chemical batteries",
+            "Oscillating sinusoidal voltage from turbine generators"
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "start_sec": 60.0,
+      "end_sec": 70.0,
+      "duration_sec": 10.0,
+      "narration": "The electrical distribution network steps power up for transmission across high-voltage grid lines before local substation transformers lower voltage for household consumer safety.",
+      "visual": {
+        "type": "flow",
+        "params": {
+          "labels": [
+            "Power Plant",
+            "Step-Up Transformer",
+            "Transmission Grid",
+            "Substation Step-Down",
+            "Consumer Household"
+          ],
+          "steps": [
+            "End-to-end grid efficiency exceeds 92 percent"
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "start_sec": 70.0,
+      "end_sec": 80.0,
+      "duration_sec": 10.0,
+      "narration": "To conclude our physics curriculum, review these fundamental electrical relationships and verify circuit power dissipation equations before laboratory testing.",
+      "visual": {
+        "type": "bullets",
+        "params": {
+          "labels": [
+            "Key Laboratory Safety and Electrical Rules"
+          ],
+          "steps": [
+            "Always disconnect main power supply prior to circuit inspection",
+            "Ensure voltmeter is connected in parallel and ammeter in series",
+            "Verify power ratings of resistors to prevent thermal runaway",
+            "Wear non-conductive insulating footwear in high-voltage work areas"
+          ]
+        }
+      }
+    }
+  ]
+}

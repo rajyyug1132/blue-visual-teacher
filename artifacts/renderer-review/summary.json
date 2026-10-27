@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-10-27T11:35:29.975Z",
+  "browser": "Google Chrome 156.0.8078.48",
+  "viewport": "1280x720",
+  "totalScreenshotsCaptured": 15,
+  "errors": {
+    "pageErrors": [],
+    "consoleErrors": [],
+    "failedRequests": [],
+    "missingFontAssets": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:60000/renderer/assets/fonts/NotoSans-Regular.ttf",
+      "GET http://127.0.0.1:60000/renderer/assets/fonts/NotoSans-Regular.ttf: net::ERR_ABORTED",
+      "Failed to load resource: the server responded with a status of 404 (Not Found) http://127.0.0.1:60000/renderer/assets/fonts/NotoSans-Bold.ttf",
+      "GET http://127.0.0.1:60000/renderer/assets/fonts/NotoSans-Bold.ttf: net::ERR_ABORTED"
+    ]
+  },
+  "screenshots": [
+    {
+      "name": "golden_01_title_intro",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_01_title_intro.png",
+      "bytes": 49104,
+      "t": 2
+    },
+    {
+      "name": "golden_02_transition_title_compare",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_02_transition_title_compare.png",
+      "bytes": 46867,
+      "t": 9.8
+    },
+    {
+      "name": "golden_03_compare_active",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_03_compare_active.png",
+      "bytes": 63970,
+      "t": 15
+    },
+    {
+      "name": "golden_04_equation_active",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_04_equation_active.png",
+      "bytes": 56914,
+      "t": 25
+    },
+    {
+      "name": "golden_05_flow_active",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_05_flow_active.png",
+      "bytes": 58343,
+      "t": 36
+    },
+    {
+      "name": "golden_06_bullets_active",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_06_bullets_active.png",
+      "bytes": 68278,
+      "t": 48
+    },
+    {
+      "name": "golden_07_final_hold_frame",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\golden_07_final_hold_frame.png",
+      "bytes": 63437,
+      "t": 54.79
+    },
+    {
+      "name": "template_01_labeled_diagram",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_01_labeled_diagram.png",
+      "bytes": 61002,
+      "t": 5,
+      "template": "labeled_diagram"
+    },
+    {
+      "name": "template_02_timeline",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_02_timeline.png",
+      "bytes": 55512,
+      "t": 15,
+      "template": "timeline"
+    },
+    {
+      "name": "template_03_graph_barchart",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_03_graph_barchart.png",
+      "bytes": 49249,
+      "t": 25,
+      "template": "graph_numeric_barchart"
+    },
+    {
+      "name": "template_04_graph_conceptual",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_04_graph_conceptual.png",
+      "bytes": 58025,
+      "t": 35,
+      "template": "graph_conceptual_analysis"
+    },
+    {
+      "name": "template_05_title",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_05_title.png",
+      "bytes": 63072,
+      "t": 45,
+      "template": "title"
+    },
+    {
+      "name": "template_06_compare",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_06_compare.png",
+      "bytes": 59439,
+      "t": 55,
+      "template": "compare"
+    },
+    {
+      "name": "template_07_flow",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_07_flow.png",
+      "bytes": 60827,
+      "t": 65,
+      "template": "flow"
+    },
+    {
+      "name": "template_08_bullets",
+      "path": "D:\\CodeStorm - UNLOX\\artifacts\\renderer-review\\template_08_bullets.png",
+      "bytes": 85802,
+      "t": 75,
+      "template": "bullets"
+    }
+  ]
+}

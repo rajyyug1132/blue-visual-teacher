@@ -28,7 +28,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 | Owner | Module | State | Last check | Next |
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
-| FARHAN | renderer/ | — | — | — |
+| FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
 | TARUN | localization/ | Done (L1–L8 verified) | Full L1–L8 pipeline verified: offline sockets blocked, 1 batched IndicTrans2 call, zero Devanagari in KN, 24kHz MMS seed 42, 0.90 peak norm, 30–90s sync ±0.05s, 8 Noto fonts |  |
 | AYUSH | exporter/ | — | — | — |
 

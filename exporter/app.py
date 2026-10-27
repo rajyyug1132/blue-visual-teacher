@@ -145,8 +145,13 @@ def index() -> RedirectResponse:
     return RedirectResponse("/web/index.html")
 
 
-for mount, folder in (("/web", ROOT / "web"), ("/renderer", ROOT / "renderer"), ("/artifacts", pipeline.ARTIFACTS)):
+# One server, zero CORS. Order matters: the fonts mount must come before /renderer, which would otherwise claim it.
+# renderer/player.html loads assets/fonts/*.ttf relative to itself; the files live once, in assets/fonts (Tarun).
+MOUNTS = (("/renderer/assets/fonts", ROOT / "assets" / "fonts"), ("/assets/fonts", ROOT / "assets" / "fonts"),
+          ("/web", ROOT / "web"), ("/renderer", ROOT / "renderer"), ("/fixtures", ROOT / "fixtures"),
+          ("/artifacts", pipeline.ARTIFACTS))
+for mount, folder in MOUNTS:
     folder.mkdir(parents=True, exist_ok=True)
-    app.mount(mount, StaticFiles(directory=folder, html=True), name=mount.strip("/"))
+    app.mount(mount, StaticFiles(directory=folder, html=True), name=mount.strip("/").replace("/", "_"))
 
 __all__ = ["app", "topic_slug"]

@@ -174,3 +174,15 @@ def test_d7_real_pipeline_ohms_law(lang):
     if lang == "kn":
         text = " ".join(s["narration"] for s in manifest["scenes"])
         assert any("ಀ" <= c <= "೿" for c in text) and not any("ऀ" <= c <= "ॿ" for c in text)
+
+
+def test_one_server_serves_ui_renderer_fonts_fixtures(api):
+    client, _ = api
+    root = client.get("/", follow_redirects=False)
+    assert root.status_code in (302, 307) and root.headers["location"] == "/web/index.html"  # live mode, no ?mock=1
+    assert client.get("/web/index.html").status_code == 200
+    assert client.get("/renderer/player.html").status_code == 200
+    font = client.get("/renderer/assets/fonts/NotoSansKannada-Regular.ttf")
+    assert font.status_code == 200 and len(font.content) > 100_000
+    assert client.get("/assets/fonts/NotoSansDevanagari-Regular.ttf").status_code == 200
+    assert client.get("/fixtures/golden_ohms_law.json").json()["title"].startswith("Ohm")

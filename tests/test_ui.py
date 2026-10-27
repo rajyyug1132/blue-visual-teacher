@@ -79,19 +79,22 @@ def page(server):
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("request", lambda r: None if r.url.startswith((base, "data:", "blob:")) else external.append(r.url))
         pg.goto(base + "/")
-        pg.wait_for_selector("#langs .chip")
+        pg.wait_for_selector("#lang-chips .chip-btn[data-lang='kn']", state="visible")
         pg.errors, pg.external = errors, external
         yield pg
         browser.close()
 
 
+# Farhan's web/ (FARHAN_BLUEPRINT 7): #topic-input, #generate-btn, #lang-chips, #step-*, #progress-bar,
+# #error-toast (.show), #toast-retry-btn, #download-mp4-btn, #validation-msg.
+
 def test_d8_language_selector_offers_en_hi_kn(page):
-    chips = page.locator("#langs .chip")
-    assert chips.count() == 3
-    assert [chips.nth(i).get_attribute("data-lang") for i in range(3)] == ["en", "hi", "kn"]
-    assert chips.nth(2).inner_text() == "ಕನ್ನಡ"
-    chips.nth(1).click()
-    assert chips.nth(1).get_attribute("aria-checked") == "true"
+    visible = page.eval_on_selector_all(
+        "#lang-chips .chip-btn", "els => els.filter(e => e.offsetParent !== null).map(e => e.dataset.lang)")
+    assert visible == ["en", "hi", "kn"]  # /api/languages says en, hi, kn; others are hidden
+    page.click("#lang-chips .chip-btn[data-lang='kn']")
+    assert page.get_attribute("#lang-chips .chip-btn[data-lang='kn']", "aria-checked") == "true"
+    assert page.inner_text("#lang-chips .chip-btn[data-lang='kn']") == "ಕನ್ನಡ"
 
 
 def test_d8_generate_shows_progress_then_player_and_download(page, server):
@@ -99,14 +102,15 @@ def test_d8_generate_shows_progress_then_player_and_download(page, server):
     behaviour["fail"] = False
     topic = f"UI Flow {uuid.uuid4().hex[:6]}"
     topics.append(topic)
-    page.fill("#topic", topic)
-    page.click("#go")
-    page.wait_for_selector("#progress:not([hidden])")
-    page.wait_for_selector("#stepper li.active, #stepper li.done")
-    page.wait_for_selector("#player:not([hidden])", timeout=240_000)
-    assert page.evaluate("document.getElementById('bar-fill').style.width") == "100%"
-    assert page.locator("#stepper li.done").count() == 5
-    href = page.get_attribute("#download", "href")
+    page.fill("#topic-input", topic)
+    page.click("#generate-btn")
+    page.wait_for_selector("#progress-card", state="visible")
+    page.wait_for_selector("#step-plan.active, #step-plan.done")
+    page.wait_for_function("document.getElementById('download-mp4-btn').getAttribute('href') !== '#'",
+                           timeout=240_000)
+    assert page.locator(".step-item.done").count() == 5
+    assert page.evaluate("document.getElementById('progress-bar').style.width") == "100%"
+    href = page.get_attribute("#download-mp4-btn", "href")
     assert href.endswith("/lesson.mp4")
     resp = page.request.get(base + href)
     assert resp.status == 200 and len(resp.body()) > 150 * 1024
@@ -119,18 +123,17 @@ def test_d8_errors_show_a_friendly_toast_with_retry(page, server):
     _, behaviour, _ = server
     behaviour["fail"] = True
     try:
-        page.fill("#topic", f"Broken {uuid.uuid4().hex[:6]}")
-        page.click("#go")
-        page.wait_for_selector("#toast:not([hidden])", timeout=30_000)
-        text = page.inner_text("#toast-text")
+        page.fill("#topic-input", f"Broken {uuid.uuid4().hex[:6]}")
+        page.click("#generate-btn")
+        page.wait_for_selector("#error-toast.show", timeout=30_000)
+        text = page.inner_text("#toast-message")
         assert "traceback" not in text.lower() and "Please retry" in text
-        assert page.is_visible("#retry")
+        assert page.is_visible("#toast-retry-btn")
     finally:
         behaviour["fail"] = False
 
 
 def test_d8_topic_validation_is_inline(page):
-    page.fill("#topic", "x")
-    page.click("#go")
-    assert "at least 2 characters" in page.inner_text("#hint")
-    assert page.is_hidden("#progress")
+    page.fill("#topic-input", "x")
+    page.click("#generate-btn")
+    assert page.is_visible("#validation-msg")

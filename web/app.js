@@ -1,145 +1,499 @@
-// web/app.js — the page judges touch first. Vanilla JS, same-origin API only (AYUSH_BLUEPRINT 4).
+// web/app.js — Blue Visual Teacher Frontend Logic (FARHAN_BLUEPRINT.md §7)
+// Pure vanilla JS, offline-first, WCAG compliant, zero external CDNs or network calls.
+
 (function () {
-  "use strict";
-  const $ = (id) => document.getElementById(id);
-  const LANG_NAMES = { en: "English", hi: "हिन्दी", kn: "ಕನ್ನಡ", ta: "தமிழ்", te: "తెలుగు" };
-  const STAGES = ["plan", "translate", "tts", "render", "encode"];
-  const STAGE_TEXT = { queued: "Waiting for the previous lesson to finish…", plan: "Planning the lesson", translate: "Translating",
-                       tts: "Recording the voice", render: "Drawing the video", encode: "Exporting the MP4", done: "Ready" };
-  const ui = { lang: "en", polling: null, last: null, playing: false };
+  'use strict';
 
-  function store(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* private mode */ } }
-  function recall(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  // DOM Elements
+  const topicInput = document.getElementById('topic-input');
+  const generateBtn = document.getElementById('generate-btn');
+  const validationMsg = document.getElementById('validation-msg');
+  const langChipsContainer = document.getElementById('lang-chips');
+  const exampleChips = document.querySelectorAll('.example-chip');
+  const progressCard = document.getElementById('progress-card');
+  const progressBar = document.getElementById('progress-bar');
+  const playPauseBtn = document.getElementById('play-pause-btn');
+  const playBtnIcon = document.getElementById('play-btn-icon');
+  const playBtnText = document.getElementById('play-btn-text');
+  const scrubber = document.getElementById('lesson-scrubber');
+  const timeDisplay = document.getElementById('time-display');
+  const captionsBtn = document.getElementById('captions-btn');
+  const muteBtn = document.getElementById('mute-btn');
+  const downloadMp4Btn = document.getElementById('download-mp4-btn');
+  const copyPlanBtn = document.getElementById('copy-plan-btn');
+  const toggleTimingsBtn = document.getElementById('toggle-timings-btn');
+  const timingsDrawer = document.getElementById('timings-drawer');
+  const errorToast = document.getElementById('error-toast');
+  const toastMessage = document.getElementById('toast-message');
+  const toastRetryBtn = document.getElementById('toast-retry-btn');
+  const audio = document.getElementById('audio-player');
+  const offlineBadge = document.getElementById('offline-badge');
+  const offlineText = document.getElementById('offline-text');
 
-  async function api(path, opts) {
-    let res;
-    try { res = await fetch(path, opts); }
-    catch (e) { throw new Error("Server not reachable. Is run_demo running?"); }
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Please check the topic and try again.");
-    return body;
+  // State
+  let currentLang = 'en';
+  let currentManifest = null;
+  let isGenerating = false;
+  let isPlaying = false;
+  let playStartTime = null;
+  let pauseOffset = 0;
+  let animId = null;
+  let captionsEnabled = true;
+  let activeJobId = null;
+  let pollTimer = null;
+  let lastTopic = "Ohm's Law";
+
+  // Stage mapping
+  const STAGE_ORDER = ['plan', 'translate', 'tts', 'render', 'encode'];
+
+  // 1. Initialize
+  async function init() {
+    setupOfflineBadge();
+    loadStoredPreferences();
+    setupEventListeners();
+    await fetchAvailableLanguages();
+
+    // If loaded with ?mock=1 or default, automatically warm up with golden manifest
+    if (window.location.search.includes('mock=1') || window.location.search.includes('load=1')) {
+      loadDefaultLesson();
+    }
   }
 
-  function toast(message) {
-    $("toast-text").textContent = message;
-    $("toast").hidden = false;
+  // Live offline indicator
+  function setupOfflineBadge() {
+    function updateOnlineStatus() {
+      if (navigator.onLine === false) {
+        offlineText.textContent = 'Running fully offline';
+        offlineBadge.style.color = 'var(--good)';
+      } else {
+        offlineText.textContent = 'Offline Engine Ready';
+      }
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
   }
 
-  function chip(label, checked, onClick, extra) {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "chip"; b.textContent = label;
-    if (checked !== null) { b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(checked)); }
-    if (extra) { const s = document.createElement("span"); s.className = "cached"; s.textContent = extra; b.appendChild(s); }
-    b.onclick = onClick;
-    return b;
+  // Load and save localStorage safely wrapped in try/catch
+  function loadStoredPreferences() {
+    try {
+      const storedTopic = localStorage.getItem('bvt_last_topic');
+      const storedLang = localStorage.getItem('bvt_last_lang');
+      if (storedTopic) topicInput.value = storedTopic;
+      if (storedLang) setLanguage(storedLang);
+    } catch (e) {
+      console.warn('[Storage] localStorage not accessible:', e);
+    }
   }
 
-  function renderLangs(langs) {
-    const box = $("langs");
-    box.innerHTML = "";
-    if (!langs.includes(ui.lang)) ui.lang = langs[0] || "en";
-    langs.forEach((code) => {
-      const c = chip(LANG_NAMES[code] || code, code === ui.lang, () => {
-        ui.lang = code; store("bvt.lang", code); renderLangs(langs);
-        if (ui.last && ui.last.topic) generate(ui.last.topic);  // switching language re-uses the cached plan
+  function savePreferences(topic, lang) {
+    try {
+      localStorage.setItem('bvt_last_topic', topic);
+      localStorage.setItem('bvt_last_lang', lang);
+    } catch (e) {
+      console.warn('[Storage] Failed to save localStorage:', e);
+    }
+  }
+
+  // Fetch available languages from backend
+  async function fetchAvailableLanguages() {
+    try {
+      const res = await fetch('/api/languages');
+      if (res.ok) {
+        const langs = await res.json();
+        const chips = langChipsContainer.querySelectorAll('.chip-btn');
+        chips.forEach(chip => {
+          const l = chip.getAttribute('data-lang');
+          if (langs.includes(l)) {
+            chip.style.display = 'inline-block';
+          } else {
+            chip.style.display = 'none';
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[API] /api/languages unreachable:', err);
+    }
+  }
+
+  // Set active language
+  function setLanguage(lang) {
+    currentLang = lang;
+    const chips = langChipsContainer.querySelectorAll('.chip-btn');
+    chips.forEach(chip => {
+      const active = chip.getAttribute('data-lang') === lang;
+      chip.classList.toggle('active', active);
+      chip.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+  }
+
+  // 2. Event Listeners
+  function setupEventListeners() {
+    // Generate Button & Enter Key
+    generateBtn.addEventListener('click', handleGenerate);
+    topicInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleGenerate();
+      }
+    });
+
+    // Spacebar to Play/Pause (when not typing in an input)
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && document.activeElement !== topicInput) {
+        e.preventDefault();
+        togglePlayPause();
+      }
+    });
+
+    // Language chips
+    langChipsContainer.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip-btn');
+      if (chip) {
+        const selectedLang = chip.getAttribute('data-lang');
+        if (selectedLang !== currentLang) {
+          setLanguage(selectedLang);
+          if (currentManifest && topicInput.value.trim()) {
+            handleGenerate(); // re-generate with cached plan
+          }
+        }
+      }
+    });
+
+    // Example topics
+    exampleChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        topicInput.value = chip.textContent.trim();
+        validationMsg.style.display = 'none';
+        handleGenerate();
       });
-      c.dataset.lang = code;
-      box.appendChild(c);
+    });
+
+    // Player Controls
+    playPauseBtn.addEventListener('click', togglePlayPause);
+    scrubber.addEventListener('input', handleScrub);
+
+    captionsBtn.addEventListener('click', () => {
+      captionsEnabled = !captionsEnabled;
+      captionsBtn.classList.toggle('active', captionsEnabled);
+      // Re-render current frame with updated caption flag
+      const t = parseFloat(scrubber.value || 0);
+      window.renderAtTime(t);
+    });
+
+    muteBtn.addEventListener('click', () => {
+      if (audio) {
+        audio.muted = !audio.muted;
+        muteBtn.textContent = audio.muted ? '🔇' : '🔊';
+      }
+    });
+
+    // Action buttons
+    copyPlanBtn.addEventListener('click', () => {
+      if (!currentManifest) return;
+      navigator.clipboard.writeText(JSON.stringify(currentManifest, null, 2)).then(() => {
+        const originalText = copyPlanBtn.textContent;
+        copyPlanBtn.textContent = '✓ Copied!';
+        setTimeout(() => { copyPlanBtn.textContent = originalText; }, 2000);
+      });
+    });
+
+    toggleTimingsBtn.addEventListener('click', () => {
+      timingsDrawer.classList.toggle('open');
+      const isOpen = timingsDrawer.classList.contains('open');
+      toggleTimingsBtn.textContent = isOpen ? '⏱ Hide Timings & Telemetry' : '⏱ Show Timings & Telemetry';
+    });
+
+    toastRetryBtn.addEventListener('click', () => {
+      hideToast();
+      handleGenerate();
     });
   }
 
-  async function loadExamples() {
-    try {
-      const list = await api("/api/examples");
-      const box = $("examples");
-      box.innerHTML = "";
-      list.forEach((ex) => box.appendChild(chip(ex.topic, null, () => { $("topic").value = ex.topic; generate(ex.topic); },
-                                                ex.cached.length ? "● " + ex.cached.join(" ") : "")));
-    } catch (e) { /* examples are optional */ }
+  // 3. Validation & Generation Flow
+  function validateInput(topic) {
+    if (!topic || topic.length < 2 || topic.length > 120) {
+      validationMsg.style.display = 'block';
+      topicInput.setAttribute('aria-invalid', 'true');
+      return false;
+    }
+    validationMsg.style.display = 'none';
+    topicInput.removeAttribute('aria-invalid');
+    return true;
   }
 
-  function setProgress(st) {
-    $("progress").hidden = false;
-    const idx = STAGES.indexOf(st.stage);
-    document.querySelectorAll("#stepper li").forEach((li, i) => {
-      const s = li.dataset.stage, secs = st.stage_times && st.stage_times[s];
-      li.className = st.stage === "done" || (idx >= 0 && i < idx) ? "done" : i === idx ? "active" : "";
-      li.querySelector("small")?.remove();
-      if (secs != null) { const sm = document.createElement("small"); sm.textContent = secs.toFixed(1) + " s"; li.appendChild(sm); }
+  async function handleGenerate() {
+    const topic = topicInput.value.trim();
+    if (!validateInput(topic)) return;
+
+    hideToast();
+    lastTopic = topic;
+    savePreferences(topic, currentLang);
+
+    // Reset UI state
+    isGenerating = true;
+    generateBtn.disabled = true;
+    progressCard.style.display = 'flex';
+    resetStepper();
+    pausePlayback();
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, lang: currentLang })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      activeJobId = data.job_id;
+      startPolling(activeJobId);
+    } catch (err) {
+      console.error('[Generation] Request failed:', err);
+      showToast('Server not reachable, is run_demo running? You can also test with ?mock=1.');
+      isGenerating = false;
+      generateBtn.disabled = false;
+      progressCard.style.display = 'none';
+    }
+  }
+
+  // 4. Polling Job Status every 400ms
+  function startPolling(jobId) {
+    if (pollTimer) clearInterval(pollTimer);
+
+    pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/status/${jobId}`);
+        if (!res.ok) {
+          throw new Error(`Status check HTTP ${res.status}`);
+        }
+        const status = await res.json();
+        updateProgress(status);
+
+        if (status.stage === 'done') {
+          clearInterval(pollTimer);
+          await finishGeneration(status);
+        } else if (status.stage === 'error' || status.error) {
+          clearInterval(pollTimer);
+          throw new Error(status.error || 'Generation encountered an error');
+        }
+      } catch (err) {
+        clearInterval(pollTimer);
+        console.error('[Polling] Error:', err);
+        showToast('Generation halted: ' + (err.message || 'Server connection lost'));
+        isGenerating = false;
+        generateBtn.disabled = false;
+      }
+    }, 400);
+  }
+
+  function updateProgress(status) {
+    const { stage, pct, stage_times } = status;
+
+    // Update progress bar
+    progressBar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+
+    // Update stepper
+    const currentIdx = STAGE_ORDER.indexOf(stage);
+    STAGE_ORDER.forEach((s, idx) => {
+      const el = document.getElementById(`step-${s}`);
+      const timeEl = document.getElementById(`time-${s}`);
+      if (!el) return;
+
+      if (idx < currentIdx || stage === 'done') {
+        el.className = 'step-item done';
+        if (stage_times && stage_times[s]) {
+          timeEl.textContent = `${stage_times[s].toFixed(1)}s`;
+        }
+      } else if (idx === currentIdx) {
+        el.className = 'step-item active';
+        timeEl.textContent = '...';
+      } else {
+        el.className = 'step-item';
+        timeEl.textContent = '';
+      }
     });
-    const overall = st.stage === "done" ? 100 : idx < 0 ? 0 : Math.round((idx * 100 + (st.pct || 0)) / STAGES.length);
-    $("bar-fill").style.width = overall + "%";
-    $("progress-text").textContent = (STAGE_TEXT[st.stage] || st.stage) + (st.cached ? " · cached lesson" : "") + ` · ${overall}%`;
+
+    // Populate telemetry
+    if (status.telemetry) {
+      updateTelemetry(status.telemetry, stage_times);
+    }
   }
 
-  async function generate(topicArg) {
-    const topic = (topicArg || $("topic").value).trim();
-    $("hint").textContent = "";
-    $("toast").hidden = true;
-    if (topic.length < 2) { $("hint").textContent = "Please type a topic (at least 2 characters)."; return; }
-    if (topic.length > 120) { $("hint").textContent = "Please keep the topic under 120 characters."; return; }
-    store("bvt.topic", topic);
-    ui.last = { topic };
-    $("go").disabled = true;
-    clearInterval(ui.polling);
+  function updateTelemetry(tel, stage_times) {
+    if (stage_times) {
+      if (stage_times.plan) document.getElementById('telemetry-plan').textContent = `${stage_times.plan.toFixed(2)}s`;
+      if (stage_times.translate) document.getElementById('telemetry-translate').textContent = `${stage_times.translate.toFixed(2)}s`;
+      if (stage_times.tts) document.getElementById('telemetry-tts').textContent = `${stage_times.tts.toFixed(2)}s`;
+      if (stage_times.render) document.getElementById('telemetry-render').textContent = `${stage_times.render.toFixed(2)}s`;
+      if (stage_times.encode) document.getElementById('telemetry-encode').textContent = `${stage_times.encode.toFixed(2)}s`;
+    }
+    if (tel) {
+      if (tel.model) document.getElementById('telemetry-model').textContent = tel.model;
+      if (tel.tokens) document.getElementById('telemetry-tokens').textContent = tel.tokens;
+      if (typeof tel.fallback_used !== 'undefined') {
+        document.getElementById('telemetry-fallback').textContent = tel.fallback_used ? 'True' : 'False';
+      }
+    }
+  }
+
+  function resetStepper() {
+    STAGE_ORDER.forEach(s => {
+      const el = document.getElementById(`step-${s}`);
+      const timeEl = document.getElementById(`time-${s}`);
+      if (el) el.className = 'step-item';
+      if (timeEl) timeEl.textContent = '';
+    });
+    progressBar.style.width = '0%';
+  }
+
+  // 5. Completion and Player Wiring
+  async function finishGeneration(status) {
+    isGenerating = false;
+    generateBtn.disabled = false;
+
     try {
-      const { job_id } = await api("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" },
-                                                      body: JSON.stringify({ topic, lang: ui.lang }) });
-      ui.polling = setInterval(() => poll(job_id), 400);
-      poll(job_id);
-    } catch (e) { toast(e.message); $("go").disabled = false; }
+      const manifestUrl = status.manifest_url || '/fixtures/golden_manifest_en.json';
+      const res = await fetch(manifestUrl);
+      currentManifest = await res.json();
+
+      // Initialize the in-app player directly using engine.js
+      await window.initLesson(currentManifest.title, currentManifest.scenes, currentManifest.lang || currentLang);
+
+      // Setup audio clock if present
+      if (currentManifest.audio && audio) {
+        const audioSrc = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1) + currentManifest.audio;
+        audio.src = audioSrc;
+      }
+
+      // Configure scrubber
+      scrubber.max = window.totalDuration;
+      scrubber.value = 0;
+      updateTimeDisplay(0, window.totalDuration);
+
+      // Enable MP4 download
+      if (status.mp4_url) {
+        downloadMp4Btn.href = status.mp4_url;
+        downloadMp4Btn.style.pointerEvents = 'auto';
+        downloadMp4Btn.style.opacity = '1';
+      }
+
+      // Render initial frame
+      window.renderAtTime(0);
+
+      // Autoplay
+      startPlayback();
+    } catch (err) {
+      console.error('[Playback] Failed to initialize lesson:', err);
+      showToast('Generated, but lesson manifest failed to load.');
+    }
   }
 
-  async function poll(jobId) {
-    let st;
-    try { st = await api("/api/status/" + jobId); }
-    catch (e) { clearInterval(ui.polling); toast(e.message); $("go").disabled = false; return; }
-    setProgress(st);
-    if (st.stage === "error") { clearInterval(ui.polling); toast(st.error || "Something went wrong."); $("go").disabled = false; }
-    if (st.stage === "done") { clearInterval(ui.polling); $("go").disabled = false; await showLesson(st); }
+  // Load default Ohm's law lesson on boot
+  async function loadDefaultLesson() {
+    try {
+      const res = await fetch('/fixtures/golden_manifest_en.json');
+      currentManifest = await res.json();
+      await window.initLesson(currentManifest.title, currentManifest.scenes, currentManifest.lang || 'en');
+      scrubber.max = window.totalDuration;
+      scrubber.value = 0;
+      updateTimeDisplay(0, window.totalDuration);
+      window.renderAtTime(0);
+    } catch (e) {
+      console.warn('[Init] Golden lesson fallback notice:', e);
+    }
   }
 
-  async function showLesson(st) {
-    const manifest = await api(st.manifest_url);
-    await window.initLesson(manifest.title, manifest.scenes, manifest.lang);
-    $("player").hidden = false;
-    $("download").href = st.mp4_url;
-    $("download").setAttribute("download", (st.topic || "lesson").replace(/\W+/g, "_") + "_" + st.lang + ".mp4");
-    $("timings").textContent = JSON.stringify({ stage_times: st.stage_times, cached: st.cached, telemetry: st.telemetry }, null, 2);
-    const audio = $("audio");
-    audio.src = st.audio_url;
-    audio.currentTime = 0;
-    window.renderAtTime(0);
-    audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+  // 6. Playback and Scrubber Logic
+  function togglePlayPause() {
+    if (isPlaying) {
+      pausePlayback();
+    } else {
+      startPlayback();
+    }
   }
 
-  function setPlaying(on) { ui.playing = on; $("play").textContent = on ? "Pause" : "Play"; if (on) requestAnimationFrame(tick); }
+  function startPlayback() {
+    if (parseFloat(scrubber.value) >= window.totalDuration) {
+      pauseOffset = 0;
+      scrubber.value = 0;
+    } else {
+      pauseOffset = parseFloat(scrubber.value || 0);
+    }
 
-  // Playback clock lives here, never inside renderAtTime: the audio drives the frame.
-  function tick() {
-    const audio = $("audio"), t = audio.currentTime || 0, total = window.totalDuration || 1;
+    isPlaying = true;
+    playBtnIcon.textContent = '⏸';
+    playBtnText.textContent = 'Pause';
+    playStartTime = null;
+
+    if (audio && audio.src && !audio.ended) {
+      audio.currentTime = pauseOffset;
+      audio.play().catch(() => {});
+    }
+
+    animId = requestAnimationFrame(animationLoop);
+  }
+
+  function pausePlayback() {
+    isPlaying = false;
+    playBtnIcon.textContent = '▶';
+    playBtnText.textContent = 'Play';
+    if (animId) cancelAnimationFrame(animId);
+    if (audio) audio.pause();
+    pauseOffset = parseFloat(scrubber.value || 0);
+  }
+
+  function animationLoop(now) {
+    if (!playStartTime) playStartTime = now - (pauseOffset * 1000);
+    const elapsed = (now - playStartTime) / 1000;
+
+    if (elapsed <= window.totalDuration) {
+      window.renderAtTime(elapsed);
+      scrubber.value = elapsed;
+      updateTimeDisplay(elapsed, window.totalDuration);
+      animId = requestAnimationFrame(animationLoop);
+    } else {
+      window.renderAtTime(window.totalDuration);
+      scrubber.value = window.totalDuration;
+      updateTimeDisplay(window.totalDuration, window.totalDuration);
+      pausePlayback();
+    }
+  }
+
+  function handleScrub(e) {
+    const t = parseFloat(e.target.value);
     window.renderAtTime(t);
-    $("scrub").value = Math.round((t / total) * 1000);
-    $("time").textContent = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
-    if (ui.playing && !audio.ended) requestAnimationFrame(tick); else if (audio.ended) setPlaying(false);
+    updateTimeDisplay(t, window.totalDuration);
+    if (isPlaying) {
+      pauseOffset = t;
+      playStartTime = performance.now() - (t * 1000);
+      if (audio && audio.src) audio.currentTime = t;
+    } else {
+      pauseOffset = t;
+    }
   }
 
-  function init() {
-    ui.lang = recall("bvt.lang") || "en";
-    $("topic").value = recall("bvt.topic") || "";
-    $("go").onclick = () => generate();
-    $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") generate(); });
-    $("retry").onclick = () => generate(ui.last && ui.last.topic);
-    $("play").onclick = () => { const a = $("audio"); if (a.paused) a.play().then(() => setPlaying(true)); else { a.pause(); setPlaying(false); } };
-    $("scrub").oninput = () => { const a = $("audio"); a.currentTime = ($("scrub").value / 1000) * (window.totalDuration || 0); window.renderAtTime(a.currentTime); };
-    $("timings-btn").onclick = () => { const t = $("timings"); t.hidden = !t.hidden; $("timings-btn").setAttribute("aria-expanded", String(!t.hidden)); };
-    document.addEventListener("keydown", (e) => {
-      if (e.code === "Space" && document.activeElement !== $("topic") && !$("player").hidden) { e.preventDefault(); $("play").click(); }
-    });
-    if (navigator.onLine === false) $("offline-text").textContent = "Running fully offline";
-    api("/api/languages").then(renderLangs).catch((e) => { renderLangs(["en"]); toast(e.message); });
-    loadExamples();
+  function updateTimeDisplay(current, total) {
+    timeDisplay.textContent = `${current.toFixed(2)}s / ${(total || 54.79).toFixed(2)}s`;
   }
 
-  init();
+  // 7. Error Toast Helpers
+  function showToast(message) {
+    toastMessage.textContent = message;
+    errorToast.classList.add('show');
+  }
+
+  function hideToast() {
+    errorToast.classList.remove('show');
+  }
+
+  // Auto-init on DOMContentLoaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

@@ -1,165 +1,338 @@
-// renderer/engine.js — timeline + frame drawing. Public API (PLAN 4.4, frozen):
-//   window.initLesson(title, scenes, lang?) -> Promise   scenes = manifest scenes (start_sec, end_sec, narration, visual)
-//   window.renderAtTime(t)                               sync, pure function of t: same t -> same pixels
-//   window.totalDuration                                 seconds
-//   window.ready                                         true once initLesson resolved (the exporter waits on it)
-// No Date.now, no setInterval, no unseeded randomness in here.
-(function () {
-  "use strict";
+// renderer/engine.js
+// Core deterministic rendering engine exposing the frozen window API:
+// - window.initLesson(title, scenes, lang)
+// - window.renderAtTime(t_sec)
+// - window.totalDuration
+// - window.ready
 
-  const T0 = window.Theme;
-  const TAIL = 0.35;  // silent tail TTS appends to every scene: used for the transition
-  let lesson = null;
+(function (root) {
+  let _canvas = null;
+  let _ctx = null;
+  let _title = '';
+  let _scenes = [];
+  let _lang = 'en';
+  let _totalDuration = 0;
+  let _theme = null;
+  let _templates = null;
 
-  function canvas() { return document.getElementById("stage"); }
-
-  function normalizeScenes(scenes) {
-    let cursor = 0;
-    return (scenes || []).map((s, i) => {
-      const dur = Number(s.duration_sec) || Math.max(0.5, (Number(s.end_sec) || 0) - (Number(s.start_sec) || 0)) || 5;
-      const start = s.start_sec != null ? Number(s.start_sec) : cursor;
-      const end = s.end_sec != null ? Number(s.end_sec) : start + dur;
-      cursor = end;
-      const visual = s.visual || { type: "bullets", params: { labels: [], steps: [] } };
-      return { id: s.id != null ? s.id : i + 1, start, end, dur: Math.max(0.1, end - start),
-               narration: String(s.narration || ""), type: visual.type,
-               params: Object.assign({ labels: [], steps: [] }, visual.params || {}) };
-    });
-  }
-
-  async function loadFonts(family) {
-    if (!document.fonts) return;
-    const first = family.split(",")[0].trim();
-    try {
-      await Promise.all([document.fonts.load(`600 32px ${first}`), document.fonts.load(`800 32px ${first}`),
-                         document.fonts.load('600 32px "Noto Sans"')]);
-      await document.fonts.ready;
-    } catch (e) { /* fall back to the system font in the stack; never block the render */ }
-  }
-
-  window.initLesson = async function (title, scenes, lang) {
-    window.ready = false;
-    const all = (title || "") + " " + (scenes || []).map((s) => s.narration || "").join(" ");
-    const code = lang || T0.detectLang(all);
-    const family = T0.families[code] || T0.families.en;
-    await loadFonts(family);
-    const list = normalizeScenes(scenes);
-    lesson = { title: String(title || ""), lang: code, family, scenes: list,
-               total: list.length ? list[list.length - 1].end : 0 };
-    window.totalDuration = lesson.total;
-    window.renderAtTime(0);
-    window.ready = true;
-    return lesson.total;
-  };
-
-  function sceneAt(t) {
-    const list = lesson.scenes;
-    for (let i = 0; i < list.length; i++) if (t < list[i].end) return i;
-    return list.length - 1;
-  }
-
-  function drawBackground(ctx, scene) {
-    const P = T0.palette;
-    ctx.fillStyle = P.bg;
-    ctx.fillRect(0, 0, T0.W, T0.H);
-    // Seeded decorative dots: same scene -> same dots, every frame.
-    const r = T0.rng(1000 + (scene ? scene.id : 0));
-    ctx.save();
-    ctx.fillStyle = P.line;
-    for (let k = 0; k < 24; k++) {
-      ctx.globalAlpha = 0.25 + r() * 0.35;
-      ctx.beginPath(); ctx.arc(r() * T0.W, 80 + r() * 500, 1.5 + r() * 2.5, 0, Math.PI * 2); ctx.fill();
+  function getTheme() {
+    if (!_theme) {
+      _theme = (typeof root.THEME !== 'undefined') ? root.THEME : (typeof require !== 'undefined' ? require('./theme') : null);
     }
-    ctx.restore();
+    return _theme;
   }
 
-  function drawHeader(ctx) {
-    const P = T0.palette;
-    ctx.fillStyle = P.panel;
-    ctx.fillRect(0, 0, T0.W, T0.safe.headerH);
-    ctx.fillStyle = P.accent;
-    ctx.fillRect(0, T0.safe.headerH - 3, T0.W, 3);
-    T0.drawText(ctx, lesson.title, { x: 32, y: 12, w: T0.W - 64, h: 48 },
-      { family: lesson.family, maxPx: 28, minPx: 18, maxLines: 1, valign: "middle", weight: 700, color: P.muted });
-  }
-
-  // Word-by-word highlight: word k becomes active at start + 0.15 + frac_k * (dur - 0.5), weighted by length.
-  function drawCaption(ctx, scene, lt) {
-    const P = T0.palette, box = { x: 48, y: T0.safe.captionY, w: T0.W - 96, h: T0.safe.captionH - 8 };
-    T0.panel(ctx, box.x - 16, box.y - 6, box.w + 32, box.h + 8, { fill: "rgba(19,34,74,0.92)", stroke: null, r: 16 });
-    const words = scene.narration.split(/\s+/).filter(Boolean);
-    if (!words.length) return;
-    const lay = T0.fitText(ctx, scene.narration, { x: box.x, y: box.y, w: box.w, h: box.h },
-      { family: lesson.family, maxPx: T0.type.caption, minPx: T0.type.captionMin, maxLines: 2, weight: 600 });
-    const lens = words.map((w) => Array.from(w).length), total = lens.reduce((a, b) => a + b, 0) || 1;
-    const span = Math.max(0.1, scene.dur - 0.5);
-    let acc = 0, active = -1;
-    words.forEach((w, k) => { if (lt >= 0.15 + (acc / total) * span) active = k; acc += lens[k]; });
-    ctx.save();
-    ctx.font = lay.font; ctx.textBaseline = "top"; ctx.textAlign = "left";
-    let k = 0, y = box.y + (box.h - lay.height) / 2;
-    for (const line of lay.lines) {
-      const lineWords = line.split(" ");
-      let x = box.x + (box.w - ctx.measureText(line).width) / 2;
-      for (const w of lineWords) {
-        ctx.fillStyle = k === active ? P.accent2 : k < active ? P.text : P.muted;
-        ctx.fillText(w, x, y);
-        x += ctx.measureText(w + " ").width;
-        k++;
-      }
-      y += lay.lineHeight;
+  function getTemplates() {
+    if (!_templates) {
+      _templates = (typeof root.TEMPLATES !== 'undefined') ? root.TEMPLATES : (typeof require !== 'undefined' ? require('./templates') : null);
     }
-    ctx.restore();
+    return _templates;
   }
 
-  function drawDots(ctx, idx) {
-    const n = lesson.scenes.length, gap = 22, x0 = T0.W - 48 - (n - 1) * gap;
-    for (let i = 0; i < n; i++) {
-      ctx.fillStyle = i === idx ? T0.palette.accent : T0.palette.line;
-      ctx.beginPath(); ctx.arc(x0 + i * gap, 44, i === idx ? 7 : 5, 0, Math.PI * 2); ctx.fill();
-    }
-  }
+  // Pure function to find the active scene for a timestamp
+  function getActiveScene(scenes, t) {
+    if (!scenes || scenes.length === 0) return null;
+    if (t <= scenes[0].start_sec) return scenes[0];
+    const last = scenes[scenes.length - 1];
+    if (t >= last.end_sec) return last;
 
-  function drawTemplate(ctx, scene, lt, alpha, dy) {
-    const T = Object.assign({}, T0, { family: lesson.family, accent: T0.accents[(scene.id - 1) % 3], lang: lesson.lang });
-    const fn = window.Templates[scene.type] || window.Templates.bullets;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(0, dy);
-    try {
-      fn(ctx, scene.params, lt, scene.dur, T, lesson.lang);
-    } catch (e) {
-      // Never throw, never blank: fall back to bullets with the same params, then to plain labels.
-      ctx.restore(); ctx.save(); ctx.globalAlpha = alpha; ctx.translate(0, dy);
-      try { window.Templates.bullets(ctx, scene.params, lt, scene.dur, T, lesson.lang); }
-      catch (e2) {
-        T0.drawText(ctx, (scene.params.labels || []).join(" · "), { x: 64, y: 200, w: T0.W - 128, h: 200 },
-          { family: lesson.family, maxPx: 40, minPx: 20, maxLines: 4, align: "center" });
+    for (let i = 0; i < scenes.length; i++) {
+      if (t >= scenes[i].start_sec && t < scenes[i].end_sec) {
+        return scenes[i];
       }
     }
+    return last;
+  }
+
+  // Draw header bar
+  function drawHeader(ctx, title, sceneIndex, totalScenes, theme, lang) {
+    const font = theme.getFont(lang);
+    ctx.save();
+    // Top bar background
+    ctx.fillStyle = theme.colors.bg;
+    ctx.fillRect(0, 0, 1280, theme.safeArea.headerHeight);
+
+    // Bottom border line
+    ctx.fillStyle = theme.colors.panelBorder;
+    ctx.fillRect(64, theme.safeArea.headerHeight - 2, 1152, 2);
+
+    // Title left
+    ctx.font = `600 22px ${font}`;
+    ctx.fillStyle = theme.colors.muted;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const truncatedTitle = title.length > 60 ? title.substring(0, 57) + '...' : title;
+    ctx.fillText(truncatedTitle, 64, theme.safeArea.headerHeight / 2);
+
+    // Scene counter right
+    ctx.textAlign = 'right';
+    ctx.fillStyle = theme.colors.accent;
+    ctx.fillText(`Scene ${sceneIndex + 1} of ${totalScenes}`, 1216, theme.safeArea.headerHeight / 2);
     ctx.restore();
   }
 
-  window.renderAtTime = function (t) {
-    const ctx = canvas().getContext("2d");
-    if (!lesson || !lesson.scenes.length) {
-      ctx.fillStyle = T0.palette.bg; ctx.fillRect(0, 0, T0.W, T0.H);
+  // Draw caption bar with responsive font-scaling and word-by-word highlight
+  function drawCaptions(ctx, narration, lt, dur, theme, lang) {
+    if (!narration) return;
+    const font = theme.getFont(lang);
+    const boxX = 64;
+    const boxY = theme.safeArea.captionY;
+    const boxW = 1152;
+    const boxH = theme.safeArea.captionHeight;
+
+    ctx.save();
+    // Caption card background
+    theme.drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 12, 'rgba(19, 34, 74, 0.95)', theme.colors.panelBorder);
+
+    const words = narration.trim().split(/\s+/);
+    if (words.length === 0) {
+      ctx.restore();
       return;
     }
-    t = T0.clamp(Number(t) || 0, 0, lesson.total);
-    const idx = sceneAt(t), scene = lesson.scenes[idx], lt = t - scene.start;
-    // Fade/slide in over the first TAIL seconds (not for scene 1 at t=0's very first frame), out over the last TAIL.
-    const tin = idx === 0 ? 1 : T0.easeOutCubic(lt / TAIL);
-    const isLast = idx === lesson.scenes.length - 1;
-    const tout = isLast ? 1 : T0.easeInOutCubic((scene.end - t) / TAIL);
-    const alpha = Math.min(tin, tout);
-    drawBackground(ctx, scene);
-    drawHeader(ctx);
-    drawTemplate(ctx, scene, lt, alpha, (1 - tin) * 24 - (1 - tout) * 24);
-    drawCaption(ctx, scene, lt);
-    drawDots(ctx, idx);
-  };
 
-  window.totalDuration = 0;
-  window.ready = false;
-})();
+    // Determine active word index based on proportional character timing
+    const totalChars = words.reduce((acc, w) => acc + w.length, 0);
+    const effectiveDur = Math.max(0.5, dur - 0.5);
+    let charAccum = 0;
+    let activeWordIdx = -1;
+
+    for (let i = 0; i < words.length; i++) {
+      const fracStart = charAccum / totalChars;
+      charAccum += words[i].length;
+      const fracEnd = charAccum / totalChars;
+
+      const tStart = 0.15 + fracStart * effectiveDur;
+      const tEnd = 0.15 + fracEnd * effectiveDur;
+
+      if (lt >= tStart && lt < tEnd) {
+        activeWordIdx = i;
+        break;
+      } else if (lt >= tEnd && i === words.length - 1) {
+        activeWordIdx = words.length - 1;
+      }
+    }
+
+    // Adapt font size dynamically from 24px down to 16px so all words fit within 2 or 3 lines
+    const maxLineW = boxW - 64;
+    const fontCandidates = [24, 21, 18, 16];
+    let chosenFontSize = 16;
+    let chosenLines = [];
+
+    for (let f = 0; f < fontCandidates.length; f++) {
+      const fs = fontCandidates[f];
+      ctx.font = `500 ${fs}px ${font}`;
+      const lines = [];
+      let currentLine = [];
+      let currentWidth = 0;
+
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        const wordW = ctx.measureText(word + ' ').width;
+        if (currentWidth + wordW > maxLineW && currentLine.length > 0) {
+          lines.push(currentLine);
+          currentLine = [];
+          currentWidth = 0;
+        }
+        currentLine.push({ word, idx: wIdx, width: wordW });
+        currentWidth += wordW;
+      }
+      if (currentLine.length > 0) lines.push(currentLine);
+
+      const lHeight = fs * 1.35;
+      if (lines.length <= 2 || (lines.length === 3 && fs <= 18)) {
+        chosenFontSize = fs;
+        chosenLines = lines;
+        break;
+      }
+      if (f === fontCandidates.length - 1) {
+        chosenFontSize = fs;
+        chosenLines = lines;
+      }
+    }
+
+    // Render all words across the chosen lines with accurate inter-word spacing
+    const lineHeight = chosenFontSize * 1.35;
+    const totalBlockHeight = chosenLines.length * lineHeight;
+    const startY = boxY + (boxH - totalBlockHeight) / 2 + (lineHeight / 2);
+    ctx.textBaseline = 'middle';
+
+    for (let l = 0; l < chosenLines.length; l++) {
+      const lineWords = chosenLines[l];
+      ctx.font = `500 ${chosenFontSize}px ${font}`;
+      const spaceWidth = ctx.measureText(' ').width;
+
+      // Calculate exact rendered line width including spaces
+      let totalLineWidth = 0;
+      for (let w = 0; w < lineWords.length; w++) {
+        const { word, idx } = lineWords[w];
+        ctx.font = idx === activeWordIdx ? `700 ${chosenFontSize}px ${font}` : `500 ${chosenFontSize}px ${font}`;
+        totalLineWidth += ctx.measureText(word).width;
+        if (w < lineWords.length - 1) totalLineWidth += spaceWidth;
+      }
+
+      let curX = boxX + (boxW - totalLineWidth) / 2;
+      const curY = startY + l * lineHeight;
+
+      for (let w = 0; w < lineWords.length; w++) {
+        const { word, idx } = lineWords[w];
+        if (idx === activeWordIdx) {
+          ctx.fillStyle = theme.colors.accent2; // Highlight color
+          ctx.font = `700 ${chosenFontSize}px ${font}`;
+        } else if (activeWordIdx >= 0 && idx < activeWordIdx) {
+          ctx.fillStyle = theme.colors.text;    // Spoken
+          ctx.font = `500 ${chosenFontSize}px ${font}`;
+        } else {
+          ctx.fillStyle = theme.colors.muted;   // Upcoming
+          ctx.font = `500 ${chosenFontSize}px ${font}`;
+        }
+        ctx.fillText(word, curX, curY);
+        curX += ctx.measureText(word).width + spaceWidth;
+      }
+    }
+    ctx.restore();
+  }
+
+  // Draw scene progress indicator
+  function drawProgress(ctx, scenes, t, theme) {
+    if (!scenes || scenes.length === 0) return;
+    ctx.save();
+    const count = scenes.length;
+    const dotSpacing = 20;
+    const startX = (1280 - (count - 1) * dotSpacing) / 2;
+    const y = 708;
+
+    for (let i = 0; i < count; i++) {
+      const scene = scenes[i];
+      const isPast = t >= scene.end_sec;
+      const isCurrent = t >= scene.start_sec && t < scene.end_sec;
+
+      ctx.beginPath();
+      ctx.arc(startX + i * dotSpacing, y, isCurrent ? 4 : 3, 0, Math.PI * 2);
+      if (isCurrent) {
+        ctx.fillStyle = theme.colors.accent;
+      } else if (isPast) {
+        ctx.fillStyle = theme.colors.good;
+      } else {
+        ctx.fillStyle = theme.colors.progressTrack;
+      }
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Public API: Initialize lesson
+  async function initLesson(title, scenes, lang = 'en') {
+    if (!title || !scenes || scenes.length === 0) {
+      throw new Error('[Renderer] Invalid arguments to initLesson');
+    }
+
+    _title = title;
+    _scenes = scenes;
+    _lang = lang || 'en';
+    _totalDuration = scenes[scenes.length - 1].end_sec;
+
+    // Attach canvas if in browser environment
+    if (typeof document !== 'undefined') {
+      _canvas = document.getElementById('stage');
+      if (_canvas) {
+        _ctx = _canvas.getContext('2d');
+      }
+
+      // Wait for fonts to be ready per FARHAN_BLUEPRINT.md §3
+      try {
+        if (typeof document !== 'undefined' && document.fonts) {
+          const font = getTheme().getFont(_lang);
+          await Promise.allSettled([
+            document.fonts.load(`24px ${font}`),
+            document.fonts.load(`700 32px ${font}`)
+          ]);
+          await document.fonts.ready;
+        }
+      } catch (fontErr) {
+        console.warn('[Renderer] Font loading notice:', fontErr);
+      }
+    }
+
+    root.totalDuration = _totalDuration;
+    root.ready = true;
+    return true;
+  }
+
+  // Public API: Render deterministic frame at t_sec
+  function renderAtTime(t_sec) {
+    const theme = getTheme();
+    const templates = getTemplates();
+
+    if (!_canvas && typeof document !== 'undefined') {
+      _canvas = document.getElementById('stage');
+      if (_canvas) _ctx = _canvas.getContext('2d');
+    }
+
+    if (!_ctx || !_scenes || _scenes.length === 0) {
+      return false;
+    }
+
+    const numericT = Number(t_sec);
+    const validT = isNaN(numericT) ? 0 : numericT;
+    const t = Math.max(0, Math.min(_totalDuration, validT));
+    const scene = getActiveScene(_scenes, t);
+    if (!scene) return false;
+
+    const sceneIdx = _scenes.indexOf(scene);
+    const lt = t - scene.start_sec;
+    const dur = scene.duration_sec;
+
+    // Calculate transition fade alpha using 0.35s tail
+    const TAIL = 0.35;
+    let fadeAlpha = 1.0;
+    if (lt < TAIL && sceneIdx > 0) {
+      fadeAlpha = Math.max(0.1, lt / TAIL);
+    } else if (lt > dur - TAIL && sceneIdx < _scenes.length - 1) {
+      fadeAlpha = Math.max(0.1, (dur - lt) / TAIL);
+    }
+
+    // 1. Clear background
+    _ctx.fillStyle = theme.colors.bg;
+    _ctx.fillRect(0, 0, 1280, 720);
+
+    // 2. Draw Header
+    drawHeader(_ctx, _title, sceneIdx, _scenes.length, theme, _lang);
+
+    // 3. Draw Scene Template with fade
+    _ctx.save();
+    _ctx.globalAlpha = fadeAlpha;
+    const visual = scene.visual || { type: 'bullets', params: { labels: [], steps: [] } };
+    templates.draw(_ctx, visual.type, visual.params, lt, dur, theme, _lang);
+    _ctx.restore();
+
+    // 4. Draw Captions
+    drawCaptions(_ctx, scene.narration, lt, dur, theme, _lang);
+
+    // 5. Draw Progress indicators
+    drawProgress(_ctx, _scenes, t, theme);
+
+    return true;
+  }
+
+  // Expose frozen API to root/window
+  root.initLesson = initLesson;
+  root.renderAtTime = renderAtTime;
+  root.totalDuration = 0;
+  root.ready = false;
+
+  // Node.js module export if required
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      initLesson,
+      renderAtTime,
+      getActiveScene,
+      drawHeader,
+      drawCaptions,
+      drawProgress,
+      setCanvas(canvas, ctx) {
+        _canvas = canvas;
+        _ctx = ctx;
+      }
+    };
+  }
+})(typeof window !== 'undefined' ? window : globalThis);
