@@ -10,15 +10,18 @@ Evidence per check in `logs/D#.log`; latest table in `logs/summary.md`.
 | D# | check | state | owner | evidence |
 |---|---|---|---|---|
 | D1 | schema + golden fixture (CC-1 counts [22,27,24,29,21]) | PASS | YYUG | logs/D1.log |
-| D2 | planner ladder, 20 topics >=19 valid, P50 <20 s, math ok | pending stress run | YYUG | logs/D2.log |
-| D3 | tier-1 plan hit <5 ms, tier-2 artifact hit serves MP4 | MISSING (tier 2) | YYUG | logs/D3.log |
-| D4 | IndicTrans2 batched + IndicProcessor, KN no Devanagari | MISSING here (on origin/dev, weights downloading) | TARUN | logs/D4.log |
-| D5 | Kokoro EN/HI, MMS KN seed 42, 24 kHz, 0.35 s tail, deterministic | MISSING here (on origin/dev, weights downloading) | TARUN | logs/D5.log |
-| D6 | renderer: 8 templates, deterministic, Indic fits 1280x720 | MISSING | FARHAN | logs/D6.log |
-| D7 | export 20 topics x en/hi/kn, BLUEPRINT 6.2 checks | MISSING | AYUSH | logs/D7.log |
-| D8 | UI: language selector, progress, toasts, MP4 download | MISSING | AYUSH | logs/D8.log |
-| D9 | pytest tests/ incl. test_e2e_offline.py, sockets blocked | MISSING (e2e test) | ALL | logs/D9.log |
-| D10 | README licenses, run_demo.sh, 10 topics pre-cached | MISSING | AYUSH | logs/D10.log |
+| D2 | planner ladder, 20 topics >=19 valid, P50 <20 s, math ok | PASS (run 2): 19/20 valid, P50 15.1 s, 0 final failures, all answers spoken (run 1 was P50 39.1 s) | YYUG | logs/D2_run2_pass.log, logs/D2_run1_stress.txt |
+| D3 | tier-1 plan hit <5 ms, tier-2 artifact hit serves MP4 | built (yyug/integration); tests pass | YYUG | logs/D3.log |
+| D4 | IndicTrans2 batched + IndicProcessor, KN no Devanagari | real-model tests pass on yyug/integration | TARUN (assist PR #3) | logs/D4.log |
+| D5 | Kokoro EN/HI, MMS KN seed 42, 24 kHz, 0.35 s tail, deterministic | real-model tests pass (HI via bundled espeak-ng) | TARUN (assist PR #3) | logs/D5.log |
+| D6 | renderer: 8 templates, deterministic, Indic fits 1280x720 | built; tests pass | FARHAN (assist PR #2) | logs/D6.log |
+| D7 | export 20 topics x en/hi/kn, BLUEPRINT 6.2 checks | exporter built, golden export passes; 60-video harness pending | AYUSH (assist PR #4) | logs/D7.log |
+| D8 | UI: language selector, progress, toasts, MP4 download | built; tests pass | FARHAN UI + AYUSH API (PRs #2, #4) | logs/D8.log |
+| D9 | pytest tests/ incl. test_e2e_offline.py, sockets blocked | 163 passed, 3 skipped (opt-in real run) | ALL | logs/D9.log |
+| D10 | README licenses, run_demo.sh, 10 topics pre-cached | README + run_demo done; pre-cache pending | AYUSH (assist PR #4) | logs/D10.log |
+
+Runtime for these checks: Python 3.11 venv with requirements.txt (transformers 4.46.3, CPU torch), IndicTransToolkit
+built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNINGS.md.
 
 ## Milestones
 
