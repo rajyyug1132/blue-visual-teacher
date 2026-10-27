@@ -32,7 +32,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
 | FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
 | TARUN | localization/ | Done (L1–L8 verified + SPATS ratio sync + enm/enf educator voices) | SPATS ratio scaling, natural breath pauses, Ohm/variable transliteration, enm (Michael) / enf (Sarah) voice options | All green |
-| AYUSH | exporter/ | — | — | — |
+| AYUSH | exporter/ | Exporter pipeline, FastAPI app, Next.js UI integration, e2e tests (`test_e2e_offline.py` 6 passed) | 2026-10-28 00:10 · D8 PASS · D10 PASS · test_e2e_offline PASS | V1-Keeper loop active, ready for 06:00 review |
 
 ### Planner bench (5 topics, uncached, RTX 3050 6 GB)
 
@@ -100,4 +100,17 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - TARUN: confirm `localize_lesson()` copies `check` untouched; confirm spelled-out numbers sound right in HI/KN.
 - AYUSH: update any test that hardcodes 54.79 s for the golden fixture to 55.23 s.
 
-Votes: YYUG ✅ · FARHAN ☐ · TARUN ☐ · AYUSH ☐
+Votes: YYUG ✅ · FARHAN ☐ · TARUN ☐ · AYUSH ✅
+
+## V1-Keeper Passes
+
+### Pass 1 · 2026-10-28 00:10
+- **Merged:** None (all branches `farhan/ui`, `tarun/localization`, `dev`, `yyug/*`, `ayush/*` already incorporated in `v1` at commit `bd1058e`).
+- **Skipped:** None.
+- **Gate status:** Green (Baseline D1-D10 10/10 PASS; `pytest tests/test_e2e_offline.py` 6 passed, 3 skipped).
+- **Preview URL:** Standalone mock UI at `web/` (`http://localhost:3000` for integrated app; offline pipeline strictly local).
+- **Open PRs waiting on owner:**
+  - PR #6 (`v1` -> `main`): Ready for 06:00 final freeze & review.
+  - PR #2, PR #4, PR #5: Subsumed/merged into `v1`.
+- **Blockers:** None.
+
