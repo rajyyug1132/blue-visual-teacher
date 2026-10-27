@@ -2,12 +2,27 @@
 
 import { RefreshCw } from 'lucide-react'
 import { useHealth } from '@/hooks/use-api'
+import { useShowcase } from '@/hooks/use-showcase'
 import { API_BASE_URL } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export function BackendStatus({ className }: { className?: string }) {
+  const showcase = useShowcase()
   const { data, isLoading, isValidating, mutate } = useHealth()
   const state = isLoading ? 'checking' : data?.ok ? 'up' : 'down'
+
+  if (showcase) {
+    return (
+      <div className={cn('rounded-2xl border-2 border-ink bg-white p-4', className)}>
+        <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Lesson server</h2>
+        <p className="mt-2 flex items-center gap-2 font-semibold" role="status">
+          <span aria-hidden="true" className="size-2.5 rounded-full bg-brand-yellow" />
+          Preview mode
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Lessons generate offline on your own machine.</p>
+      </div>
+    )
+  }
 
   return (
     <div className={cn('rounded-2xl border-2 border-ink bg-white p-4', className)}>
@@ -34,6 +49,11 @@ export function BackendStatus({ className }: { className?: string }) {
         {state === 'checking' ? 'Checking connection…' : data?.message}
       </p>
       <p className="mt-1 break-all text-xs text-muted-foreground">{API_BASE_URL}</p>
+      {state === 'down' && (
+        <p className="mt-2 text-xs">
+          Start it with <code className="font-bold">run_demo</code> in the project folder.
+        </p>
+      )}
     </div>
   )
 }

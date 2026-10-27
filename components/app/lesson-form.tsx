@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import { AlertTriangle, ArrowUpRight, Loader2, RotateCcw } from 'lucide-react'
 import { ApiError, createLesson } from '@/lib/api'
+import { RunLocally } from './run-locally'
 import { EXAMPLE_TOPICS } from '@/lib/languages'
 import { useLanguages } from '@/hooks/use-api'
+import { useShowcase } from '@/hooks/use-showcase'
 import { cn } from '@/lib/utils'
 
 const MIN_TOPIC = 3
@@ -26,12 +28,13 @@ export function LessonForm({
 }) {
   const router = useRouter()
   const { data: langData, isLoading: langsLoading } = useLanguages()
+  const showcase = useShowcase()
   const languages = langData?.languages ?? []
 
   const [topic, setTopic] = useState(initialTopic.slice(0, MAX_TOPIC))
   const [language, setLanguage] = useState(initialLanguage)
   const [topicError, setTopicError] = useState<string | null>(null)
-  const [submitError, setSubmitError] = useState<{ message: string; retryable: boolean } | null>(null)
+  const [submitError, setSubmitError] = useState<{ message: string; retryable: boolean; offline?: 'preview' | 'down' } | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const selectedLanguage = languages.some((l) => l.code === language) ? language : (languages[0]?.code ?? language)
@@ -64,6 +67,7 @@ export function LessonForm({
       setSubmitError({
         message: apiErr?.message ?? 'Something went wrong while creating your lesson.',
         retryable: !isClientError,
+        offline: apiErr?.kind === 'showcase' ? 'preview' : apiErr?.kind === 'network' ? 'down' : undefined,
       })
       setSubmitting(false)
     }
@@ -162,7 +166,7 @@ export function LessonForm({
                 )
               })}
             </div>
-            {langData?.source === 'fallback' && (
+            {langData?.source === 'fallback' && !showcase && (
               <p className="text-xs text-muted-foreground">
                 {"Couldn't load languages from the server. Showing the default list (English, Hindi, Kannada)."}
               </p>
@@ -171,7 +175,9 @@ export function LessonForm({
         )}
       </fieldset>
 
-      {submitError && (
+      {submitError?.offline ? (
+        <RunLocally variant={submitError.offline} />
+      ) : submitError && (
         <div role="alert" className="flex flex-col gap-3 rounded-2xl border-2 border-destructive bg-white p-4 sm:flex-row sm:items-start">
           <AlertTriangle className="size-5 shrink-0 text-destructive" aria-hidden="true" />
           <div className="flex-1">
