@@ -1,0 +1,113 @@
+{
+  "title": "Ohm's Law: Voltage, Current, and Resistance",
+  "lang": "en",
+  "total_sec": 53.9,
+  "audio": "lesson_audio.wav",
+  "sample_rate": 24000,
+  "scenes": [
+    {
+      "id": 1,
+      "start_sec": 0.0,
+      "end_sec": 9.125,
+      "duration_sec": 9.125,
+      "narration": "Why does your phone charger get warm while fast-charging, or a ceiling fan slow down when voltage drops during summer in Bengaluru?",
+      "visual": {
+        "type": "title",
+        "params": {
+          "labels": [
+            "Ohm's Law",
+            "V = I × R",
+            "Voltage, Current & Resistance"
+          ],
+          "steps": [
+            "Everyday Electricity in India"
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "start_sec": 9.125,
+      "end_sec": 18.875,
+      "duration_sec": 9.75,
+      "narration": "Think of an overhead water tank on your house roof. Water height is Voltage, water flow through the pipe is Current, and a narrow tap is Resistance.",
+      "visual": {
+        "type": "compare",
+        "params": {
+          "labels": [
+            "Roof Tank Height → Voltage (V)",
+            "Pipe Water Flow → Current (I)",
+            "Narrow Tap → Resistance (R)"
+          ],
+          "steps": [
+            "Higher pressure pushes more flow",
+            "Narrower pipe restricts flow"
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "start_sec": 18.875,
+      "end_sec": 30.5,
+      "duration_sec": 11.625,
+      "narration": "Georg Ohm discovered that Voltage equals Current multiplied by Resistance: V equals I times R. Doubling voltage doubles the current if resistance stays constant.",
+      "visual": {
+        "type": "equation",
+        "params": {
+          "labels": [
+            "V = I × R",
+            "V : Voltage (Volts)",
+            "I : Current (Amperes)",
+            "R : Resistance (Ohms Ω)"
+          ],
+          "steps": [
+            "I = V / R",
+            "R = V / I"
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "start_sec": 30.5,
+      "end_sec": 44.0,
+      "duration_sec": 13.5,
+      "narration": "Let's test a two hundred thirty volt Indian wall socket powering an iron box with forty-six ohms resistance. Two hundred thirty divided by forty-six gives five amperes of current.",
+      "visual": {
+        "type": "flow",
+        "params": {
+          "labels": [
+            "Supply: V = 230 V",
+            "Heater Coil: R = 46 Ω",
+            "Formula: I = V / R",
+            "Result: I = 5 A"
+          ],
+          "steps": [
+            "230 V ÷ 46 Ω = 5 Amperes"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "start_sec": 44.0,
+      "end_sec": 53.9,
+      "duration_sec": 9.9,
+      "narration": "To recap: Voltage pushes electrons, Resistance opposes them, and Current is the resulting flow governed by V equals I times R.",
+      "visual": {
+        "type": "bullets",
+        "params": {
+          "labels": [
+            "Key Takeaways: Ohm's Law"
+          ],
+          "steps": [
+            "Voltage (V): Electrical pressure in Volts",
+            "Resistance (R): Opposition to flow in Ohms (Ω)",
+            "Current (I = V / R): Flow rate in Amperes"
+          ]
+        }
+      }
+    }
+  ]
+}

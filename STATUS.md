@@ -29,7 +29,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 
 | Owner | Module | State | Last check | Next |
 |---|---|---|---|---|
-| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Audited repo against the 5 problem-statement requirements: `code_walkthrough` absent, level/target_sec absent, next/replay missing, English voice American, CPU path OK for translate/TTS/render. CC-2 raised; handoffs to FARHAN/TARUN. Vercel deferred past the freeze. |
+| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. **CC-2 part 2 landed 2026-10-28: `level` + `target_sec` wired through prompt, plan-cache key, tier-2 artifact key, and the exporter job; budget = target_sec × 2.3 words ±15%.** | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Audited repo against the 5 problem-statement requirements: `code_walkthrough` absent, level/target_sec absent, next/replay missing, English voice American, CPU path OK for translate/TTS/render. CC-2 raised; handoffs to FARHAN/TARUN. Vercel deferred past the freeze. |
 | FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
 | TARUN | localization/ | Done (L1–L8 verified + SPATS ratio sync + enm/enf educator voices) | SPATS ratio scaling, natural breath pauses, Ohm/variable transliteration, enm (Michael) / enf (Sarah) voice options | All green |
 | AYUSH | exporter/ | Exporter pipeline, FastAPI app, Next.js UI integration, e2e tests (`test_e2e_offline.py` 6 passed) | 2026-10-28 00:10 · D8 PASS · D10 PASS · test_e2e_offline PASS | V1-Keeper loop active, ready for 06:00 review |
@@ -77,6 +77,11 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - YYUG -> ALL · DECISION 2026-10-28 00:30 · the Next.js UI (`app/`, `components/`, `lib/`, `hooks/`, owner AYUSH) is the product UI; build around it · supersedes the earlier YYUG -> AYUSH handoff naming the FastAPI-served `web/` on :8000 as the product · `exporter/app.py` stays the backend, and `web/` + `server.js` stay as the offline mock harness pinned by `tests/test_server_behavior.js` and `tests/test_mock_api.js` · the condition that made `web/` the safer pick still has to be met: the two `app/layout.tsx` offline violations (`@vercel/analytics`, `next/font/google`) must be gone before the 06:00 Wi-Fi-off rehearsal; the AYUSH prompt sent at 00:25 lists them as STEP 2 · blocking? y for the rehearsal
 
 - AYUSH -> YYUG · orchestrator/pipeline.py · Frontend inputs and exporter acceptance added for 'level' (beginner/intermediate, default beginner) and 'target_sec' (30-90s, default 60) on POST /api/generate (CC-2 part 2); please wire into planner prompt/schema when ready · blocking? n
+
+- YYUG -> AYUSH · exporter/app.py, tests/test_ui.py, tests/test_e2e_offline.py · `_run` now forwards `level`/`target_sec` from the job to the pipeline (one line), and the two test `app.state.generate` stubs accept and forward `**options` · the length/level control is now real end-to-end · review the exporter call and the stub signatures · blocking? n
+- YYUG -> AYUSH · lib/api.ts, app/lesson/[id]/page.tsx, components/app/lesson-form.tsx, components/app/run-locally.tsx · shop-window demo lessons: lib/showcase.ts adds DEMO_LESSONS + slugify + demo ids; lib/api.ts resolves `demo_` ids and `/demo/` artifact URLs without any network call; the lesson page builds a local initial job for `demo_` ids; lesson-form highlights demo chips and run-locally offers ready-made lessons · ships real mp4/manifests in public/demo/ (Ohm's Law, Binary search, Photosynthesis × en/hi/kn) · review the branching in your files · blocking? n
+- YYUG -> AYUSH · README.md, run_demo.ps1, run_demo.sh · updated run locally documentation with copy-pasteable PowerShell 5.1 & bash steps, fixed .venv python detection in run_demo scripts, and added offline models warning · review and confirm · blocking? n
+- YYUG -> TARUN · localization/ · the shipped Hindi demo (public/demo/ohm-s-law_hi) is the restored pre_v1 lesson, so its title/narration still say वर्तमान instead of धारा · regenerate the artifact after the normalize.py:610 current → vidyut dhaara fix and refresh public/demo/ohm-s-law_hi · blocking? n (known wording gap on the public shop window)
 
 
 ## CONTRACT CHANGE proposals
@@ -164,6 +169,10 @@ constant: budget = `target_sec * 2.3` words +/- 15%, with the 30-90 s outer boun
 - AYUSH: `level` and `target_sec` on `POST /api/generate` and the input page.
 
 Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
+
+**Landed on v1 (the `level` + `target_sec` half only) at the user's direction on 2026-10-28, ahead of the
+FARHAN/TARUN/AYUSH votes.** The `code_walkthrough` half stays on `yyug/code-walkthrough`, still merged-with-nothing
+until FARHAN's renderer template exists. The three votes remain open for the code_walkthrough part.
 
 ## V1-Keeper Passes
 
@@ -281,3 +290,27 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
 - **Keeper note for every later pass:** production is a *promoted snapshot*. The project's production branch is still `main`
   (untouched, per the rules), so pushes to v1 update only the preview, never the public URL. After a green push, ship it with
   `vercel promote <the new preview deployment URL> --yes`, or ask the owner to set the production branch to `v1`.
+
+### Pass 6 (YYUG keeper session) · 2026-10-28 02:05
+
+- **Features & Fixes Landed on v1:**
+  - P0-1 verified: ohm-s-law audio restored from pre_v1, voiced ~70% & 150+ transitions checked for EN, HI, KN.
+  - Shop-window demo lessons: pre-rendered lesson.mp4, manifest.json, and captions.vtt for Ohm's Law, Binary Search, and Photosynthesis (EN, HI, KN) shipped in `public/demo/` (39.28 MB, under 50 MB budget).
+  - `lib/showcase.ts`: DEMO_LESSONS, slugify, demo id resolution.
+  - `lib/api.ts`: intercept showcase demo lessons locally without network calls.
+  - `app/lesson/[id]/page.tsx`: server-safe demo job handling for `demo_` ids.
+  - `components/app/run-locally.tsx`: fixed PowerShell 5.1 commands (no `&&`), two-terminal instructions, `-ExecutionPolicy Bypass`, link to `${REPO_URL}/tree/v1#readme`.
+  - `README.md`: ordered, copy-pasteable "Run it locally" steps for PowerShell 5.1 and Bash.
+  - `run_demo.ps1` / `run_demo.sh`: prefers `.venv` python if present, prints offline model warmup warning if weights missing.
+  - CC-2 part 2: level & target_sec wired across prompt, cache keys, exporter job.
+  - P0-2 fix in `tests/test_multilingual_sync.py`: redirects ARTIFACT_DIR to tmp_path to prevent overwriting cache/artifacts.
+- **Gate:**
+  - `tsc --noEmit`: exit 0
+  - `npm run build`: compiled in 895ms, static generation (7/7) in 708ms
+  - `pytest tests/test_ui.py tests/test_e2e_offline.py -q`: 11 passed, 3 skipped
+  - `npm test`: 18/18 renderer tests passed
+  - `npm run test:units`: 12 + 5 passed
+- **Waiting on user:**
+  - Default branch decision (`main` vs `v1`)
+  - Approval for leftover folder `C:\Users\karti\blue-visual-teacher` cleanup
+  - Signoff on Ayush files (`README.md`, `run_demo.ps1`, `run_demo.sh`)

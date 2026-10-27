@@ -32,6 +32,20 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "fixtures" / "golden_ohms_law.json"
 
 
+@pytest.fixture
+def isolated_artifact_dir(tmp_path, monkeypatch):
+    """Keep run_pipeline.run() out of cache/artifacts, which is the live demo cache.
+
+    run_pipeline.ARTIFACT_DIR points at the real demo directory, so an unpatched
+    run() overwrites the Ohm's Law / Photosynthesis / Newton's Third Law artifacts
+    that the running product serves.
+    """
+    import run_pipeline
+
+    monkeypatch.setattr(run_pipeline, "ARTIFACT_DIR", tmp_path)
+    return tmp_path
+
+
 def test_time_scale_audio_compression():
     """Verify audio is compressed in time to match a shorter target duration."""
     sr = TARGET_SR
@@ -150,7 +164,7 @@ def test_synthesize_multilingual_all_scenes_helper(tmp_path):
             assert s_lang["duration_sec"] == s_ref["duration_sec"]
 
 
-def test_run_pipeline_multilingual_sync():
+def test_run_pipeline_multilingual_sync(isolated_artifact_dir):
     """Verify run_pipeline.run generates all present languages synchronized to English."""
     artifacts = run(topic=None, langs="all")
 
@@ -187,7 +201,7 @@ def test_run_pipeline_multilingual_sync():
             assert s_lang["duration_sec"] == s_en["duration_sec"]
 
 
-def test_multilingual_sync_three_scenarios():
+def test_multilingual_sync_three_scenarios(isolated_artifact_dir):
     """Verify 3 distinct real-world curriculum scenarios across all 5 present languages."""
     scenarios = ["Ohm's Law", "Photosynthesis", "Newton's Third Law"]
     for topic in scenarios:

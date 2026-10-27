@@ -1,0 +1,111 @@
+{
+  "title": "Binary Search: Halving the Search Space",
+  "lang": "en",
+  "total_sec": 46.825,
+  "audio": "lesson_audio.wav",
+  "sample_rate": 24000,
+  "scenes": [
+    {
+      "id": 1,
+      "start_sec": 0.0,
+      "end_sec": 9.05,
+      "duration_sec": 9.05,
+      "narration": "How does a railway clerk find one passenger's booking among a huge pile of sorted records without checking every single entry one by one?",
+      "visual": {
+        "type": "title",
+        "params": {
+          "labels": [
+            "Binary Search",
+            "Logarithmic Time",
+            "Divide and Conquer"
+          ],
+          "steps": [
+            "Fast Lookup in Sorted Data"
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "start_sec": 9.05,
+      "end_sec": 19.2,
+      "duration_sec": 10.15,
+      "narration": "Imagine finding a roll number in a sorted exam sheet. Instead of reading from the top, open the exact middle page and throw away half instantly.",
+      "visual": {
+        "type": "compare",
+        "params": {
+          "labels": [
+            "Linear Scan: One by One",
+            "Binary Search: Cut in Half"
+          ],
+          "steps": [
+            "Linear: work grows with the list",
+            "Binary: work grows very slowly"
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "start_sec": 19.2,
+      "end_sec": 28.5,
+      "duration_sec": 9.3,
+      "narration": "Binary Search compares your target with the middle element. If the target is larger, discard the left half; if smaller, discard the right half.",
+      "visual": {
+        "type": "flow",
+        "params": {
+          "labels": [
+            "Find the middle element",
+            "Compare target with middle",
+            "Keep the correct half"
+          ],
+          "steps": [
+            "Requires a sorted list",
+            "Halves the search each step"
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "start_sec": 28.5,
+      "end_sec": 37.675,
+      "duration_sec": 9.175,
+      "narration": "Let's search a sorted list for a target. We check the middle item, see the target is larger, keep only the right half, and find it on the next check.",
+      "visual": {
+        "type": "labeled_diagram",
+        "params": {
+          "labels": [
+            "Sorted list of roll numbers",
+            "Check middle: too small",
+            "Keep the right half",
+            "Target found"
+          ],
+          "steps": [
+            "Two checks instead of many"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "start_sec": 37.675,
+      "end_sec": 46.825,
+      "duration_sec": 9.15,
+      "narration": "To recap: Binary Search needs sorted data, checks the middle each step, and finishes in logarithmic time, even for very long lists.",
+      "visual": {
+        "type": "bullets",
+        "params": {
+          "labels": [
+            "Binary Search Summary"
+          ],
+          "steps": [
+            "Precondition: data must be sorted",
+            "Mechanism: halve the range each step",
+            "Speed: logarithmic comparisons"
+          ]
+        }
+      }
+    }
+  ]
+}

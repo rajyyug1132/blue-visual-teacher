@@ -237,7 +237,7 @@ def test_lesson_total_below_range_retries_with_total_feedback(fake):
     client = fake(payload, payload)
     _, tel = planner.plan_lesson("Ohm's Law")
     feedback = client.calls[1]["messages"][-1]["content"]
-    assert "total 56 words" in feedback and f"{schema.TOTAL_MIN}-{schema.TOTAL_MAX} words" in feedback
+    assert "total 56 words" in feedback and "does not fill a 60s lesson" in feedback
     assert tel["fallback_used"] is True
 
 
@@ -539,7 +539,7 @@ def test_classify_failure_means_policy_none(fake, monkeypatch):
     monkeypatch.setattr(client, "has_formula", "maybe")  # anything but a JSON true
     _, tel = planner.plan_lesson("Monsoon")
     assert tel["policy"] == "none" and len(client.classify_calls) == 1
-    assert client.calls[0]["messages"][-1]["content"].endswith("Number policy: none")
+    assert "Number policy: none" in client.calls[0]["messages"][-1]["content"]
     assert client.classify_calls[0]["options"]["num_ctx"] == client.calls[0]["options"]["num_ctx"]  # no reload
 
 
@@ -607,3 +607,84 @@ def test_generate_lesson_fits_long_audio_and_leaves_the_cached_plan_alone(tmp_pa
     assert manifest["total_sec"] <= 90 and len(manifest["scenes"]) == 4 and exported == [out]
     assert len(tel["planner"]["duration_trims"]) == 3 and "duration_fit" in tel["stage_sec"]
     assert len(plan.scenes) == 5  # the shared English plan was not modified
+
+
+# --- CC-2 part 2: learner level and target length (Stage 1 inputs) -------------------------------------------
+
+def _narration(words_n: int) -> str:
+    return " ".join(["voltage"] * words_n)
+
+
+def _scenes(lengths: list[int]) -> list[dict]:
+    return [{"id": i + 1, "narration": _narration(n),
+             "visual": {"type": "title", "params": {"labels": ["Ohm's Law"], "steps": ["Voltage and current"]}}}
+            for i, n in enumerate(lengths)]
+
+
+@pytest.mark.parametrize("target,lengths", [(30, [17, 17, 17, 17]), (45, [20] * 5),
+                                            (60, [27] * 5), (75, [29] * 6), (90, [32] * 6)])
+def test_target_sec_sets_the_word_budget(target, lengths):
+    plan = LessonPlan.model_validate({"title": "Voltage and current", "target_sec": target,
+                                      "scenes": _scenes(lengths)})
+    assert plan.target_sec == target and plan.level == "beginner"
+    golden = json.loads(GOLDEN_JSON)  # 123 words, ~55 s: right for 60 s, wrong for anything far from it
+    if target != 60:
+        with pytest.raises(ValidationError, match=rf"does not fill a {target}s lesson"):
+            LessonPlan.model_validate({**golden, "target_sec": target})
+
+
+def test_level_and_length_are_in_the_plan_cache_key(tmp_path):
+    default = LessonPlan.model_validate(json.loads(GOLDEN_JSON))
+    other = LessonPlan.model_validate({"title": "Voltage and current", "level": "intermediate", "target_sec": 45,
+                                       "scenes": _scenes([20] * 5)})
+    path_default = cache.save_plan("Ohm's Law", default, plan_dir=tmp_path)
+    path_other = cache.save_plan("Ohm's Law", other, plan_dir=tmp_path)
+    assert path_default.name == "ohm-s-law.json"
+    assert path_other.name == "ohm-s-law__intermediate__45s.json"
+    assert cache.load_plan("Ohm's Law", plan_dir=tmp_path) == default
+    assert cache.load_plan("Ohm's Law", plan_dir=tmp_path, level="intermediate", target_sec=45) == other
+    assert cache.load_plan("Ohm's Law", plan_dir=tmp_path, level="beginner", target_sec=45) is None
+
+
+def test_request_states_level_and_length():
+    from orchestrator.prompts import request
+
+    beginner = request("Ohm's Law", "checked", "beginner", 30)
+    advanced = request("Ohm's Law", "checked", "intermediate", 90)
+    assert "Learner level: beginner" in beginner and "exactly 4 scenes" in beginner and "30 seconds" in beginner
+    assert "Learner level: intermediate" in advanced and "exactly 6 scenes" in advanced and "90 seconds" in advanced
+
+
+def test_plan_lesson_uses_the_requested_level_and_length(fake):
+    payload = json.dumps({"title": "Voltage and current", "scenes": _scenes([17, 17, 17, 17])})
+    client = fake(payload, has_formula=False)  # no numbers, so the qualitative audit is satisfied
+    plan, tel = planner.plan_lesson("Ohm's Law", level="beginner", target_sec=30)
+    assert (plan.level, plan.target_sec) == ("beginner", 30)
+    assert (tel["level"], tel["target_sec"]) == ("beginner", 30)
+    assert "Lesson length: 30 seconds" in client.calls[0]["messages"][-1]["content"]
+    assert cache.load_plan("Ohm's Law", target_sec=30) == plan  # cached under the 30 s key
+    assert cache.load_plan("Ohm's Law") is None  # and not under the default one
+
+
+def test_artifact_dir_and_cache_are_keyed_by_level_and_length(tmp_path, monkeypatch):
+    from orchestrator import pipeline
+
+    monkeypatch.setattr(pipeline, "ARTIFACTS", tmp_path)
+    assert pipeline.artifact_dir("Ohm's Law", "hi").name == "ohm-s-law_hi"
+    assert pipeline.artifact_dir("Ohm's Law", "hi", "intermediate", 90).name == "ohm-s-law_hi__intermediate__90s"
+    assert pipeline.artifact_dir("Ohm's Law", "hi", "beginner", 45).name == "ohm-s-law_hi__beginner__45s"
+    cached = tmp_path / "ohm-s-law_hi"
+    cached.mkdir()
+    (cached / "manifest.json").write_text("{}", encoding="utf-8")
+    (cached / "lesson.mp4").write_bytes(b"x")
+    assert pipeline.cached_artifact("Ohm's Law", "hi") == cached
+    assert pipeline.cached_artifact("Ohm's Law", "hi", "beginner", 45) is None  # a 60 s lesson is not a 45 s one
+
+
+@pytest.mark.parametrize("target", [30, 45, 60, 75, 90])
+def test_fallback_fills_the_requested_length(target):
+    plan = build_safe_fallback_lesson("Photosynthesis", "beginner", target)
+    lo, hi = schema.word_band(target, len(plan.scenes))
+    assert plan.target_sec == target
+    assert lo <= sum(words(plan)) <= hi
+    assert all(schema.WORDS_MIN <= w <= schema.WORDS_MAX for w in words(plan))

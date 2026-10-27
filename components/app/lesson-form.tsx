@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowUpRight, Loader2, RotateCcw } from 'lucide-react'
 import { ApiError, createLesson } from '@/lib/api'
 import { RunLocally } from './run-locally'
 import { EXAMPLE_TOPICS } from '@/lib/languages'
+import { DEMO_SLUGS, slugify } from '@/lib/showcase'
 import { useLanguages } from '@/hooks/use-api'
 import { useShowcase } from '@/hooks/use-showcase'
 import { cn } from '@/lib/utils'
@@ -116,19 +117,28 @@ export function LessonForm({
           </p>
         </div>
         <div className="flex flex-wrap gap-2" aria-label="Example topics">
-          {EXAMPLE_TOPICS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
-                setTopic(t)
-                setTopicError(null)
-              }}
-              className="rounded-full border border-ink bg-cream px-3 py-1.5 text-sm font-medium transition-colors hover:bg-ink hover:text-cream"
-            >
-              {t}
-            </button>
-          ))}
+          {EXAMPLE_TOPICS.map((t) => {
+            const isDemo = showcase && DEMO_SLUGS.includes(slugify(t))
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  setTopic(t)
+                  setTopicError(null)
+                }}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-ink hover:text-cream',
+                  isDemo
+                    ? 'border-ink bg-brand-green font-bold'
+                    : 'border-ink bg-cream',
+                )}
+              >
+                {t}
+                {isDemo ? ' · demo' : ''}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -247,7 +257,7 @@ export function LessonForm({
 
 
       {submitError?.offline ? (
-        <RunLocally variant={submitError.offline} />
+        <RunLocally variant={submitError.offline} language={selectedLanguage} />
       ) : submitError && (
 
         <div role="alert" className="flex flex-col gap-3 rounded-2xl border-2 border-destructive bg-white p-4 sm:flex-row sm:items-start">

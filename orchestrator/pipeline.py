@@ -20,18 +20,35 @@ DURATION_MIN_SEC, DURATION_MAX_SEC = 30.0, 90.0
 ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS = ROOT / "cache" / "artifacts"
 STAGES = ("plan", "translate", "tts", "render", "encode", "done")
+LEVELS = ("beginner", "intermediate")
+DEFAULT_LEVEL, DEFAULT_TARGET_SEC = "beginner", 60
 
 _engines: dict = {}
 _engines_lock = threading.Lock()
 
 
-def artifact_dir(topic: str, lang: str) -> Path:
-    return ARTIFACTS / f"{topic_slug(topic)}_{lang}"
+def request_options(level: str | None = None, target_sec: int | None = None) -> tuple[str, int]:
+    """Clamp the two Stage 1 inputs (CC-2) so a bad request can never reach the planner or the cache key."""
+    level = level if level in LEVELS else DEFAULT_LEVEL
+    try:
+        target = int(target_sec) if target_sec is not None else DEFAULT_TARGET_SEC
+    except (TypeError, ValueError):
+        target = DEFAULT_TARGET_SEC
+    return level, max(int(DURATION_MIN_SEC), min(int(DURATION_MAX_SEC), target))
 
 
-def cached_artifact(topic: str, lang: str) -> Path | None:
-    """Tier 2: a complete lesson (manifest + MP4) for this (topic, lang), or None."""
-    out = artifact_dir(topic, lang)
+def artifact_dir(topic: str, lang: str, level: str = DEFAULT_LEVEL,
+                 target_sec: int = DEFAULT_TARGET_SEC) -> Path:
+    """One directory per (topic, language, level, length); the default pair keeps the historical name."""
+    level, target_sec = request_options(level, target_sec)
+    suffix = "" if (level, target_sec) == (DEFAULT_LEVEL, DEFAULT_TARGET_SEC) else f"__{level}__{target_sec}s"
+    return ARTIFACTS / f"{topic_slug(topic)}_{lang}{suffix}"
+
+
+def cached_artifact(topic: str, lang: str, level: str = DEFAULT_LEVEL,
+                    target_sec: int = DEFAULT_TARGET_SEC) -> Path | None:
+    """Tier 2: a complete lesson (manifest + MP4) for this (topic, lang, level, length), or None."""
+    out = artifact_dir(topic, lang, level, target_sec)
     return out if (out / "manifest.json").exists() and (out / "lesson.mp4").exists() else None
 
 
@@ -69,11 +86,13 @@ def available_languages() -> list[str]:
     return langs
 
 
-def generate_lesson(topic: str, lang: str, progress_cb=None, *, tts=None, translator=None, export=None,
+def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEFAULT_LEVEL,
+                    target_sec: int = DEFAULT_TARGET_SEC, tts=None, translator=None, export=None,
                     plan_fn=None) -> Path:
     """Topic -> narrated MP4 in cache/artifacts/{slug}_{lang}/. tts/translator/export/plan_fn are injectable for tests."""
     report = progress_cb or (lambda stage, pct: None)
-    hit = cached_artifact(topic, lang)
+    level, target_sec = request_options(level, target_sec)
+    hit = cached_artifact(topic, lang, level, target_sec)
     if hit:
         report("done", 100)
         return hit
@@ -88,8 +107,10 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, tts=None, transl
         return result
 
     if plan_fn is None:
-        from orchestrator.planner import plan_lesson as plan_fn
-    plan, telemetry = stage("plan", lambda: plan_fn(topic))
+        from orchestrator.planner import plan_lesson
+        plan, telemetry = stage("plan", lambda: plan_lesson(topic, level=level, target_sec=target_sec))
+    else:
+        plan, telemetry = stage("plan", lambda: plan_fn(topic))
 
     if lang != "en":
         translator = translator or warmup(planner=False)["translator"]
@@ -98,7 +119,7 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, tts=None, transl
         localized = plan
         times["translate"] = 0.0
 
-    out = artifact_dir(topic, lang)
+    out = artifact_dir(topic, lang, level, target_sec)
     out.mkdir(parents=True, exist_ok=True)
     wav = out / "lesson_audio.wav"
     tts = tts or warmup(planner=False)["tts"]
@@ -122,7 +143,8 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, tts=None, transl
     times["render_encode"] = round(time.perf_counter() - start, 3)
 
     times["total"] = round(time.perf_counter() - t0, 3)
-    (out / "telemetry.json").write_text(json.dumps({"topic": topic, "lang": lang, "stage_sec": times,
+    (out / "telemetry.json").write_text(json.dumps({"topic": topic, "lang": lang, "level": level,
+                                                    "target_sec": target_sec, "stage_sec": times,
                                                     "planner": telemetry}, ensure_ascii=False, indent=2,
                                                    default=str), encoding="utf-8")
     report("done", 100)

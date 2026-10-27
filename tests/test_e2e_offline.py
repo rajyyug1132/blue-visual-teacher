@@ -115,8 +115,8 @@ def api(monkeypatch):
     app_module.app.state.skip_warmup = True
     monkeypatch.setitem(app_module.state, "languages", ["en"])
     monkeypatch.setattr(app_module.app.state, "generate",
-                        lambda topic, lang, cb: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
-                                                                         plan_fn=golden_plan))
+                        lambda topic, lang, cb, **opts: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
+                                                                                 plan_fn=golden_plan, **opts))
     topic = f"E2E Offline {uuid.uuid4().hex[:6]}"
     with TestClient(app_module.app) as client:
         yield client, topic

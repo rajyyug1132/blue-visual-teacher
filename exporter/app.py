@@ -138,7 +138,8 @@ def _run(job_id: str) -> None:
 
     with run_lock:
         try:
-            out = app.state.generate(job["topic"], job["lang"], progress)
+            out = app.state.generate(job["topic"], job["lang"], progress, level=job.get("level") or "beginner",
+                                     target_sec=job.get("target_sec") or 60)
             _urls(job, out)
             tel = out / "telemetry.json"
             if tel.exists():

@@ -35,12 +35,12 @@ def server():
     app_module.state["languages"] = ["en", "hi", "kn"]
     behaviour = {"fail": False}
 
-    def generate(topic, lang, cb):
+    def generate(topic, lang, cb, **options):
         if behaviour["fail"]:
             cb("plan", 10)
             raise RuntimeError("model crashed with a long traceback nobody should see")
         return pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(), plan_fn=golden_plan,
-                                        translator=_Identity())
+                                        translator=_Identity(), **options)
 
     app_module.app.state.generate = generate
     port = free_port()
@@ -137,3 +137,29 @@ def test_d8_topic_validation_is_inline(page):
     page.fill("#topic-input", "x")
     page.click("#generate-btn")
     assert page.is_visible("#validation-msg")
+
+
+def test_generate_forwards_level_and_target_sec(monkeypatch, tmp_path):
+    """CC-2 part 2: the exporter's job must hand the learner level and the target length to the pipeline."""
+    require_exporter()
+    from exporter import app as app_module
+
+    seen = {}
+
+    def fake_generate(topic, lang, cb, **options):
+        seen.update(options)
+        out = tmp_path / f"{topic}_en"
+        out.mkdir()
+        (out / "telemetry.json").write_text("{}", encoding="utf-8")
+        return out
+
+    monkeypatch.setattr(app_module.app.state, "generate", fake_generate)
+    job_id = "job-options"
+    app_module.jobs[job_id] = {
+        "job_id": job_id, "user_id": None, "topic": "Ohm's Law", "lang": "en", "level": "intermediate",
+        "target_sec": 45, "status": "queued", "stage": "queued", "pct": 0, "stage_times": {},
+        "telemetry": {}, "error": None, "mp4_url": None, "manifest_url": None, "audio_url": None,
+    }
+    app_module._run(job_id)
+    assert seen == {"level": "intermediate", "target_sec": 45}
+    assert app_module.jobs[job_id]["status"] == "completed"

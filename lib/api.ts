@@ -1,6 +1,14 @@
 import { DEFAULT_LANGUAGES, type Language } from './languages'
 import { getAuthToken } from './demo-session'
-import { isShowcase, SHOWCASE_MESSAGE } from './showcase'
+import {
+  DEMO_LESSONS,
+  demoFor,
+  demoManifestUrl,
+  demoVideoUrl,
+  isShowcase,
+  parseDemoId,
+  SHOWCASE_MESSAGE,
+} from './showcase'
 
 export const API_BASE_URL = typeof window !== 'undefined'
   ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/+$/, '')
@@ -150,10 +158,29 @@ export function normalizeStatus(raw: string | null): JobStatus {
 /** Resolve a possibly-relative artifact path against the backend origin. */
 export function resolveArtifactUrl(url: string | null): string | null {
   if (!url) return null
+  if (url.startsWith('/demo/')) return url // shop-window assets are same-origin, never prefixed with API_BASE_URL
   try {
     return new URL(url, `${API_BASE_URL}/`).toString()
   } catch {
     return null
+  }
+}
+
+/** A completed Job for a pre-made shop-window lesson (see lib/showcase.ts). */
+function demoJob(slug: string, lang: string): Job {
+  const topic = DEMO_LESSONS[slug].topic
+  return {
+    id: `demo_${slug}_${lang}`,
+    status: 'completed',
+    rawStatus: 'completed',
+    stage: 'done',
+    message: null,
+    error: null,
+    videoUrl: demoVideoUrl(slug, lang),
+    manifestUrl: demoManifestUrl(slug, lang),
+    topic,
+    language: lang,
+    pct: 100,
   }
 }
 
@@ -230,6 +257,11 @@ export async function createLesson(input: {
   level?: string
   target_sec?: number
 }): Promise<Job> {
+  // Public preview: a known topic plays a real, pre-made lesson instead of hitting a server that is not there.
+  if (isShowcase()) {
+    const demo = demoFor(input.topic, input.language)
+    if (demo) return demoJob(demo.slug, input.language)
+  }
   const body = await request('/api/generate', {
     method: 'POST',
     body: JSON.stringify({
@@ -245,6 +277,9 @@ export async function createLesson(input: {
 }
 
 export async function getJobStatus(id: string): Promise<Job> {
+  // A `demo_` id is a static asset; resolve it without any network call, in showcase mode and out of it.
+  const demo = parseDemoId(id)
+  if (demo) return demoJob(demo.slug, demo.lang)
   const body = await request(`/api/status/${encodeURIComponent(id)}`)
   return parseJob(body, id)
 }

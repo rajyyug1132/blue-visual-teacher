@@ -13,7 +13,8 @@ from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.mathcheck import MathCheckError, ensure_answer_spoken, verify_plan
 from orchestrator.numeric_guard import NumericPolicy, audit_fields, nfkc
 from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT, request
-from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, WORDS_MIN, LessonPlan
+from orchestrator.schema import (NOT_SPOKEN, WORDS_MAX, WORDS_MIN, LessonPlan,
+                                 scenes_for, word_budget)
 from orchestrator.spoken import shorten_narration, to_spoken
 
 # Primary planner: fast and resident. OLLAMA_MODEL is the older name, still honoured.
@@ -89,10 +90,13 @@ def classify_topic(concept: str, model: str = MODEL_NAME) -> NumericPolicy:
         return "none"  # making no numeric claims is the safe side
 
 
-def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tuple[LessonPlan, dict]:
+def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool, level: str = "beginner",
+                target_sec: int = 60) -> tuple[LessonPlan, dict]:
     """parse -> verify math (digits still present) -> spoken words -> trim -> spoken answer -> audit -> schema.
 
     Returns (plan, info). Raises PlanRejected with every problem found, for the next rung of the ladder.
+    The requested level and length are injected before validation, so the plan is held to the budget it was
+    asked for and a model that omits or contradicts those fields cannot dodge it.
     """
     try:
         data = json.loads(content)
@@ -102,8 +106,10 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
         try:
             LessonPlan.model_validate_json(content)
         except ValidationError as exc:
-            raise PlanRejected(_validation_feedback(exc)) from None
+            raise PlanRejected(_validation_feedback(exc, target_sec)) from None
         raise PlanRejected(["JSON: scenes must be a list of objects"]) from None
+
+    data["level"], data["target_sec"] = level, target_sec
 
     info = {"policy": policy, "math": {"status": "none"}, "repaired": False, "answer_repaired": False}
     problems = []
@@ -142,7 +148,7 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
     try:
         plan = LessonPlan.model_validate(data)
     except ValidationError as exc:
-        problems += _validation_feedback(exc)
+        problems += _validation_feedback(exc, target_sec)
     if problems or issues:
         # Only field-level number problems left: the caller can patch those strings instead of re-planning.
         patchable = issues if issues and not problems else None
@@ -151,7 +157,8 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
 
 
 def _patch_fields(concept: str, rejected: PlanRejected, model: str, policy: NumericPolicy,
-                  repair_answer: bool) -> tuple[LessonPlan, dict] | None:
+                  repair_answer: bool, level: str = "beginner",
+                  target_sec: int = 60) -> tuple[LessonPlan, dict] | None:
     """Rewrite only the strings the audit flagged (one short call each), then re-run every check.
 
     Returns (plan, info) on success, None if the patch fails or more than MAX_PATCHES strings need it.
@@ -184,7 +191,7 @@ def _patch_fields(concept: str, rejected: PlanRejected, model: str, policy: Nume
         else:
             params[field + "s"][idx] = new
     try:
-        return _parse_plan(json.dumps(data, ensure_ascii=False), policy, repair_answer)
+        return _parse_plan(json.dumps(data, ensure_ascii=False), policy, repair_answer, level, target_sec)
     except PlanRejected:
         return None
 
@@ -215,8 +222,10 @@ def _extend_short_hook(data: dict) -> bool:
     return False
 
 
-def _validation_feedback(exc: ValidationError) -> list[str]:
+def _validation_feedback(exc: ValidationError, target_sec: int = 60) -> list[str]:
     """Turn a ValidationError into per-scene instructions; a raw error dump makes 3B models repeat themselves."""
+    scenes = scenes_for(target_sec)
+    budget = word_budget(target_sec, scenes)
     lines = []
     for err in exc.errors():
         loc = err["loc"]
@@ -227,8 +236,8 @@ def _validation_feedback(exc: ValidationError) -> list[str]:
                 "definitions in visual.params.labels, not in narration."
             )
         elif not loc and "total" in err["msg"]:
-            lines.append(f"{err['msg']}. Lengthen or shorten scenes so all narrations add up to "
-                         f"{TOTAL_MIN}-{TOTAL_MAX} words.")
+            lines.append(f"{err['msg']}. Adjust the scenes so all narrations add up to about {budget} words "
+                         f"over {scenes} scenes.")
         else:
             lines.append(f"{'.'.join(map(str, loc)) or 'JSON'}: {err['msg']}")
     return lines
@@ -258,14 +267,19 @@ def _ladder(primary: str, escalation: str) -> list[tuple[str, str]]:
 
 
 def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
-                policy: NumericPolicy | None = None, escalation_model: str | None = None) -> tuple[LessonPlan, dict]:
+                policy: NumericPolicy | None = None, escalation_model: str | None = None,
+                level: str = "beginner", target_sec: int = 60) -> tuple[LessonPlan, dict]:
     """Ladder: plan -> retry with the problem list -> escalate to the bigger model (fresh, with the problem list)
-    -> regenerate in qualitative mode -> safe template. Telemetry records every rung's model and seconds."""
+    -> regenerate in qualitative mode -> safe template. Telemetry records every rung's model and seconds.
+
+    level and target_sec are the Stage 1 inputs from the request (CC-2); both are part of the plan cache key.
+    """
     model = model or MODEL_NAME
     escalation = ESCALATION_MODEL if escalation_model is None else escalation_model
     t0 = time.perf_counter()
-    if use_cache and (cached := load_plan(concept)) is not None:
+    if use_cache and (cached := load_plan(concept, level=level, target_sec=target_sec)) is not None:
         return cached, {"cache_hit": True, "fallback_used": False, "total_words": total_words(cached),
+                        "level": level, "target_sec": target_sec,
                         "total_sec": round(time.perf_counter() - t0, 4)}
 
     t_classify = time.perf_counter()
@@ -273,8 +287,9 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
         policy = classify_topic(concept, model)
     classify_sec = round(time.perf_counter() - t_classify, 3)
 
+    budget = word_budget(target_sec, scenes_for(target_sec))
     base = [{"role": "system", "content": SYSTEM_PROMPT}] + FEW_SHOT_MESSAGES
-    messages = base + [{"role": "user", "content": request(concept, policy)}]
+    messages = base + [{"role": "user", "content": request(concept, policy, level, target_sec)}]
     errors, rungs, problems = [], [], []
     loaded = model
     swap_sec = 0.0
@@ -289,10 +304,12 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
             # Fresh conversation for the bigger model, told what went wrong (no drafts to copy from).
             note = ("\nA previous draft was rejected for these problems; avoid them:\n- " + "\n- ".join(problems)
                     if problems else "")
-            messages = base + [{"role": "user", "content": request(concept, policy) + note}]
+            messages = base + [{"role": "user",
+                                "content": request(concept, policy, level, target_sec) + note}]
         elif stage == "qualitative":
             # Fresh conversation: the failed drafts would pull the model back to the same numbers.
-            messages = base + [{"role": "user", "content": request(concept, "none") + "\n" + QUALITATIVE_MODE}]
+            messages = base + [{"role": "user",
+                                "content": request(concept, "none", level, target_sec) + "\n" + QUALITATIVE_MODE}]
         resp = None
         t_rung = time.perf_counter()
         try:
@@ -304,7 +321,8 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
                 options={"temperature": 0.0 if stage in ("plan", "escalate") else 0.2, "num_ctx": NUM_CTX,
                          "num_predict": 850},
             )
-            plan, info = _parse_plan(resp.message.content or "", stage_policy, repair_answer=stage != "plan")
+            plan, info = _parse_plan(resp.message.content or "", stage_policy, repair_answer=stage != "plan",
+                                     level=level, target_sec=target_sec)
             rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
                           "ok": True})
             telemetry = {
@@ -318,6 +336,8 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
                 "load_sec": round((resp.load_duration or 0) / 1e9, 3),
                 "eval_sec": round((resp.eval_duration or 0) / 1e9, 3),
                 "total_words": total_words(plan),
+                "level": level,
+                "target_sec": target_sec,
                 "fallback_used": False,
                 "errors": errors,
                 "rungs": rungs,
@@ -334,7 +354,8 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
             problems = exc.problems
             errors.append(f"{stage}: " + " | ".join(exc.problems))
             if exc.patchable and stage != "qualitative":
-                patched = _patch_fields(concept, exc, rung_model, stage_policy, repair_answer=stage != "plan")
+                patched = _patch_fields(concept, exc, rung_model, stage_policy, repair_answer=stage != "plan",
+                                        level=level, target_sec=target_sec)
                 if patched:
                     plan, info = patched
                     rungs.append({"stage": stage + "+patch", "model": rung_model,
@@ -342,7 +363,8 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
                                   "patched": len({(i["scene_index"], i["field"], i["idx"]) for i in exc.patchable})})
                     telemetry = {"attempt": attempt + 1, "stage": stage + "+patch", "model": rung_model,
                                  "cache_hit": False, "classify_sec": classify_sec,
-                                 "total_words": total_words(plan), "fallback_used": False, "errors": errors,
+                                 "total_words": total_words(plan), "level": level, "target_sec": target_sec,
+                                 "fallback_used": False, "errors": errors,
                                  "rungs": rungs, **info}
                     return _finish(concept, plan, telemetry, t0, use_cache, model, loaded, swap_sec)
             rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
@@ -350,15 +372,16 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
             feedback = "Problems:\n- " + "\n- ".join(exc.problems)
         messages = messages + [
             {"role": "assistant", "content": resp.message.content or "{}"},
-            {"role": "user", "content": f"{feedback}\nReturn the full corrected JSON with 4-6 scenes and 18-30 "
-                                        "words per narration."},
+            {"role": "user", "content": f"{feedback}\nReturn the full corrected JSON with "
+                                        f"{scenes_for(target_sec)} scenes and about {budget} words in total."},
         ]
 
     # Deterministic safe template if every rung failed. Never cached, so a later run can retry the LLM.
-    plan = build_safe_fallback_lesson(concept)
+    plan = build_safe_fallback_lesson(concept, level, target_sec)
     telemetry = {"attempt": len(rungs) + 1, "stage": "template", "model": None, "cache_hit": False,
                  "fallback_used": True, "policy": policy, "classify_sec": classify_sec,
-                 "total_words": total_words(plan), "math": {"status": "none"}, "errors": errors, "rungs": rungs}
+                 "total_words": total_words(plan), "level": level, "target_sec": target_sec,
+                 "math": {"status": "none"}, "errors": errors, "rungs": rungs}
     return _finish(concept, plan, telemetry, t0, False, model, loaded, swap_sec)
 
 
@@ -375,5 +398,5 @@ def _finish(concept, plan, telemetry, t0, use_cache, primary, loaded, swap_sec):
         swap_sec += time.perf_counter() - t_swap
     telemetry["swap_sec"] = round(swap_sec, 2)
     if use_cache:
-        save_plan(concept, plan)
+        save_plan(concept, plan, level=plan.level, target_sec=plan.target_sec)
     return plan, telemetry

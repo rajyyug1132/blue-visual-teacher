@@ -5,6 +5,10 @@ __pycache__/
 cache/
 *.mp4
 *.wav
+# Ship pre-made demo lessons as static assets (shop-window mode, lib/showcase.ts).
+# These are committed once and served by Vercel; they are NOT generated at deploy time.
+!public/demo/**/*.mp4
+!public/demo/**/*.vtt
 *.pt
 *.safetensors
 *.onnx

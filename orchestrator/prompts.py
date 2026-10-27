@@ -1,10 +1,12 @@
 # orchestrator/prompts.py
 import json
 
+from orchestrator.schema import WORDS_MAX, WORDS_MIN, scenes_for, word_band
+
 SYSTEM_PROMPT = """You are an expert Indian STEM educator and visual curriculum planner.
 Given a student's concept, output ONLY valid JSON matching the LessonPlan schema. Never output code or markdown.
 
-MANDATORY 5-SCENE PEDAGOGICAL STRUCTURE:
+MANDATORY PEDAGOGICAL STRUCTURE (the request states how many scenes your lesson has; keep this order):
 - Scene 1 (Hook): A relatable everyday Indian question or phenomenon (18-26 words). Visual type: "title".
 - Scene 2 (Intuition / Analogy): A concrete physical analogy from daily life in India—water tanks, cricket, IRCTC trains, UPI, traffic, or kitchen cooking (20-28 words). Visual type: "compare" or "labeled_diagram".
 - Scene 3 (Core Principle / Mechanism): State the exact scientific, mathematical, or conceptual rule clearly (20-28 words). Visual type: "equation", "flow", or "timeline".
@@ -13,7 +15,8 @@ MANDATORY 5-SCENE PEDAGOGICAL STRUCTURE:
 
 STRICT RULES:
 1. Plan in clear, simple English ("language_neutral": true).
-2. Each scene's "narration" MUST be 1-2 short spoken sentences (18-30 words). Total words across all 5 scenes MUST be 100-140 words so audio lasts 45-65 seconds.
+2. Each scene's "narration" MUST be 1-2 short spoken sentences (14-32 words). The request states the total word budget for its lesson length: obey it exactly, because the audio is measured against that length.
+
 3. "narration" is spoken words only, read aloud by a voice engine. Write every number in words ("two hundred thirty", not "230") and every operator in words ("V equals I times R", "fifty percent"). Never put digits or symbols (0-9 = × ÷ + / % Ω < >) in narration; keep figures and formulas ("230 V", "V = I × R") in visual.params.labels and visual.params.steps.
 4. Keep visual.params.labels (2-4 items) and visual.params.steps (1-4 items) under 6 words each so they translate cleanly into Hindi and Kannada without overflowing the canvas.
 5. Never define every symbol in "narration". State the rule in words and put symbol definitions ("P : Principal") in visual.params.labels. Every narration must end with a complete sentence.
@@ -34,9 +37,26 @@ QUALITATIVE_MODE = ("QUALITATIVE MODE: explain this concept without any quantiti
                     "Describe what happens and why, in natural sentences. Scene 4 walks through the steps in words.")
 
 
-def request(concept: str, policy: str) -> str:
-    """The user turn for one concept; few-shots use the same shape so the policy line is learned by example."""
-    return f"Concept: {concept.strip()}\nNumber policy: {policy}"
+LEVEL_NOTES = {
+    "beginner": "everyday words and short sentences; define each new term the first time it appears; keep one concrete analogy",
+    "intermediate": "precise terminology; state the rule and when it applies; assume the basics are already known",
+}
+
+
+def request(concept: str, policy: str, level: str = "beginner", target_sec: int = 60) -> str:
+    """The user turn for one concept; few-shots use the same shape so the policy line is learned by example.
+
+    level and target_sec are Stage 1 inputs (CC-2): the level shapes vocabulary and depth only, the length shapes
+    the scene count and the word budget the schema will hold the plan to.
+    """
+    scenes = scenes_for(target_sec)
+    lo, hi = word_band(target_sec, scenes)
+    per_lo, per_hi = max(WORDS_MIN, -(-lo // scenes)), min(WORDS_MAX, -(-hi // scenes))
+    return (f"Concept: {concept.strip()}\n"
+            f"Number policy: {policy}\n"
+            f"Learner level: {level} -- {LEVEL_NOTES.get(level, LEVEL_NOTES['beginner'])}.\n"
+            f"Lesson length: {target_sec} seconds -- write exactly {scenes} scenes, {lo}-{hi} words in total "
+            f"({per_lo}-{per_hi} words per scene).")
 
 BINARY_SEARCH_QUALITATIVE = {  # few-shot for policy "none": an algorithm explained with no quantities
     "title": "Binary Search: Halving the Search Space",

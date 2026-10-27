@@ -25,18 +25,85 @@ topic ──> classify (formula?) ──> plan (Ollama qwen2.5:3b, schema-constr
 Code map: `orchestrator/` (planner, guard, cache, pipeline) · `localization/` (translation, TTS, captions) ·
 `renderer/` (canvas engine, 8 templates) · `web/` (UI) · `exporter/` (MP4 export, FastAPI, harness).
 
-## Run it offline
+## Run it locally
 
-```bash
-python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # once, online
-python -m playwright install chromium                                    # once, online
-python -c "from localization.warmup import run_all_warmups; run_all_warmups()"  # caches models and voices, online
-./run_demo.sh            # or run_demo.ps1 on Windows; then open http://127.0.0.1:8000
+Follow these steps to run the full application locally on your machine.
+
+### Windows (PowerShell 5.1)
+
+#### 1. Clone repository (branch `v1`)
+```powershell
+git clone --branch v1 https://github.com/rajyyug1132/blue-visual-teacher
+cd blue-visual-teacher
 ```
 
-`run_demo` sets `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `OLLAMA_MAX_LOADED_MODELS=1`, starts Ollama only if it
-is not running, pins the planner with `keep_alive=-1`, loads translator and TTS once, then serves the app.
-`python scripts/precache.py` pre-generates the 10 example topics so the first demo clicks are instant.
+#### 2. One-time environment setup (Online)
+```powershell
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt
+ollama pull qwen2.5:3b
+# Ensure FFmpeg is installed and accessible on your PATH (ffmpeg -version)
+.\.venv\Scripts\python.exe -m playwright install chromium
+# Download and pre-cache Hugging Face weights (IndicTrans2, Kokoro, MMS-TTS) while online:
+.\.venv\Scripts\python.exe -c "from localization.warmup import run_all_warmups; run_all_warmups()"
+```
+*Note: All subsequent generation runs operate completely offline with `HF_HUB_OFFLINE=1`.*
+
+#### 3. Run the application (Two terminals)
+**Terminal 1 — Lesson Server (Backend on :8000):**
+```powershell
+powershell -ExecutionPolicy Bypass -File run_demo.ps1
+```
+
+**Terminal 2 — Next.js Product UI (:3000):**
+```powershell
+npm install
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+### macOS / Linux (Bash)
+
+#### 1. Clone repository (branch `v1`)
+```bash
+git clone --branch v1 https://github.com/rajyyug1132/blue-visual-teacher
+cd blue-visual-teacher
+```
+
+#### 2. One-time environment setup (Online)
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+ollama pull qwen2.5:3b
+# Ensure FFmpeg is installed and accessible on PATH (ffmpeg -version)
+./.venv/bin/python -m playwright install chromium
+# Download and pre-cache Hugging Face weights while online:
+./.venv/bin/python -c "from localization.warmup import run_all_warmups; run_all_warmups()"
+```
+
+#### 3. Run the application (Two terminals)
+**Terminal 1 — Lesson Server (Backend on :8000):**
+```bash
+./run_demo.sh
+```
+
+**Terminal 2 — Next.js Product UI (:3000):**
+```bash
+npm install
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+### Additional Scripts
+
+- `npm start`: Production build and start (`next build && next start`).
+- `npm run server`: Run the legacy standalone static mock demo on `:3000` (`web/` + `?mock=1`).
+- `python scripts/precache.py`: Pre-generates the 10 example topics into `cache/artifacts` for instant demo playback.
+- `run_demo` automatically pins `qwen2.5:3b` with `keep_alive=-1`, warms the translator and TTS once, and serves `exporter.app:app` at `:8000`.
 
 Checks: `python -m pytest tests/` (includes `tests/test_e2e_offline.py`, which blocks outbound sockets) and
 `python -m orchestrator.done_checks` (BLUEPRINT DONE list D1–D10, evidence in `logs/`).

@@ -1,0 +1,21 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:09.125
+Why does your phone charger get warm while fast-charging, or a ceiling fan slow down when voltage drops during summer in Bengaluru?
+
+2
+00:00:09.125 --> 00:00:18.875
+Think of an overhead water tank on your house roof. Water height is Voltage, water flow through the pipe is Current, and a narrow tap is Resistance.
+
+3
+00:00:18.875 --> 00:00:30.500
+Georg Ohm discovered that Voltage equals Current multiplied by Resistance: V equals I times R. Doubling voltage doubles the current if resistance stays constant.
+
+4
+00:00:30.500 --> 00:00:44.000
+Let's test a two hundred thirty volt Indian wall socket powering an iron box with forty-six ohms resistance. Two hundred thirty divided by forty-six gives five amperes of current.
+
+5
+00:00:44.000 --> 00:00:53.900
+To recap: Voltage pushes electrons, Resistance opposes them, and Current is the resulting flow governed by V equals I times R.
