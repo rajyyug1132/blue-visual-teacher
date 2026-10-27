@@ -26,7 +26,7 @@ Evidence per check in `logs/D#.log`; latest table in `logs/summary.md`.
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. `run_pipeline.py` runs fixture -> stub TTS -> stub exporter -> 55.23 s MP4. | 2026-10-27 · pytest green · bench qwen2.5:3b 4/5 valid, llama3.2:3b 5/5, qwen2.5:7b 5/5 (see below) · **default planner: qwen2.5:7b on GPU; TTS/IndicTrans2 on CPU (DEVICE=cpu)** | Team vote on the CONTRACT CHANGE below; then commit. Measure full-lesson latency once TTS lands. |
 | FARHAN | renderer/ | — | — | — |
-| TARUN | localization/ | — | — | — |
+| TARUN | localization/ | On origin/dev: translator.py (protected spans, zero-Devanagari, batched), tts_engine.py (Kokoro EN/HI, MMS KN seed, no double pad), captions.py, normalize.py, warmup.py, golden_manifest_en.json | 14:00 per his board | Merge dev into main |
 | AYUSH | exporter/ | — | — | — |
 
 ### Planner bench (5 topics, uncached, RTX 3050 6 GB)
@@ -41,6 +41,10 @@ No model got its own worked-example arithmetic right; the guard corrects it. Inv
 qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon ("fifty-five degrees Celsius").
 
 ## Handoffs
+
+- TARUN -> FARHAN · `fixtures/golden_manifest_en.json` · English audio timing manifest delivered (54.79s total) · unblocks renderer `initLesson` & audio clock · blocking: n
+- TARUN -> AYUSH · `fixtures/golden_manifest_en.json` · English audio timing manifest delivered · unblocks Playwright + FFmpeg export testing · blocking: n
+- TARUN -> YYUG · `orchestrator/schema.py` · Recommend allowing non-English plans to bypass the word minimum (handled in `translator.py` via `ensure_word_budget`) · blocking: n
 
 - YYUG -> TARUN · localization/tts_engine.py, translator.py · Kokoro, IndicTrans2 and MMS-TTS run on CPU (fp32): take the device from `orchestrator.device.get_device()` (default now `cpu`, env DEVICE=cpu|cuda), never hardcode "cuda"; load once at startup · the planner is now qwen2.5:7b and needs the whole GPU · blocking? n (y before the 18:00 HI+KN milestone)
 - YYUG -> TARUN · localization/ · please report CPU timings for one 5-scene lesson (translate + TTS) per language; if total > ~30 s, batch IndicTrans2 once and run scene TTS in a ThreadPoolExecutor (BLUEPRINT 3.2) · speed is 10 % of the score and the planner already takes ~20 s · blocking? n
