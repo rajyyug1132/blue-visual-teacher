@@ -37,7 +37,7 @@ DEFAULT_TEXTS = {
 }
 
 
-def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_dur: float | None = None, play: bool = False) -> Path:
+def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_dur: float | None = None, ref_text: str | None = None, play: bool = False) -> Path:
     from localization.tts_engine import OfflineTTSEngine
 
     print(f"\n[TTS Engine] Initializing voice synthesizer for '{lang}'...")
@@ -58,10 +58,14 @@ def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_d
 
     print(f"[Engine Model] {engine_desc}")
     print(f"[Input Text]   {text}")
+    ref_ratios = None
+    if ref_text:
+        ref_ratios = tts.extract_segment_ratios(ref_text, "en")
+        print(f"[Proportional Sync] English reference timing profile: {[round(r, 3) for r in ref_ratios]}")
     if target_dur:
-        print(f"[Timing Sync]  Target duration locked to {target_dur:.3f}s (Time Expansion/Compression Active)")
+        print(f"[Timing Sync]  Target duration locked to {target_dur:.3f}s (Proportional Segment Scaling)")
 
-    wav, dur = tts.synthesize_scene(text, lang, target_dur=target_dur)
+    wav, dur = tts.synthesize_scene(text, lang, target_dur=target_dur, ref_ratios=ref_ratios)
 
     suffix = f"_{target_dur:.1f}s" if target_dur else ""
     out_path = Path("cache") / f"test_voice_{lang}{suffix}.wav"
@@ -109,7 +113,13 @@ def main():
         help="Custom text to speak. If omitted, uses a standard STEM lesson sentence.",
     )
     parser.add_argument(
+        "--ref-text",
+        default=None,
+        help="English reference text to extract clause duration proportions from.",
+    )
+    parser.add_argument(
         "--target-dur",
+
         type=float,
         default=None,
         help="Target duration in seconds to lock the speech to using time expansion/compression.",
@@ -122,7 +132,7 @@ def main():
 
     args = parser.parse_args()
     text = args.text or DEFAULT_TEXTS.get(args.lang, DEFAULT_TEXTS["en"])
-    synthesize_and_save(args.lang, text, voice=args.voice, target_dur=args.target_dur, play=args.play)
+    synthesize_and_save(args.lang, text, voice=args.voice, target_dur=args.target_dur, ref_text=args.ref_text, play=args.play)
 
 
 if __name__ == "__main__":

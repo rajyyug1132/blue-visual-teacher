@@ -581,6 +581,26 @@ class OfflineTTSEngine:
                 except Exception:
                     pass
 
+    def extract_segment_ratios(self, text: str, lang: str = "en") -> list[float]:
+        """Extract clause-by-clause proportional duration ratios from text or speech."""
+        parts = [p.strip() for p in re.split(r'([,\;:\.\?\!\u0964\u0965]+)', text) if p.strip()]
+        segments = []
+        i = 0
+        while i < len(parts):
+            seg = parts[i]
+            if i + 1 < len(parts) and re.match(r'^[,\;:\.\?\!\u0964\u0965]+$', parts[i+1]):
+                i += 2
+            else:
+                i += 1
+            if seg and not re.match(r'^[,\;:\.\?\!\u0964\u0965]+$', seg):
+                segments.append(seg)
+        if not segments:
+            return [1.0]
+        # Syllable/word based weight profile
+        weights = [max(1.0, len(s.split()) * 1.5 + len(s) * 0.1) for s in segments]
+        total_w = sum(weights)
+        return [w / total_w for w in weights]
+
     def _synthesize_synthetic(self, text: str, lang: str, target_dur: float | None = None) -> tuple[Any, float]:
         """Synthetic fallback generating accurate duration audio when neural models are absent."""
         if target_dur is not None and target_dur > 0:
@@ -617,7 +637,7 @@ class OfflineTTSEngine:
         total_dur = round(total_samples / TARGET_SR, 3)
         return wav, total_dur
 
-    def synthesize_scene(self, text: str, lang: str, target_dur: float | None = None) -> tuple[Any, float]:
+    def synthesize_scene(self, text: str, lang: str, target_dur: float | None = None, ref_ratios: Sequence[float] | None = None) -> tuple[Any, float]:
         """Synthesize scene audio waveform with numbers expanded and tail pad attached.
         
         Returns:
@@ -693,7 +713,8 @@ class OfflineTTSEngine:
 
                 # Split by punctuation to create natural teacher phrasing and breath pauses
                 parts = re.split(r'([,\;:\.\?\!\u0964\u0965]+)', mms_input_text)
-                chunks = []
+                raw_segments = []
+                pause_durs = []
                 idx = 0
                 while idx < len(parts):
                     clause = parts[idx].strip()
@@ -715,31 +736,68 @@ class OfflineTTSEngine:
                         new_len = int(old_len * 1.5)
                         c_wav = np.interp(np.linspace(0, old_len, new_len), np.arange(old_len), out).astype(np.float32)
                     c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=4.0, release_ms=4.0)
-                    chunks.append(c_wav)
-                    if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
-                        pause_sec = 0.40  # Sentence-end teacher pause
-                    elif any(p in delim for p in [",", ";", ":"]):
-                        pause_sec = 0.25  # Breath/clause pause
-                    else:
-                        pause_sec = 0.08
-                    chunks.append(np.zeros(int(pause_sec * TARGET_SR), dtype=np.float32))
+                    raw_segments.append(c_wav)
 
-                if chunks:
-                    speech_wav = np.concatenate(chunks)
+                    if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
+                        pause_durs.append(0.40)  # Sentence-end teacher pause
+                    elif any(p in delim for p in [",", ";", ":"]):
+                        pause_durs.append(0.25)  # Breath/clause pause
+                    else:
+                        pause_durs.append(0.08)
+
+                if not raw_segments:
+                    return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)
+
+                # Proportional Segment Scaling (matches English reference rhythm ratios)
+                n_seg = len(raw_segments)
+                fixed_pauses_sec = sum(pause_durs) + TAIL_PAD_SEC
+
+                if ref_ratios is not None and len(ref_ratios) > 0:
+                    if len(ref_ratios) == n_seg:
+                        ratios = list(ref_ratios)
+                    else:
+                        cum_ref = np.concatenate([[0.0], np.cumsum(ref_ratios)])
+                        old_x = np.linspace(0, 1, len(cum_ref))
+                        new_x = np.linspace(0, 1, n_seg + 1)
+                        cum_target = np.interp(new_x, old_x, cum_ref)
+                        diffs = np.diff(cum_target)
+                        ratios = (diffs / np.sum(diffs)).tolist()
                 else:
-                    speech_wav = np.zeros(TARGET_SR, dtype=np.float32)
+                    raw_lens = [len(c) for c in raw_segments]
+                    tot = sum(raw_lens) if sum(raw_lens) > 0 else 1
+                    ratios = [l / tot for l in raw_lens]
+
+                final_chunks = []
+                if target_dur is not None and target_dur > 0:
+                    speech_budget_sec = max(0.5, target_dur - fixed_pauses_sec)
+                    for c_wav, r, p_dur in zip(raw_segments, ratios, pause_durs):
+                        seg_target_samples = int(round(r * speech_budget_sec * TARGET_SR))
+                        scaled_c = time_scale_audio(c_wav, seg_target_samples, sr=TARGET_SR, tail_pad_samples=0)
+                        final_chunks.append(scaled_c)
+                        final_chunks.append(np.zeros(int(p_dur * TARGET_SR), dtype=np.float32))
+                else:
+                    for c_wav, p_dur in zip(raw_segments, pause_durs):
+                        final_chunks.append(c_wav)
+                        final_chunks.append(np.zeros(int(p_dur * TARGET_SR), dtype=np.float32))
+
+                # Add tail padding
+                pad = np.zeros(pad_samples, dtype=np.float32)
+                final_chunks.append(pad)
+                full_wav = np.concatenate(final_chunks)
+
                 try:
-                    max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
+                    max_v = float(np.max(np.abs(full_wav))) if len(full_wav) > 0 else 0.0
                     if max_v > 1e-5:
-                        speech_wav = (speech_wav / max_v) * 0.95
+                        full_wav = (full_wav / max_v) * 0.95
                 except Exception:
                     pass
-                speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
-                pad = np.zeros(pad_samples, dtype=np.float32)
-                full_wav = np.concatenate([speech_wav, pad])
+
+                # Exact sample alignment if target_dur is set
                 if target_dur is not None and target_dur > 0:
                     target_samples = int(round(target_dur * TARGET_SR))
-                    full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
+                    if len(full_wav) != target_samples:
+                        full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
+
                 measured_dur = round(len(full_wav) / TARGET_SR, 3)
                 return full_wav, measured_dur
             except Exception:
@@ -776,12 +834,19 @@ class OfflineTTSEngine:
             visual = vis.model_dump() if hasattr(vis, "model_dump") else (vis if isinstance(vis, dict) else dict(vis))
 
             target_dur = None
+            ref_ratios = None
             if target_durations is not None and idx < len(target_durations):
                 item = target_durations[idx]
-                target_dur = float(item["duration_sec"]) if isinstance(item, dict) else float(item)
+                if isinstance(item, dict):
+                    target_dur = float(item["duration_sec"])
+                    ref_ratios = item.get("ratios")
+                else:
+                    target_dur = float(item)
 
-            wav, duration_sec = self.synthesize_scene(text, lang, target_dur=target_dur)
+            wav, duration_sec = self.synthesize_scene(text, lang, target_dur=target_dur, ref_ratios=ref_ratios)
             all_waveforms.append(wav)
+
+            scene_ratios = self.extract_segment_ratios(text, lang)
 
             timing_manifest.append({
                 "id": sid,
@@ -790,6 +855,7 @@ class OfflineTTSEngine:
                 "duration_sec": round(duration_sec, 3),
                 "narration": text,
                 "visual": visual,
+                "ratios": scene_ratios,
             })
             cursor_sec += duration_sec
 
@@ -821,7 +887,7 @@ class OfflineTTSEngine:
         ref_wav = ref_dir / "lesson_audio.wav"
         ref_manifest = self.synthesize_all_scenes(ref_scenes, reference_lang, ref_wav)
         manifests[reference_lang] = ref_manifest
-        target_durations = [s["duration_sec"] for s in ref_manifest]
+        target_durations = [{"duration_sec": s["duration_sec"], "ratios": s.get("ratios")} for s in ref_manifest]
 
         # 2. Synthesize other languages synchronized to reference scene durations
         for lang, plan in plans.items():
