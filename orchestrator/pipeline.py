@@ -213,6 +213,15 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
         voice_used = getattr(tts, f"voice_{lang}", getattr(tts, "voice_en" if lang == "en" else "voice_hi", None))
         check_audio_is_speech(wav, lang=lang, voice=voice_used)
 
+    # English hint for the renderer's illustration picker: Hindi/Kannada labels never match its English keywords.
+    # Never drawn; the renderer draws only words from a scene's labels, steps and code.
+    english = {s.id: s.visual.params for s in plan.scenes}  # by id: duration fitting can drop scenes
+    for scene in timing:
+        params = (scene.get("visual") or {}).get("params")
+        source = english.get(scene.get("id"))
+        if isinstance(params, dict):
+            params["topic_en"] = " ".join([plan.title, *(source.labels + source.steps if source else [])])
+
     manifest = {"title": localized.title, "lang": lang, "total_sec": total, "audio": wav.name,
                 "sample_rate": 24000, "scenes": timing}
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -607,6 +607,10 @@ def test_generate_lesson_fits_long_audio_and_leaves_the_cached_plan_alone(tmp_pa
     assert manifest["total_sec"] <= 90 and len(manifest["scenes"]) == 4 and exported == [out]
     assert len(tel["planner"]["duration_trims"]) == 3 and "duration_fit" in tel["stage_sec"]
     assert len(plan.scenes) == 5  # the shared English plan was not modified
+    english = {s.id: s for s in plan.scenes}
+    for scene in manifest["scenes"]:  # the renderer's English illustration hint, matched by scene id
+        hint = scene["visual"]["params"]["topic_en"]
+        assert hint.startswith(plan.title) and english[scene["id"]].visual.params.labels[0] in hint
 
 
 # --- CC-2 part 2: learner level and target length (Stage 1 inputs) -------------------------------------------
