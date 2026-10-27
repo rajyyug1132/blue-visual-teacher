@@ -206,7 +206,7 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
 
 **From Pass 2 on, one keeper pushes to v1** -- two agents merging and pushing the same branch is the race this role exists to prevent.
 
-### Pass 2 (YYUG keeper session) · 2026-10-28 00:35
+### Pass 2 (YYUG keeper session) · 2026-10-28 00:19
 
 - **Rebased** onto AYUSH's `d1c1223` (his keeper log + CC-1 vote). Two STATUS.md conflicts, both resolved keeping both sides:
   his `AYUSH ✅` vote on CC-1 kept, his Pass 1 kept verbatim, mine placed beside it with the reconciliation note above.
@@ -228,7 +228,7 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
   `127.0.0.1:8000` in `app/lesson/[id]/page.tsx:28` and `components/app/lesson-view.tsx:24-25`, next-scene/replay, level +
   length inputs) · FARHAN (code_walkthrough template, `web/` next/replay) · TARUN (Indian-English voice default, device hardcode).
 
-### Pass 3 (YYUG keeper session) · 2026-10-28 01:05
+### Pass 3 (YYUG keeper session) · 2026-10-28 00:34
 
 - **Decision (user):** the Vercel URL serves the Next UI as a shop window, with a clear "run locally to generate" state.
 - **Merged:** `yyug/vercel-showcase` (`055c77f`, merge `9956aa3`), 8 files, frontend only. On a public host with no
@@ -244,6 +244,8 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
   Windows-local symlink EPERM that Linux builders do not have). All 70 local imports match tracked files with exact case, so a
   Windows-only case mismatch is ruled out. The remaining suspect is the Vercel project's own settings (Root Directory,
   Framework Preset, build/install command overrides). Logs need an account: `npx vercel inspect <deployment> --logs`.
+  The deploy of `4dcfb5e` went pending -> failure in 11 s (00:34:37 -> 00:34:48), far shorter than `npm ci` + `next build`,
+  so it fails before reaching the code -- consistent with a project-settings problem, not a code problem.
 - **Owner note (AYUSH):** this pass edited your `lib/api.ts`, `lesson-form.tsx`, `backend-status.tsx`, `app-shell.tsx` and
   `dashboard-view.tsx` with small hooks; the logic lives in three new files. If your STEP 3 work on `lesson-form.tsx` conflicts,
   your side wins -- keep the `submitError.offline` branch and the `!showcase` guard on the language warning.
