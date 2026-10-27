@@ -68,7 +68,7 @@ HARD RULES
 
 ## 4. Contracts (frozen after the lock; changes need team agreement)
 
-**4.1 LessonPlan schema** — exactly `orchestrator/schema.py` from BLUEPRINT 1.2. Visual types: `flow, bullets, equation, labeled_diagram, graph, timeline, compare, title`. 4-6 scenes, narration 8-42 words (target 18-30), labels 1-6, steps 1-5.
+**4.1 LessonPlan schema** — exactly `orchestrator/schema.py` from BLUEPRINT 1.2. Visual types: `flow, bullets, equation, labeled_diagram, graph, timeline, compare, title`. 4-6 scenes, narration 14-32 words (target 18-30) and spoken words only (no digits or symbols), 85-150 words per lesson, labels 1-6, steps 1-5. Optional `check {expr, result}` on the worked-example scene (pending CONTRACT CHANGE, see STATUS.md).
 
 **4.2 Golden fixture** — `fixtures/golden_ohms_law.json` from BLUEPRINT 1.3.
 

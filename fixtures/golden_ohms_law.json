@@ -40,7 +40,7 @@
     },
     {
       "id": 4,
-      "narration": "Let's test a 230-Volt Indian wall socket connected to an iron box with 46 Ohms resistance. Dividing 230 Volts by 46 Ohms gives exactly 5 Amperes of current.",
+      "narration": "Let's test a two hundred thirty volt Indian wall socket powering an iron box with forty-six ohms resistance. Two hundred thirty divided by forty-six gives five amperes of current.",
       "visual": {
         "type": "flow",
         "params": {

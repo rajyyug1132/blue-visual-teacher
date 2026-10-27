@@ -1,52 +1,118 @@
-"""Plan a fixed set of topics with the live model and print a telemetry table.
+"""Plan topics with the live model and print a telemetry table plus the numeric-guard acceptance checks.
 
-    python -m orchestrator.bench                          # model from OLLAMA_MODEL (default qwen2.5:3b)
-    python -m orchestrator.bench --model llama3.2:3b      # compare another model
+    python -m orchestrator.bench                                   # 5 topics, model from OLLAMA_MODEL
+    python -m orchestrator.bench --stress                          # the 20-topic set from PLAN.md section 7
+    python -m orchestrator.bench --stress --models qwen2.5:3b qwen2.5:7b
     python -m orchestrator.bench --topics "GST" "Monsoon"
 
-Bypasses the plan cache so every topic hits the LLM.
+Bypasses the plan cache so every topic hits the LLM. Columns:
+policy   classify result (checked = has a formula, none = descriptive)
+stage    rung of the ladder that produced the plan: plan · retry · qualitative · template (= fallback)
+math     ok = the model's own check was right · fixed = wrong result replaced · none = no check
+said     worked example speaks its verified answer (y/n, - when there is no check)
+viol     guard violations raised on the way (each sent back to the model), then the final-plan audit
+Acceptance (from the review): >= 19/20 without the template, no digits or "=" in descriptive topics, every
+worked example speaks its answer. Each topic's scene-4 narration is printed so invented facts can be spotted by eye.
 """
 import argparse
 import statistics
 import time
 
-from orchestrator.planner import MODEL_NAME, TARGET_WORDS, plan_lesson, warm_up_ollama
+from orchestrator.numeric_guard import audit_numbers, close, nfkc, spoken_numbers
+from orchestrator.planner import MODEL_NAME, plan_lesson, warm_up_ollama
 
 DEFAULT_TOPICS = ["Photosynthesis", "Newton's Third Law", "Compound Interest", "Monsoon", "TCP Three-Way Handshake"]
+STRESS_TOPICS = [
+    "Photosynthesis", "Newton's Third Law", "Binary Search", "Supply and Demand", "DNA Replication",
+    "Pythagoras Theorem", "Water Cycle", "Compound Interest", "Acid-Base Titration", "TCP Three-Way Handshake",
+    "Indian Independence Movement", "Monsoon", "GST", "Mughal Empire", "Democracy",
+    "Green Revolution", "Mauryan Empire", "Fundamental Rights", "Climate Change", "Panchayati Raj",
+]
 
 
-def bench(model: str, topics: list[str]) -> list[dict]:
+def final_checks(plan, tel) -> tuple[list[str], str]:
+    """Acceptance checks on the plan that would ship: (problems, answer-spoken flag)."""
+    policy = tel.get("policy", "none")
+    math = tel.get("math", {})
+    data = plan.model_dump()
+    problems = audit_numbers(data, policy, set(math.get("allowed", [])))
+    if policy == "none":
+        shown = [t for s in data["scenes"] for t in s["visual"]["params"]["labels"] + s["visual"]["params"]["steps"]]
+        if any("=" in nfkc(t) for t in shown + [s["narration"] for s in data["scenes"]]):
+            problems.append("'=' in a descriptive topic")
+    said = "-"
+    if math.get("result") is not None:
+        scene = next(s for s in plan.scenes if s.id == math["scene"])
+        said = "y" if any(close(v, math["result"]) for v in spoken_numbers(scene.narration)) else "n"
+        if said == "n":
+            problems.append("worked example does not speak its answer")
+    return problems, said
+
+
+def bench(model: str, topics: list[str]) -> dict:
     t0 = time.perf_counter()
     warm_up_ollama(model)
-    print(f"model {model} | warm-up {time.perf_counter() - t0:.2f}s\n")
+    print(f"\nmodel {model} | warm-up {time.perf_counter() - t0:.2f}s\n")
 
-    header = f"{'topic':<26} {'sec':>6} {'try':>3} {'result':<8} {'words':>5} {'per scene':<22} {'out_tok':>7} {'tok/s':>6}"
+    header = (f"{'topic':<28} {'sec':>6} {'cls':>5} {'policy':<7} {'stage':<11} {'math':<6} {'said':<4} "
+              f"{'viol':>4} {'final':<5} {'words':>5}")
     print(header)
     print("-" * len(header))
     rows = []
     for topic in topics:
         plan, tel = plan_lesson(topic, model=model, use_cache=False)
-        per_scene = [len(s.narration.split()) for s in plan.scenes]
-        tok_s = tel.get("output_tokens", 0) / tel["eval_sec"] if tel.get("eval_sec") else 0
-        rows.append({"topic": topic, **tel, "per_scene": per_scene})
-        result = "FALLBACK" if tel["fallback_used"] else "valid"
-        print(f"{topic[:26]:<26} {tel['total_sec']:>6.2f} {tel['attempt']:>3} {result:<8} {tel['total_words']:>5} "
-              f"{str(per_scene):<22} {tel.get('output_tokens', 0):>7} {tok_s:>6.1f}")
+        problems, said = final_checks(plan, tel)
+        raised = sum(e.count(" | ") + 1 for e in tel.get("errors", []))
+        row = {"topic": topic, **tel, "said": said, "final_problems": problems, "raised": raised}
+        rows.append(row)
+        print(f"{topic[:28]:<28} {tel['total_sec']:>6.2f} {tel.get('classify_sec', 0):>5.2f} "
+              f"{tel.get('policy', '?'):<7} {tel.get('stage', '?'):<11} {tel.get('math', {}).get('status', '-'):<6} "
+              f"{said:<4} {raised:>4} {'ok' if not problems else 'FAIL':<5} {tel['total_words']:>5}")
+        example = next((s for s in plan.scenes if s.id == 4), None)
+        if example:
+            check = f"  [check {example.check.expr} = {example.check.result}]" if example.check else ""
+            print(f"    ex: {example.narration}{check}")
         for err in tel.get("errors", []):
-            print(f"    ! {err[:150]}")
+            print(f"    ! {err[:160]}")
+        for p in problems:
+            print(f"    X {p[:160]}")
 
     secs = [r["total_sec"] for r in rows]
-    valid = sum(not r["fallback_used"] for r in rows)
-    in_target = sum(TARGET_WORDS[0] <= r["total_words"] <= TARGET_WORDS[1] for r in rows)
-    print(f"\nvalid {valid}/{len(rows)} | fallback {len(rows) - valid} | "
-          f"words in {TARGET_WORDS[0]}-{TARGET_WORDS[1]}: {in_target}/{len(rows)} | "
-          f"plan sec P50 {statistics.median(secs):.2f}, max {max(secs):.2f}")
-    return rows
+    summary = {
+        "model": model,
+        "valid": sum(not r["fallback_used"] for r in rows),
+        "templates": sum(r["fallback_used"] for r in rows),
+        "qualitative": sum(r.get("stage") == "qualitative" for r in rows),
+        "retries": sum(r.get("stage") == "retry" for r in rows),
+        "raised": sum(r["raised"] for r in rows),
+        "final_fail": sum(bool(r["final_problems"]) for r in rows),
+        "math_ok": sum(r.get("math", {}).get("status") == "ok" for r in rows),
+        "math_fixed": sum(r.get("math", {}).get("status") == "fixed" for r in rows),
+        "unspoken": sum(r["said"] == "n" for r in rows),
+        "p50": statistics.median(secs), "p90": sorted(secs)[max(0, int(len(secs) * 0.9) - 1)], "max": max(secs),
+        "n": len(rows),
+    }
+    s = summary
+    print(f"\nvalid {s['valid']}/{s['n']} (template {s['templates']}, qualitative {s['qualitative']}, "
+          f"retry {s['retries']}) | violations raised {s['raised']} | final-plan failures {s['final_fail']} | "
+          f"math ok {s['math_ok']} fixed {s['math_fixed']} | unspoken answers {s['unspoken']} | "
+          f"plan sec P50 {s['p50']:.1f} P90 {s['p90']:.1f} max {s['max']:.1f}")
+    accept = s["valid"] >= s["n"] - max(1, s["n"] // 20) and s["final_fail"] == 0
+    print(f"acceptance: {'PASS' if accept else 'FAIL'}")
+    return summary
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--model", default=MODEL_NAME)
-    ap.add_argument("--topics", nargs="+", default=DEFAULT_TOPICS)
+    ap.add_argument("--models", nargs="+", default=[MODEL_NAME])
+    ap.add_argument("--model", help="single model; same as --models X")
+    ap.add_argument("--topics", nargs="+")
+    ap.add_argument("--stress", action="store_true", help="the 20-topic set from PLAN.md section 7")
     args = ap.parse_args()
-    bench(args.model, args.topics)
+    topics = args.topics or (STRESS_TOPICS if args.stress else DEFAULT_TOPICS)
+    summaries = [bench(m, topics) for m in ([args.model] if args.model else args.models)]
+    if len(summaries) > 1:
+        print("\nmodel            valid templ qual  viol final_fail unspoken  p50s  p90s")
+        for s in summaries:
+            print(f"{s['model']:<16} {s['valid']:>5} {s['templates']:>5} {s['qualitative']:>4} {s['raised']:>5} "
+                  f"{s['final_fail']:>10} {s['unspoken']:>8} {s['p50']:>5.1f} {s['p90']:>5.1f}")

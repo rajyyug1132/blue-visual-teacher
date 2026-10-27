@@ -1,10 +1,11 @@
 # orchestrator/device.py — one place that decides where torch models (Kokoro, IndicTrans2, MMS-TTS) run.
+# Default cpu: qwen2.5:7b needs the whole RTX 3050 (5.2 GB) and already spills ~18% to CPU on its own.
 import os
 
 
 def get_device() -> str:
-    """DEVICE=cuda|cpu (default cuda). Falls back to cpu when CUDA is requested but unavailable."""
-    wanted = os.environ.get("DEVICE", "cuda").strip().lower()
+    """DEVICE=cpu|cuda (default cpu: the GPU is reserved for the qwen2.5:7b planner). cuda falls back to cpu if unavailable."""
+    wanted = os.environ.get("DEVICE", "cpu").strip().lower()
     if wanted not in ("cuda", "cpu"):
         raise ValueError(f"DEVICE must be 'cuda' or 'cpu', got {wanted!r}")
     if wanted == "cpu":

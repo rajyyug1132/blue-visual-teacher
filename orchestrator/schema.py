@@ -1,6 +1,20 @@
 # orchestrator/schema.py
-from typing import List, Literal
-from pydantic import BaseModel, Field, field_validator
+# One rule per layer:
+#   JSON schema (Ollama grammar) -> shape, enums, list sizes, hard char cap on narration
+#   SceneSpec validator          -> per-scene word count, spoken words only
+#   LessonPlan validator         -> lesson word total and estimated audio length
+#   pipeline.duration_gate       -> real measured audio length after TTS
+#   mathcheck.verify_plan        -> worked-example arithmetic (check.expr vs check.result), before to_spoken
+import re
+import unicodedata
+from typing import List, Literal, Optional
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+WORDS_MIN, WORDS_MAX = 14, 32
+TOTAL_MIN, TOTAL_MAX = 85, 150
+SPEECH_WPS, TAIL = 2.3, 0.35
+EST_SEC_MIN, EST_SEC_MAX = 35, 85
+NOT_SPOKEN = re.compile(r"[0-9=×÷+<>%Ω/\\°√π]")  # matched after NFKC, so CO₂ and km² count as digits
 
 VisualType = Literal[
     "flow", "bullets", "equation", "labeled_diagram",
@@ -25,26 +39,43 @@ class VisualSpec(BaseModel):
     type: VisualType
     params: VisualParams
 
+class Check(BaseModel):
+    expr: str = Field(..., max_length=60, description="Arithmetic only: numbers, + - * / ** and parentheses. E.g. 230 / 46")
+    result: str = Field(..., max_length=30, description="The answer the narration states, e.g. 5")
+
 class SceneSpec(BaseModel):
     id: int = Field(..., ge=1, le=6)
     narration: str = Field(
         ...,
-        min_length=25,
-        max_length=240,
-        description="1-2 short spoken sentences (18-30 words). Plain spoken text, no markdown."
+        min_length=1,
+        max_length=320,
+        description="1-2 short spoken sentences (18-30 words). Spoken words only: numbers written as words, no digits or symbols."
     )
     visual: VisualSpec
     caption_key: Literal["narration"] = "narration"
+    check: Optional[Check] = None  # only on a numeric worked example; absent everywhere else
 
     @field_validator("narration")
     @classmethod
-    def check_word_budget(cls, v: str) -> str:
-        words = v.strip().split()
-        if len(words) < 8 or len(words) > 42:
-            raise ValueError(f"Scene narration must be 8-42 words (got {len(words)}) to fit 30-90s audio budget.")
-        return v.strip()
+    def check_spoken_narration(cls, v: str) -> str:
+        v = v.strip()
+        n = len(v.split())
+        if not WORDS_MIN <= n <= WORDS_MAX:
+            raise ValueError(f"narration must be {WORDS_MIN}-{WORDS_MAX} words, got {n}")
+        if NOT_SPOKEN.search(unicodedata.normalize("NFKC", v)):
+            raise ValueError("narration must be spoken words only: no digits or symbols "
+                             "(write carbon dioxide, square kilometres, degrees in words)")
+        return v
 
 class LessonPlan(BaseModel):
     title: str = Field(..., min_length=3, max_length=90)
     language_neutral: bool = True
     scenes: List[SceneSpec] = Field(..., min_length=4, max_length=6)
+
+    @model_validator(mode="after")
+    def check_total(self) -> "LessonPlan":
+        words = sum(len(s.narration.split()) for s in self.scenes)
+        est = words / SPEECH_WPS + TAIL * len(self.scenes)
+        if not (TOTAL_MIN <= words <= TOTAL_MAX) or not (EST_SEC_MIN <= est <= EST_SEC_MAX):
+            raise ValueError(f"total {words} words (~{est:.0f}s) out of range: need {TOTAL_MIN}-{TOTAL_MAX} words")
+        return self
