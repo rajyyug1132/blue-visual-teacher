@@ -32,6 +32,8 @@ from localization.tts_engine import (
     expand_numbers_and_symbols,
     hindi_number_to_words,
     kannada_number_to_words,
+    tamil_number_to_words,
+    bengali_number_to_words,
 )
 from orchestrator.schema import LessonPlan
 
@@ -98,6 +100,74 @@ def test_expand_numbers_and_symbols_kannada():
 # ---------------------------------------------------------------------------
 # Zero Devanagari Leakage in Kannada
 # ---------------------------------------------------------------------------
+def test_tamil_number_to_words():
+    """Verify Tamil numbers expand accurately."""
+    assert tamil_number_to_words(0) == "பூஜ்ஜியம்"
+    assert tamil_number_to_words(5) == "ஐந்து"
+    assert tamil_number_to_words(46) == "நாற்பத்து ஆறு"
+    assert tamil_number_to_words(100) == "நூறு"
+    assert tamil_number_to_words(230) == "இருநூற்று முப்பது"
+
+
+def test_expand_numbers_and_symbols_tamil():
+    """Verify symbols and numbers expand into spoken Tamil so MMS-TTS never drops them."""
+    exp_ta_v = expand_numbers_and_symbols("230 V", "ta")
+    assert "இருநூற்று முப்பது" in exp_ta_v
+    assert "வோல்ட்" in exp_ta_v
+    assert "230" not in exp_ta_v
+
+    exp_ta_ohm = expand_numbers_and_symbols("46 Ω", "ta")
+    assert "நாற்பத்து ஆறு" in exp_ta_ohm
+    assert "ஓம்" in exp_ta_ohm
+
+    exp_ta_eq = expand_numbers_and_symbols("V = I × R", "ta")
+    assert "சமம்" in exp_ta_eq
+    assert "பெருக்கல்" in exp_ta_eq
+
+
+def test_ensure_word_budget_tamil():
+    """Verify Tamil short narrations expand to >= 8 words."""
+    short_ta = "மின்னழுத்தம் மற்றும் மின்னோட்டம்."  # 3 words
+    expanded_ta = ensure_word_budget(short_ta, "ta", min_words=8, max_words=42)
+    assert len(expanded_ta.split()) >= 8
+    assert "மின்னழுத்தம்" in expanded_ta
+
+
+# ---------------------------------------------------------------------------
+def test_bengali_number_to_words():
+    """Verify Bengali numbers expand accurately."""
+    assert bengali_number_to_words(0) == "শূন্য"
+    assert bengali_number_to_words(5) == "পাঁচ"
+    assert bengali_number_to_words(46) == "ছেচল্লিশ"
+    assert bengali_number_to_words(100) == "একশো"
+    assert bengali_number_to_words(230) == "দুইশো ত্রিশ"
+    assert bengali_number_to_words(2023) == "দুই হাজার তেইশ"
+
+
+def test_expand_numbers_and_symbols_bengali():
+    """Verify symbols and numbers expand into spoken Bengali so MMS-TTS never drops them."""
+    exp_bn_v = expand_numbers_and_symbols("230 V", "bn")
+    assert "দুইশো ত্রিশ" in exp_bn_v
+    assert "ভোল্ট" in exp_bn_v
+    assert "230" not in exp_bn_v
+
+    exp_bn_ohm = expand_numbers_and_symbols("46 Ω", "bn")
+    assert "ছেচল্লিশ" in exp_bn_ohm
+    assert "ওহম" in exp_bn_ohm
+
+    exp_bn_eq = expand_numbers_and_symbols("V = I × R", "bn")
+    assert "সমান" in exp_bn_eq
+    assert "গুণ" in exp_bn_eq
+
+
+def test_ensure_word_budget_bengali():
+    """Verify Bengali short narrations expand to >= 8 words."""
+    short_bn = "ভোল্টেজ এবং কারেন্ট।"  # 3 words
+    expanded_bn = ensure_word_budget(short_bn, "bn", min_words=8, max_words=42)
+    assert len(expanded_bn.split()) >= 8
+    assert "ভোল্টেজ" in expanded_bn
+
+
 def test_kannada_zero_devanagari_rule():
     """Verify automated check for zero Devanagari (U+0900-U+097F) in Kannada text."""
     kannada_clean = "ವೋಲ್ಟೇಜ್ ಕರೆಂಟ್ ಮತ್ತು ರೋಧ"

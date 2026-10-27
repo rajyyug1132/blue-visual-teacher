@@ -38,3 +38,10 @@ Things that cost time once. Read before each pass of the DONE loop; add a line w
 - Golden 55.2 s lesson exports in 11.2 s with toDataURL capture (target < 60 s).
 - IndicTrans2 via Tarun's translator: one 32-string batch for the whole lesson plus about 8 one- or two-string
   repair calls for protected spans.
+- v1 merge (2026-10-27): the full suite with Tarun's new tests takes ~15 min and uses most of the 16 GB RAM (only
+  ~2 GB free during the run). One run had 5 extra TTS failures that passed alone and on the next full run: each
+  test builds a fresh OfflineTTSEngine (Kokoro + up to 4 MMS models), and the engine silently falls back to a
+  synthetic tone on any exception, which changes durations. Close other apps before the full suite; a shared
+  session-scoped engine fixture would remove the pressure (Tarun's tests).
+- Tarun's run_pipeline.py uses the BLUEPRINT 5.1 exporter call shape; it now goes through
+  exporter.export_mp4.export_from_manifest, which keeps the existing manifest fields (lang, sample_rate).

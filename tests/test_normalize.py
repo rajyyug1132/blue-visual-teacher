@@ -34,6 +34,8 @@ from localization.normalize import (
     has_ascii_digits,
     hindi_number_to_words,
     kannada_number_to_words,
+    tamil_number_to_words,
+    bengali_number_to_words,
     speak_en,
 )
 
@@ -51,26 +53,38 @@ SIMULATED_TRANSLATIONS: dict[str, dict[str, str]] = {
     "230 V": {
         "hi": "230 वोल्ट",
         "kn": "230 ವೋಲ್ಟ್",
+        "ta": "230 வோல்ட்",
+        "bn": "230 ভোল্ট",
     },
     "46 Ω": {
         "hi": "46 ओम",
         "kn": "46 ಓಮ್",
+        "ta": "46 ஓம்",
+        "bn": "46 ওহম",
     },
     "100 °C": {
         "hi": "100 डिग्री सेल्सियस",
         "kn": "100 ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್",
+        "ta": "100 டிகிரி செல்சியஸ்",
+        "bn": "100 ডিগ্রি সেলসিয়াস",
     },
     "6.5%": {
         "hi": "6.5 प्रतिशत",
         "kn": "6.5 ಪ್ರತಿಶತ",
+        "ta": "6.5 சதவீதம்",
+        "bn": "6.5 শতাংশ",
     },
     "2023": {
         "hi": "2023",
         "kn": "2023",
+        "ta": "2023",
+        "bn": "2023",
     },
     "H = 2": {
         "hi": "H बराबर 2",
         "kn": "H ಸಮಾನ 2",
+        "ta": "H சமம் 2",
+        "bn": "H সমান 2",
     },
 }
 
@@ -103,10 +117,29 @@ def test_fix_residual_digits_kn():
         assert count_ascii_digits(res) == 0
 
 
+def test_fix_residual_digits_ta():
+    """Verify Tamil residual digit expansion produces zero ASCII digits."""
+    for case in TEST_CASES:
+        trans_ta = SIMULATED_TRANSLATIONS[case]["ta"]
+        res = fix_residual_digits(trans_ta, "ta")
+        assert not has_ascii_digits(res), f"Residual digits found in ta: '{res}'"
+        assert count_ascii_digits(res) == 0
+
+
+
+def test_fix_residual_digits_bn():
+    """Verify Bengali residual digit expansion produces zero ASCII digits."""
+    for case in TEST_CASES:
+        trans_bn = SIMULATED_TRANSLATIONS[case]["bn"]
+        res = fix_residual_digits(trans_bn, "bn")
+        assert not has_ascii_digits(res), f"Residual digits found in bn: '{res}'"
+        assert count_ascii_digits(res) == 0
+
+
 def test_clean_for_mms_guarantees_zero_ascii_digits():
     """Verify clean_for_mms removes all ASCII digits and math symbols for MMS-TTS."""
     for case in TEST_CASES:
-        for lang in ("hi", "kn"):
+        for lang in ("hi", "kn", "ta", "bn"):
             # Direct raw case
             res_raw = clean_for_mms(case, lang)
             assert not has_ascii_digits(res_raw), f"Direct raw clean_for_mms failed for {case} ({lang}): '{res_raw}'"
@@ -120,7 +153,7 @@ def test_clean_for_mms_guarantees_zero_ascii_digits():
 def run_benchmark_and_print():
     """Run all normalization stages across test cases and print detailed results table."""
     print("\n" + "=" * 96)
-    print("NORMALIZATION & RESIDUAL DIGIT BENCHMARK (hi & kn)")
+    print("NORMALIZATION & RESIDUAL DIGIT BENCHMARK (hi, kn, ta, bn)")
     print("=" * 96)
     header = f"{'Case':<10} {'speak_en()':<24} {'Lang':<6} {'Post-Trans + clean_for_mms()':<36} {'ASCII Digits Left':<18}"
     print(header)
@@ -131,7 +164,7 @@ def run_benchmark_and_print():
 
     for case in TEST_CASES:
         sp = speak_en(case)
-        for lang in ("hi", "kn"):
+        for lang in ("hi", "kn", "ta", "bn"):
             trans = SIMULATED_TRANSLATIONS[case][lang]
             cleaned = clean_for_mms(trans, lang)
             digits_left = count_ascii_digits(cleaned)

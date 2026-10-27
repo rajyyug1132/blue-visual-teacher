@@ -82,8 +82,10 @@ def export_from_manifest(html_path, timing_manifest, lesson_title, audio_wav_pat
                          progress_callback=None):
     """BLUEPRINT 5.1 signature, kept so run_pipeline.py and older callers keep working."""
     out = Path(output_mp4_path)
-    manifest = {"title": lesson_title, "scenes": timing_manifest, "total_sec": timing_manifest[-1]["end_sec"],
-                "audio": Path(audio_wav_path).name}
+    existing = out.parent / "manifest.json"
+    manifest = json.loads(existing.read_text(encoding="utf-8")) if existing.exists() else {}  # keep lang, etc.
+    manifest.update({"title": lesson_title, "scenes": timing_manifest, "total_sec": timing_manifest[-1]["end_sec"],
+                     "audio": Path(audio_wav_path).name})
     (out.parent / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     cb = (lambda stage, pct: progress_callback(pct)) if progress_callback else None
     result = render_and_mux_mp4(out.parent, None, cb, player=Path(html_path))

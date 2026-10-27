@@ -29,7 +29,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
 | FARHAN | renderer/ | — | — | — |
-| TARUN | localization/ | On origin/dev: translator.py (protected spans, zero-Devanagari, batched), tts_engine.py (Kokoro EN/HI, MMS KN seed, no double pad), captions.py, normalize.py, warmup.py, golden_manifest_en.json | 14:00 per his board | Merge dev into main |
+| TARUN | localization/ | Done (L1–L8 verified) | Full L1–L8 pipeline verified: offline sockets blocked, 1 batched IndicTrans2 call, zero Devanagari in KN, 24kHz MMS seed 42, 0.90 peak norm, 30–90s sync ±0.05s, 8 Noto fonts |  |
 | AYUSH | exporter/ | — | — | — |
 
 ### Planner bench (5 topics, uncached, RTX 3050 6 GB)
@@ -44,6 +44,8 @@ No model got its own worked-example arithmetic right; the guard corrects it. Inv
 qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon ("fifty-five degrees Celsius").
 
 ## Handoffs
+
+- YYUG -> TARUN · localization/translator.py · add `"bn": "ben_Beng"` to LANG_CODE_MAP on tarun/localization (already patched on v1) · Bengali replaced Telugu everywhere except this map, so IndicTrans2 got the raw tag `bn` and test_multilingual_sync failed with "Invalid target language tag: bn" whenever the real model is loaded · blocking? n (fixed on v1)
 
 - TARUN -> FARHAN · `fixtures/golden_manifest_en.json` · English audio timing manifest delivered (54.79s total) · unblocks renderer `initLesson` & audio clock · blocking: n
 - TARUN -> AYUSH · `fixtures/golden_manifest_en.json` · English audio timing manifest delivered · unblocks Playwright + FFmpeg export testing · blocking: n

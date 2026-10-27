@@ -15,7 +15,11 @@ from __future__ import annotations
 import copy
 import os
 import re
+from pathlib import Path
 from typing import Callable, Sequence
+
+if os.environ.get("BVT_HF_HOME"):
+    os.environ.setdefault("HF_HOME", os.environ["BVT_HF_HOME"])
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -36,8 +40,13 @@ LANG_CODE_MAP = {
     "hi": "hin_Deva",
     "kn": "kan_Knda",
     "ta": "tam_Taml",
-    "te": "tel_Telu",
+    "bn": "ben_Beng",  # integration fix (v1): Bengali replaced Telugu but was missing here; see STATUS handoff
 }
+
+
+class TranslationUnavailable(RuntimeError):
+    """Raised when IndicTrans2 weights or toolkit are missing from offline environment."""
+    pass
 
 
 def contains_devanagari(text: str) -> bool:
@@ -68,6 +77,8 @@ def ensure_word_budget(text: str, lang: str, min_words: int = 8, max_words: int 
             prefix = "ಇಲ್ಲಿ ಗಮನಿಸಿ, ಸರಳವಾಗಿ ಹೇಳುವುದಾದರೆ "
         elif lang in ("hi", "hin_Deva"):
             prefix = "ध्यान दें कि, सरल शब्दों में "
+        elif lang in ("ta", "tam_Taml"):
+            prefix = "இங்கே கவனியுங்கள், எளிய முறையில் சொன்னால் "
         else:
             prefix = "Notice that, in simple terms "
         expanded = prefix + text.strip()
@@ -327,16 +338,25 @@ class OfflineIndicTranslator:
         if backend_fn is None and HAS_TORCH:
             try:
                 self.ip = IndicProcessor(inference=True)
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    ckpt_dir, trust_remote_code=True, local_files_only=True
-                )
-                self.model = AutoModelForSeq2SeqLM.from_pretrained(
-                    ckpt_dir,
-                    trust_remote_code=True,
-                    local_files_only=True,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                ).to(self.device)
-                self.model.eval()
+                candidates = [ckpt_dir]
+                if ckpt_dir == "ai4bharat/indictrans2-en-indic-dist-200M":
+                    candidates.append("naklitechie/indictrans2-en-indic-dist-200M")
+
+                for c in candidates:
+                    try:
+                        self.tokenizer = AutoTokenizer.from_pretrained(
+                            c, trust_remote_code=True, local_files_only=True
+                        )
+                        self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                            c,
+                            trust_remote_code=True,
+                            local_files_only=True,
+                            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                        ).to(self.device)
+                        self.model.eval()
+                        break
+                    except Exception:
+                        continue
             except Exception:
                 # Weights not yet downloaded or offline initialization failure
                 pass
@@ -350,8 +370,9 @@ class OfflineIndicTranslator:
             return self.backend_fn(texts, tgt_lang_short)
 
         if self.model is None or self.tokenizer is None or self.ip is None:
-            # Safe offline fallback when model is not loaded
-            return list(texts)
+            raise TranslationUnavailable(
+                f"Translation to '{tgt_lang_short}' unavailable: IndicTrans2 model/tokenizer weights are missing from the offline HuggingFace cache, or IndicTransToolkit is not installed."
+            )
 
         tgt_lang = LANG_CODE_MAP.get(tgt_lang_short, tgt_lang_short)
         batch = self.ip.preprocess_batch(texts, src_lang="eng_Latn", tgt_lang=tgt_lang)
@@ -625,8 +646,8 @@ class OfflineIndicTranslator:
             # Fallback for unexpected item types
             results.append(item.get("original", ""))
 
-        # Ensure zero Devanagari leakage in Kannada output
-        if tgt_lang_short == "kn":
+        # Ensure zero Devanagari leakage in non-Devanagari scripts (Kannada, Tamil, Bengali)
+        if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml"):
             results = [sanitize_kannada_output(r) if contains_devanagari(r) else r for r in results]
 
         return results
