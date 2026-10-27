@@ -1,6 +1,7 @@
 # orchestrator/planner.py
 import json
 import os
+import re
 import time
 
 import httpx
@@ -10,7 +11,7 @@ from pydantic import ValidationError
 from orchestrator.cache import load_plan, save_plan
 from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.mathcheck import MathCheckError, ensure_answer_spoken, verify_plan
-from orchestrator.numeric_guard import NumericPolicy, audit_numbers, nfkc
+from orchestrator.numeric_guard import NumericPolicy, audit_fields, nfkc
 from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT, request
 from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, WORDS_MIN, LessonPlan
 from orchestrator.spoken import shorten_narration, to_spoken
@@ -31,11 +32,31 @@ LLM_ERRORS = (ollama.ResponseError, ConnectionError, httpx.HTTPError)
 
 
 class PlanRejected(ValueError):
-    """Model output that failed a check; `problems` are fed back to the model on the next rung of the ladder."""
+    """Model output that failed a check; `problems` are fed back to the model on the next rung of the ladder.
 
-    def __init__(self, problems: list[str]):
+    When every problem is a number, unit or '=' in a known string, `data` holds the parsed lesson and `patchable`
+    the located issues, so the planner can rewrite just those strings instead of re-planning the whole lesson.
+    """
+
+    def __init__(self, problems: list[str], data: dict | None = None, patchable: list[dict] | None = None):
         super().__init__("; ".join(problems))
         self.problems = problems
+        self.data = data
+        self.patchable = patchable
+
+
+# Topics that obviously have a standard formula skip the classify call (and 3b's misreads of them).
+FORMULA_TOPIC = re.compile(
+    r"\b(?:theorem|law|laws|interest|equation|formula|speed|velocity|acceleration|momentum|density|pressure|area"
+    r"|volume|perimeter|probability|percentage|ratio|titration|molarity|ohm|voltage|resistance|current|power"
+    r"|energy|force|gravitation|kinetic|potential|pythagor\w*|trigonometr\w*|quadratic|profit|discount|average"
+    r"|simple interest|compound interest)\b", re.I)
+PATCH_SCHEMA = {"type": "object", "properties": {"text": {"type": "string", "maxLength": 320}}, "required": ["text"]}
+PATCH_RULES = {"numbers": "contains no numbers or amounts (small counts up to ten are fine)",
+               "unit": "contains no units of measurement", "equals": "contains no '=' sign and no formula"}
+PATCH_PROMPT = ('Rewrite this {field} from a lesson about "{concept}" so that it {rules}. Keep its meaning{length}. '
+                'Plain, simple English. Reply as JSON {{"text": "..."}}.\n\n{text}')
+MAX_PATCHES = 6
 
 
 def total_words(plan: LessonPlan) -> int:
@@ -55,7 +76,10 @@ def _chat(**kwargs):
 
 
 def classify_topic(concept: str, model: str = MODEL_NAME) -> NumericPolicy:
-    """One tiny schema-constrained call: does this concept have a standard formula? Unsure or failed -> "none"."""
+    """Keyword prior first (Pythagoras Theorem, Compound Interest...), then one tiny schema-constrained call:
+    does this concept have a standard formula? Unsure or failed -> "none"."""
+    if FORMULA_TOPIC.search(concept):
+        return "checked"
     try:
         resp = _chat(model=model, messages=[{"role": "user", "content": CLASSIFY_PROMPT.format(concept=concept.strip())}],
                      format=CLASSIFY_SCHEMA, keep_alive=KEEP_ALIVE,
@@ -114,14 +138,55 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
         except MathCheckError as exc:
             problems.append(str(exc))
 
-    problems += audit_numbers(data, policy, set(math.get("allowed", [])))
+    issues = audit_fields(data, policy, set(math.get("allowed", [])))
     try:
         plan = LessonPlan.model_validate(data)
     except ValidationError as exc:
         problems += _validation_feedback(exc)
-    if problems:
-        raise PlanRejected(problems)
+    if problems or issues:
+        # Only field-level number problems left: the caller can patch those strings instead of re-planning.
+        patchable = issues if issues and not problems else None
+        raise PlanRejected(problems + [i["message"] for i in issues], data=data, patchable=patchable)
     return plan, info
+
+
+def _patch_fields(concept: str, rejected: PlanRejected, model: str, policy: NumericPolicy,
+                  repair_answer: bool) -> tuple[LessonPlan, dict] | None:
+    """Rewrite only the strings the audit flagged (one short call each), then re-run every check.
+
+    Returns (plan, info) on success, None if the patch fails or more than MAX_PATCHES strings need it.
+    The prompt states the rule only; it never offers replacement words (small models copy them verbatim).
+    """
+    targets: dict[tuple, set] = {}
+    for issue in rejected.patchable or []:
+        targets.setdefault((issue["scene_index"], issue["field"], issue["idx"]), set()).add(issue["kind"])
+    if not targets or len(targets) > MAX_PATCHES:
+        return None
+    data = json.loads(json.dumps(rejected.data))
+    for (si, field, idx), kinds in targets.items():
+        scene = data["scenes"][si]
+        params = scene["visual"]["params"]
+        text = scene["narration"] if field == "narration" else params[field + "s"][idx]
+        length = " and about the same number of words" if field == "narration" else "; under six words"
+        prompt = PATCH_PROMPT.format(field="sentence" if field == "narration" else "short label", concept=concept,
+                                     rules=" and ".join(PATCH_RULES[k] for k in sorted(kinds)), length=length,
+                                     text=text)
+        try:
+            resp = _chat(model=model, messages=[{"role": "user", "content": prompt}], format=PATCH_SCHEMA,
+                         keep_alive=KEEP_ALIVE, options={"temperature": 0.0, "num_ctx": NUM_CTX, "num_predict": 160})
+            new = str(json.loads(resp.message.content or "{}").get("text", "")).strip()
+        except (*LLM_ERRORS, ValueError):
+            return None
+        if not new:
+            return None
+        if field == "narration":
+            scene["narration"] = new
+        else:
+            params[field + "s"][idx] = new
+    try:
+        return _parse_plan(json.dumps(data, ensure_ascii=False), policy, repair_answer)
+    except PlanRejected:
+        return None
 
 
 def _extend_short_hook(data: dict) -> bool:
@@ -268,6 +333,18 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
         except PlanRejected as exc:
             problems = exc.problems
             errors.append(f"{stage}: " + " | ".join(exc.problems))
+            if exc.patchable and stage != "qualitative":
+                patched = _patch_fields(concept, exc, rung_model, stage_policy, repair_answer=stage != "plan")
+                if patched:
+                    plan, info = patched
+                    rungs.append({"stage": stage + "+patch", "model": rung_model,
+                                  "sec": round(time.perf_counter() - t_rung, 2), "ok": True,
+                                  "patched": len({(i["scene_index"], i["field"], i["idx"]) for i in exc.patchable})})
+                    telemetry = {"attempt": attempt + 1, "stage": stage + "+patch", "model": rung_model,
+                                 "cache_hit": False, "classify_sec": classify_sec,
+                                 "total_words": total_words(plan), "fallback_used": False, "errors": errors,
+                                 "rungs": rungs, **info}
+                    return _finish(concept, plan, telemetry, t0, use_cache, model, loaded, swap_sec)
             rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
                           "ok": False})
             feedback = "Problems:\n- " + "\n- ".join(exc.problems)

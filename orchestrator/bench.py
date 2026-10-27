@@ -88,10 +88,11 @@ def bench(model: str, topics: list[str]) -> dict:
         "model": model,
         "valid": sum(not r["fallback_used"] for r in rows),
         "templates": sum(r["fallback_used"] for r in rows),
-        "qualitative": sum(r.get("stage") == "qualitative" for r in rows),
-        "escalated": sum(r.get("stage") == "escalate" for r in rows),
-        "retries": sum(r.get("stage") == "retry" for r in rows),
-        "first_try": sum(r.get("stage") == "plan" for r in rows),
+        "qualitative": sum(str(r.get("stage")).split("+")[0] == "qualitative" for r in rows),
+        "escalated": sum(str(r.get("stage")).split("+")[0] == "escalate" for r in rows),
+        "retries": sum(str(r.get("stage")).split("+")[0] == "retry" for r in rows),
+        "first_try": sum(str(r.get("stage")).split("+")[0] == "plan" for r in rows),
+        "patched": sum(str(r.get("stage")).endswith("+patch") for r in rows),
         "raised": sum(r["raised"] for r in rows),
         "final_fail": sum(bool(r["final_problems"]) for r in rows),
         "math_ok": sum(r.get("math", {}).get("status") == "ok" for r in rows),
@@ -102,7 +103,7 @@ def bench(model: str, topics: list[str]) -> dict:
         "n": len(rows),
     }
     s = summary
-    print(f"\nvalid {s['valid']}/{s['n']} (first try {s['first_try']}, retry {s['retries']}, escalate "
+    print(f"\nvalid {s['valid']}/{s['n']} (patched {s['patched']}; first try {s['first_try']}, retry {s['retries']}, escalate "
           f"{s['escalated']}, qualitative {s['qualitative']}, template {s['templates']}) | "
           f"violations raised {s['raised']} | final-plan failures {s['final_fail']} | "
           f"math ok {s['math_ok']} fixed {s['math_fixed']} | unspoken answers {s['unspoken']} | "

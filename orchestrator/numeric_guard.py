@@ -142,12 +142,29 @@ def _shown_texts(scene: dict) -> list[tuple[str, str]]:
 
 def audit_numbers(data: dict, policy: NumericPolicy, allowed: set[float] | None = None) -> list[str]:
     """Every numeric violation in narration, labels and steps, as retry-ready messages. Empty list = clean."""
+    return [issue["message"] for issue in audit_fields(data, policy, allowed)]
+
+
+def audit_fields(data: dict, policy: NumericPolicy, allowed: set[float] | None = None) -> list[dict]:
+    """Violations with their location, so the planner can patch just that string:
+    {scene_index, field: narration|label|step, idx (list index, None for narration), text, kind, message}.
+    kind is numbers, unit or equals."""
     allowed = allowed or set()
     problems = []
-    for scene in data.get("scenes", []):
+    for si, scene in enumerate(data.get("scenes", [])):
         sid = scene.get("id")
-        texts = [("narration", scene.get("narration", ""))] + _shown_texts(scene)
-        for field, raw in texts:
+        params = scene.get("visual", {}).get("params", {})
+        texts = ([("narration", None, scene.get("narration", ""))]
+                 + [("label", i, t) for i, t in enumerate(params.get("labels", []))]
+                 + [("step", i, t) for i, t in enumerate(params.get("steps", []))])
+
+        def add(kind, message, field=None, idx=None, raw=None):
+            problems.append({"scene_index": si, "field": field, "idx": idx, "text": raw, "kind": kind,
+                             "message": message})
+
+        for field, idx, raw in texts:
+            if not isinstance(raw, str):
+                continue
             text = nfkc(raw)
             if field != "narration":
                 text = LIST_PREFIX.sub("", text)
@@ -159,17 +176,19 @@ def audit_numbers(data: dict, policy: NumericPolicy, allowed: set[float] | None 
             if policy == "none":
                 bad = [v for v in values if not is_small_int(v)]
                 if bad:
-                    problems.append(f"Remove the numbers ({_show(bad)}) from {where}, keep the sentence natural. "
-                                    "This topic is descriptive.")
+                    add("numbers", f"Remove the numbers ({_show(bad)}) from {where}, keep the sentence natural. "
+                                   "This topic is descriptive.", field, idx, raw)
                 if (unit := UNIT_WORDS.search(text)):
-                    problems.append(f"Remove the unit {unit.group(0)!r} from {where}, keep the sentence natural.")
+                    add("unit", f"Remove the unit {unit.group(0)!r} from {where}, keep the sentence natural.",
+                        field, idx, raw)
                 if "=" in text:
-                    problems.append(f"Remove '=' from {where}, keep the text natural. This topic has no formula.")
+                    add("equals", f"Remove '=' from {where}, keep the text natural. This topic has no formula.",
+                        field, idx, raw)
             else:
                 bad = [v for v in values if not is_small_int(v) and not in_allowed(v, allowed)]
                 if bad:
-                    problems.append(f"Remove the numbers ({_show(bad)}) from {where}, keep the sentence natural. "
-                                    "Only numbers from the checked worked example may appear.")
+                    add("numbers", f"Remove the numbers ({_show(bad)}) from {where}, keep the sentence natural. "
+                                   "Only numbers from the checked worked example may appear.", field, idx, raw)
     return problems
 
 

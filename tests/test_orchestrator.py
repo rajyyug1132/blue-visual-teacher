@@ -48,10 +48,12 @@ class FakeClient:
     planning calls. An empty queue behaves like a dead daemon (ConnectionError), so the ladder can run out.
     """
 
-    def __init__(self, *outputs, has_formula=True):
+    def __init__(self, *outputs, has_formula=True, patches=()):
         self.outputs = list(outputs)
         self.calls = []
         self.classify_calls = []
+        self.patch_calls = []
+        self.patches = list(patches)  # replies to single-string patch calls; empty -> patching fails
         self.generate_calls = []  # warm-ups and keep_alive=0 unloads
         self.has_formula = has_formula
 
@@ -62,6 +64,11 @@ class FakeClient:
         if "has_formula" in json.dumps(kwargs.get("format")):
             self.classify_calls.append(kwargs)
             return self._response(json.dumps({"has_formula": self.has_formula}))
+        if "scenes" not in json.dumps(kwargs.get("format")):  # a patch call: {"text": ...}
+            self.patch_calls.append(kwargs)
+            if not self.patches:
+                raise ConnectionError("fake daemon: no patch reply queued")
+            return self._response(json.dumps({"text": self.patches.pop(0)}))
         self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
         if not self.outputs:
             raise ConnectionError("fake daemon: no more queued outputs")
@@ -80,8 +87,8 @@ class FakeClient:
 
 @pytest.fixture
 def fake(monkeypatch):
-    def install(*outputs, has_formula=True, escalation=""):
-        client = FakeClient(*outputs, has_formula=has_formula)
+    def install(*outputs, has_formula=True, escalation="", patches=()):
+        client = FakeClient(*outputs, has_formula=has_formula, patches=patches)
         monkeypatch.setattr(planner, "_client", client)
         monkeypatch.setattr(planner, "ESCALATION_MODEL", escalation)  # off unless a test turns it on
         return client

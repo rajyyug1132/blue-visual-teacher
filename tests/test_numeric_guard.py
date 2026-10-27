@@ -21,8 +21,8 @@ DESCRIPTIVE_JSON = FEW_SHOT_MESSAGES[3]["content"]  # policy "none"
 
 @pytest.fixture
 def fake(monkeypatch):
-    def install(*outputs, has_formula=True):
-        client = FakeClient(*outputs, has_formula=has_formula)
+    def install(*outputs, has_formula=True, patches=()):
+        client = FakeClient(*outputs, has_formula=has_formula, patches=patches)
         monkeypatch.setattr(planner, "_client", client)
         monkeypatch.setattr(planner, "ESCALATION_MODEL", "")
         return client
@@ -266,3 +266,33 @@ def test_hook_extension_cannot_smuggle_numbers_from_the_title(fake):
     client = fake(json.dumps(plan), has_formula=False)  # retry and later rungs fail -> template
     _, tel = planner.plan_lesson("GST")
     assert "Remove the numbers (18) from scene 1 narration" in client.calls[1]["messages"][-1]["content"]
+
+
+# --- patch rung: rewrite just the flagged strings instead of re-planning -----------------------------------------
+
+def test_descriptive_numbers_are_patched_in_place_without_a_replan(fake):
+    bad = json.dumps(monsoon(scene4_narration="Kerala gets about two thousand millimetres of rain from June to "
+                                              "September, which fills its rivers and wells."))
+    client = fake(bad, has_formula=False,
+                  patches=["Kerala gets very heavy rain through the monsoon months, which fills its rivers and wells."])
+    plan, tel = planner.plan_lesson("Monsoon")
+    assert tel["stage"] == "plan+patch" and len(client.calls) == 1 and len(client.patch_calls) == 1
+    prompt = client.patch_calls[0]["messages"][0]["content"]
+    assert "contains no numbers or amounts" in prompt and "no units of measurement" in prompt
+    assert "heavy rain" not in prompt.split("\n\n")[0]  # the rule never offers words to copy
+    assert plan.scenes[3].narration.startswith("Kerala gets very heavy rain")
+
+
+def test_a_patch_that_still_breaks_the_rule_falls_through_to_the_retry(fake):
+    bad = json.dumps(monsoon(scene4_narration="Kerala gets about two thousand millimetres of rain from June to "
+                                              "September, which fills its rivers and wells."))
+    client = fake(bad, DESCRIPTIVE_JSON, has_formula=False,
+                  patches=["Kerala gets nearly two thousand millimetres of rain, which fills its rivers and wells."])
+    _, tel = planner.plan_lesson("Monsoon")
+    assert tel["stage"] == "retry" and len(client.patch_calls) == 1
+
+
+def test_keyword_prior_marks_formula_topics_checked_without_a_classify_call(fake):
+    client = fake(OHM_JSON, has_formula=False)  # the classifier would say no; the keyword decides first
+    _, tel = planner.plan_lesson("Pythagoras Theorem")
+    assert tel["policy"] == "checked" and client.classify_calls == []

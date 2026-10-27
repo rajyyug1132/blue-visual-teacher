@@ -1,4 +1,88 @@
-D2 planner ladder, 20 topics :: FAIL :: 20-topic live run skipped (--skip-slow) (1.6s)
+D2 planner ladder, 20 topics :: PASS :: valid 19/20, P50 15.1s, final failures 0, unspoken answers 0 (494.8s)
 
 unit: think=False / schema format / retry -> ladder -> fallback
-41 passed, 81 deselected in 1.05s
+42 passed, 83 deselected in 0.84s
+
+model qwen2.5:3b | warm-up 0.27s
+
+topic                           sec  swap   cls policy  stage       model       math   said viol final words
+------------------------------------------------------------------------------------------------------------
+Photosynthesis                16.79   0.0  0.17 none    retry+patch qwen2.5:3b  none   -       6 ok      133
+    rungs: plan qwen2.5:3b 9.21s x -> retry+patch qwen2.5:3b 7.41s ok
+    ex: Let's see how much glucose a plant makes. If a plant takes in carbon dioxide and water, and gets light energy, it produces glucose and oxygen.
+    ! plan: Remove the numbers (12) from scene 3 label, keep the sentence natural. This topic is descriptive. | Remove the numbers (100, 100) from scene 4 narration, 
+    ! retry: Remove the numbers (12) from scene 3 label, keep the sentence natural. This topic is descriptive.
+Newton's Third Law            36.10   3.1  0.00 checked escalate    qwen2.5:7b  ok     y       2 ok      106
+    rungs: plan qwen2.5:3b 5.93s x -> retry qwen2.5:3b 6.16s x -> escalate qwen2.5:7b 23.99s ok
+    ex: Let's consider a person pushing a wall. The person pushes the wall with a force of fifty Newtons. So the answer is one hundred.  [check 50 + 50 = 100]
+    ! plan: Math check failed: Scene 4 check.expr uses 100, which this scene never shows or says. The check must compute the example this scene teaches.
+    ! retry: Math check failed: Scene 4 check.expr uses 200, which this scene never shows or says. The check must compute the example this scene teaches.
+Binary Search                  7.25   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      126
+    ex: Let's search a sorted list for a target. We check the middle item, see the target is larger, keep only the right half, and find it on the next check.
+Supply and Demand             13.42   0.0  0.20 none    retry       qwen2.5:3b  none   -       6 ok      125
+    rungs: plan qwen2.5:3b 6.93s x -> retry qwen2.5:3b 6.28s ok
+    ex: Let's say you have a fixed amount of water. If many people want it, you need to provide more to each person. If fewer people want it, you can provide less.
+    ! plan: Remove the numbers (100, 50, 25) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'liters' from scene 4 nar
+DNA Replication                7.18   0.0  0.20 none    plan+patch  qwen2.5:3b  none   -       2 ok      114
+    ex: During replication, the enzyme copies each base pair exactly once, ensuring the genetic code is copied accurately.
+    ! plan: Remove the numbers (100) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the numbers (100) from scene 4 label, keep
+Pythagoras Theorem            57.37   3.1  0.00 none    qualitative qwen2.5:7b  none   -      11 ok      144
+    rungs: plan qwen2.5:3b 7.83s x -> retry qwen2.5:3b 8.1s x -> escalate qwen2.5:7b 23.41s x -> qualitative qwen2.5:7b 18.0s ok
+    ex: Let's visualize a right triangle. We draw squares on each side. The square on the longest side, the hypotenuse, exactly matches the area of the squares on the other two sides combined.
+    ! plan: Math check failed: check.expr 'sqrt(3**2 + 4**2)' may only use numbers, + - * / ** and parentheses | Scene 4 narration is invalid (Value error, narration 
+    ! retry: Math check failed: check.expr 'sqrt(9 + 16)' may only use numbers, + - * / ** and parentheses | Scene 4 narration is invalid (Value error, narration must
+    ! escalate: Scene 4: narration must say the final answer, twenty-five, within 32 words.
+Water Cycle                   48.60   2.7  0.17 none    escalate    qwen2.5:7b  none   -      14 ok      122
+    rungs: plan qwen2.5:3b 8.18s x -> retry qwen2.5:3b 7.9s x -> escalate qwen2.5:7b 32.32s ok
+    ex: Water evaporates from the surface, rises as vapor, cools, condenses into clouds, and falls as rain, then collects in rivers and lakes. This cycle ensures fresh water is always available.
+    ! plan: Scene 4 narration is invalid (Value error, narration must be 14-32 words, got 41). Rewrite it as 1-2 complete sentences of 18-28 spoken words, with every 
+    ! retry: Scene 4 narration is invalid (Value error, narration must be 14-32 words, got 41). Rewrite it as 1-2 complete sentences of 18-28 spoken words, with every
+Compound Interest             17.83   0.0  0.00 checked retry       qwen2.5:3b  ok     y       1 ok      120
+    rungs: plan qwen2.5:3b 9.18s x -> retry qwen2.5:3b 8.65s ok
+    ex: Let's calculate the amount in a bank account. Suppose you invest one thousand rupees at five percent interest compounded quarterly for five years. The amount after five years is twelve eighty rupees.  [check 1000 * (1 + 0.05/4)^(4*5) = 1276.28]
+    ! plan: Scene 4: narration must say the final answer, about twelve eighty.
+Acid-Base Titration           40.44   3.0  0.00 checked escalate    qwen2.5:7b  ok     y      10 ok      102
+    rungs: plan qwen2.5:3b 6.93s x -> retry qwen2.5:3b 7.37s x -> escalate qwen2.5:7b 26.12s ok
+    ex: Let's test a solution of one hundred milliliters of acid with a concentration of two molar. So the answer is fifty.  [check 2 * 100 / 4 = 50]
+    ! plan: Math check failed: Scene 5 check.expr uses 50, 100, which this scene never shows or says. The check must compute the example this scene teaches. | Remove 
+    ! retry: Math check failed: Scene 5 check.expr uses 50, 100, which this scene never shows or says. The check must compute the example this scene teaches. | Remove
+TCP Three-Way Handshake        6.60   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok       96
+    ex: Let's simulate a TCP handshake. A sender sends SYN, the receiver responds with SYN-ACK, and the sender confirms with ACK.
+Indian Independence Movement   6.82   0.0  0.24 none    plan        qwen2.5:3b  none   -       0 ok      124
+    ex: Let's look at one strategy: the Salt March led by Mahatma Gandhi. He marched to the sea to make salt, much like a player running to score a run.
+Monsoon                        6.04   0.0  0.20 none    plan        qwen2.5:3b  none   -       0 ok      103
+    ex: During monsoon, the sky releases water in a way that fills up the ground. If the ground is already full, the water flows into rivers and lakes.
+GST                           37.68   3.1  0.19 none    escalate    qwen2.5:7b  none   -      26 ok      137
+    rungs: plan qwen2.5:3b 6.7s x -> retry qwen2.5:3b 6.8s x -> escalate qwen2.5:7b 23.97s ok
+    ex: Let's see how GST works. A restaurant buys ingredients, adds value by cooking, and sells the meal. GST is added at each step, and the final bill includes the total tax.
+    ! plan: Remove the unit 'percentage' from scene 3 narration, keep the sentence natural. | Remove '=' from scene 3 label, keep the text natural. This topic has no 
+    ! retry: Remove the unit 'percentage' from scene 3 narration, keep the sentence natural. | Remove '=' from scene 3 label, keep the text natural. This topic has no
+Mughal Empire                  7.89   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      127
+    ex: Imagine Akbar, the emperor, deciding to tax the rich provinces heavily to support the poor ones. He then sent his Wazirs (nobles) to collect taxes and manage the provinces accordingly.
+Democracy                     36.99   2.8  0.20 none    escalate    qwen2.5:7b  none   -       6 ok      116
+    rungs: plan qwen2.5:3b 6.91s x -> retry qwen2.5:3b 6.89s x -> escalate qwen2.5:7b 22.98s ok
+    ex: Let's consider a state assembly election. Each constituency elects a representative. The party with the most seats forms the government, but all voices are heard.
+    ! plan: Remove the numbers (100, 50, 45) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the numbers (100, 50) from scene 4
+    ! retry: Remove the numbers (100, 50, 45) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the numbers (100, 50) from scene 
+Green Revolution               6.59   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      104
+    ex: In the Green Revolution, farmers adopted new technologies like drip irrigation, which is like using a fine nozzle to water plants, ensuring more water reaches the roots.
+Mauryan Empire                59.07   2.8  0.20 none    template    -           none   -      12 ok      110
+    rungs: plan qwen2.5:3b 7.39s x -> retry qwen2.5:3b 7.4s x -> escalate qwen2.5:7b 26.24s x -> qualitative qwen2.5:7b 17.82s x
+    ex: In a practical example of Mauryan Empire, when we change the primary input parameter, the output responds proportionally according to the system constraints.
+    ! plan: Remove the unit 'miles' from scene 4 narration, keep the sentence natural.
+    ! retry: Remove the unit 'miles' from scene 4 narration, keep the sentence natural.
+    ! escalate: Remove the numbers (321, 185) from scene 1 label, keep the sentence natural. This topic is descriptive. | Remove the numbers (230000) from scene 3 nar
+    ! qualitative: Remove the numbers (321, 185) from scene 1 label, keep the sentence natural. This topic is descriptive.
+Fundamental Rights             6.87   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      133
+    ex: Let's say you want to speak your mind freely. You can't be punished for it, just like how you can't be fined for playing cricket in the wrong ground.
+Climate Change                42.43   3.0  0.21 none    escalate    qwen2.5:7b  none   -       4 ok       98
+    rungs: plan qwen2.5:3b 5.93s x -> retry qwen2.5:3b 7.18s x -> escalate qwen2.5:7b 29.09s ok
+    ex: In India, rising temperatures lead to more frequent and intense heatwaves, affecting agriculture and health.
+    ! plan: Scene 5 narration is invalid (Value error, narration must be 14-32 words, got 12). Rewrite it as 1-2 complete sentences of 18-28 spoken words, with every 
+    ! retry: Scene 5 narration is invalid (Value error, narration must be 14-32 words, got 12). Rewrite it as 1-2 complete sentences of 18-28 spoken words, with every
+Panchayati Raj                 6.92   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      105
+    ex: Let's look at a simple example. A village panchayat decides to build a new school. They gather community members, discuss, and make the decision.
+
+valid 19/20 (patched 2; first try 9, retry 3, escalate 6, qualitative 1, template 1) | violations raised 100 | final-plan failures 0 | math ok 3 fixed 0 | unspoken answers 0 | short hooks extended 1 | plan sec P50 15.1 P90 48.6 max 59.1
+acceptance: PASS
+
