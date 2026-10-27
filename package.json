@@ -1,34 +1,42 @@
 {
-  "name": "codestorm---unlox",
+  "name": "blue-visual-teacher",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
+  "private": true,
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "server": "node server.js",
     "test": "node tests/test_renderer.js",
+    "test:renderer": "node tests/test_renderer.js",
     "test:units": "node tests/test_server_behavior.js && node tests/test_mock_api.js",
     "test:acceptance": "node tests/test_renderer_f1_f10.js",
     "test:server": "node tests/test_localhost_server.js",
     "test:walkthrough": "node tests/capture_ui_demo.js",
     "verify:browser": "node tests/verify_browser.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/rajyyug1132/blue-visual-teacher.git"
+  "dependencies": {
+    "@base-ui/react": "^1.5.0",
+    "@vercel/analytics": "1.6.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "next": "16.4.3",
+    "react": "^19",
+    "react-dom": "^19",
+    "shadcn": "^4.11.0",
+    "swr": "^2.5.1",
+    "tailwind-merge": "^3.3.1",
+    "tw-animate-css": "^1.4.0"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/rajyyug1132/blue-visual-teacher/issues"
-  },
-  "homepage": "https://github.com/rajyyug1132/blue-visual-teacher#readme",
   "devDependencies": {
-    "playwright": "^1.64.1"
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "playwright": "^1.64.1",
+    "postcss": "^8.5",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.7.3"
   }
 }
