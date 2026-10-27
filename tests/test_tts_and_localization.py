@@ -32,6 +32,8 @@ from localization.tts_engine import (
     expand_numbers_and_symbols,
     hindi_number_to_words,
     kannada_number_to_words,
+    tamil_number_to_words,
+    telugu_number_to_words,
 )
 from orchestrator.schema import LessonPlan
 
@@ -97,6 +99,68 @@ def test_expand_numbers_and_symbols_kannada():
 
 # ---------------------------------------------------------------------------
 # Zero Devanagari Leakage in Kannada
+# ---------------------------------------------------------------------------
+def test_tamil_and_telugu_number_to_words():
+    """Verify Tamil and Telugu numbers expand accurately."""
+    # Tamil numbers
+    assert tamil_number_to_words(0) == "பூஜ்ஜியம்"
+    assert tamil_number_to_words(5) == "ஐந்து"
+    assert tamil_number_to_words(46) == "நாற்பத்து ஆறு"
+    assert tamil_number_to_words(100) == "நூறு"
+    assert tamil_number_to_words(230) == "இருநூற்று முப்பது"
+
+    # Telugu numbers
+    assert telugu_number_to_words(0) == "సున్నా"
+    assert telugu_number_to_words(5) == "ఐదు"
+    assert telugu_number_to_words(46) == "నలభై ఆరు"
+    assert telugu_number_to_words(100) == "వంద"
+    assert telugu_number_to_words(230) == "రెండు వందల ముప్పై"
+
+
+def test_expand_numbers_and_symbols_tamil_and_telugu():
+    """Verify symbols and numbers expand into spoken Tamil and Telugu so MMS-TTS never drops them."""
+    # Tamil 230 V & 46 Ω & V = I × R
+    exp_ta_v = expand_numbers_and_symbols("230 V", "ta")
+    assert "இருநூற்று முப்பது" in exp_ta_v
+    assert "வோல்ட்" in exp_ta_v
+    assert "230" not in exp_ta_v
+
+    exp_ta_ohm = expand_numbers_and_symbols("46 Ω", "ta")
+    assert "நாற்பத்து ஆறு" in exp_ta_ohm
+    assert "ஓம்" in exp_ta_ohm
+
+    exp_ta_eq = expand_numbers_and_symbols("V = I × R", "ta")
+    assert "சமம்" in exp_ta_eq
+    assert "பெருக்கல்" in exp_ta_eq
+
+    # Telugu 230 V & 46 Ω & V = I × R
+    exp_te_v = expand_numbers_and_symbols("230 V", "te")
+    assert "రెండు వందల ముప్పై" in exp_te_v
+    assert "వోల్ట్" in exp_te_v
+    assert "230" not in exp_te_v
+
+    exp_te_ohm = expand_numbers_and_symbols("46 Ω", "te")
+    assert "నలభై ఆరు" in exp_te_ohm
+    assert "ఓమ్" in exp_te_ohm
+
+    exp_te_eq = expand_numbers_and_symbols("V = I × R", "te")
+    assert "సమానం" in exp_te_eq
+    assert "గుణకారం" in exp_te_eq
+
+
+def test_ensure_word_budget_tamil_and_telugu():
+    """Verify Tamil and Telugu short narrations expand to >= 8 words."""
+    short_ta = "மின்னழுத்தம் மற்றும் மின்னோட்டம்."  # 3 words
+    expanded_ta = ensure_word_budget(short_ta, "ta", min_words=8, max_words=42)
+    assert len(expanded_ta.split()) >= 8
+    assert "மின்னழுத்தம்" in expanded_ta
+
+    short_te = "వోల్టేజ్ మరియు విద్యుత్ ప్రవాహం."  # 4 words
+    expanded_te = ensure_word_budget(short_te, "te", min_words=8, max_words=42)
+    assert len(expanded_te.split()) >= 8
+    assert "వోల్టేజ్" in expanded_te
+
+
 # ---------------------------------------------------------------------------
 def test_kannada_zero_devanagari_rule():
     """Verify automated check for zero Devanagari (U+0900-U+097F) in Kannada text."""

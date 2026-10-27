@@ -150,6 +150,95 @@ def english_number_to_words(n: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+def tamil_number_to_words(n: int) -> str:
+    """Convert an integer (0 to 9999999) to Tamil words."""
+    if n == 0:
+        return "பூஜ்ஜியம்"
+    if n < 0:
+        return "மைனஸ் " + tamil_number_to_words(abs(n))
+
+    units = ["", "ஒன்று", "இரண்டு", "மூன்று", "நான்கு", "ஐந்து", "ஆறு", "ஏழு", "எட்டு", "ஒன்பது"]
+    teens = [
+        "பத்து", "பதினொன்று", "பன்னிரண்டு", "பதின்மூன்று", "பதினான்கு",
+        "பதினைந்து", "பதினாறு", "பதினேழு", "பதினெட்டு", "பத்தொன்பது"
+    ]
+    tens_exact = ["", "", "இருபது", "முப்பது", "நாற்பது", "ஐம்பது", "அறுபது", "எழுபது", "எண்பது", "தொண்ணூறு"]
+    tens_comb = ["", "", "இருபத்து ", "முப்பத்து ", "நாற்பத்து ", "ஐம்பத்து ", "அறுபத்து ", "எழுபத்து ", "எண்பத்து ", "தொண்ணூற்று "]
+    hundreds_exact = ["", "நூறு", "இருநூறு", "முந்நூறு", "நானூறு", "ஐந்நூறு", "அறுநூறு", "எழுநூறு", "எண்ணூறு", "தொள்ளாயிரம்"]
+    hundreds_comb = ["", "நூற்று ", "இருநூற்று ", "முந்நூற்று ", "நானூற்று ", "ஐந்நூற்று ", "அறுநூற்று ", "எழுநூற்று ", "எண்ணூற்று ", "தொள்ளாயிரத்து "]
+
+    if n < 10:
+        return units[n]
+    if n < 20:
+        return teens[n - 10]
+    if n < 100:
+        ten, rem = n // 10, n % 10
+        return tens_exact[ten] if rem == 0 else (tens_comb[ten] + units[rem])
+    if n < 1000:
+        h, rem = n // 100, n % 100
+        return hundreds_exact[h] if rem == 0 else (hundreds_comb[h] + tamil_number_to_words(rem))
+    if n < 100000:
+        th, rem = n // 1000, n % 1000
+        if th == 1:
+            prefix = "ஆயிரத்து " if rem else "ஆயிரம்"
+        else:
+            th_w = tamil_number_to_words(th)
+            prefix = f"{th_w} ஆயிரத்து " if rem else f"{th_w} ஆயிரம்"
+        return prefix if rem == 0 else (prefix + tamil_number_to_words(rem))
+    if n < 10000000:
+        lakh, rem = n // 100000, n % 100000
+        lakh_w = tamil_number_to_words(lakh)
+        prefix = f"{lakh_w} இலட்சத்து " if rem else f"{lakh_w} இலட்சம்"
+        return prefix if rem == 0 else (prefix + tamil_number_to_words(rem))
+
+    return str(n)
+
+
+def telugu_number_to_words(n: int) -> str:
+    """Convert an integer (0 to 9999999) to Telugu words."""
+    if n == 0:
+        return "సున్నా"
+    if n < 0:
+        return "మైనస్ " + telugu_number_to_words(abs(n))
+
+    units = ["", "ఒకటి", "రెండు", "మూడు", "నాలుగు", "ఐదు", "ఆరు", "ఏడు", "ఎనిమిది", "తొమ్మిది"]
+    teens = [
+        "పది", "పదకొండు", "పన్నెండు", "పదమూడు", "పద్నాలుగు",
+        "పదిహేను", "పదహారు", "పదిహేడు", "పద్దెనిమిది", "పంతొమ్మిది"
+    ]
+    tens_exact = ["", "", "ఇరవై", "ముప్పై", "నలభై", "యాభై", "అరవై", "డెబ్బై", "ఎనభై", "తొంబై"]
+    tens_comb = ["", "", "ఇరవై ", "ముప్పై ", "నలభై ", "యాభై ", "అరవై ", "డెబ్బై ", "ఎనభై ", "తొంబై "]
+    hundreds_exact = ["", "వంద", "రెండు వందలు", "మూడు వందలు", "నాలుగు వందలు", "ఐదు వందలు", "ఆరు వందలు", "ఏడు వందలు", "ఎనిమిది వందలు", "తొమ్మిది వందలు"]
+    hundreds_comb = ["", "వందల ", "రెండు వందల ", "మూడు వందల ", "నాలుగు వందల ", "ఐదు వందల ", "ఆరు వందల ", "ఏడు వందల ", "ఎనిమిది వందల ", "తొమ్మిది వందల "]
+
+    if n < 10:
+        return units[n]
+    if n < 20:
+        return teens[n - 10]
+    if n < 100:
+        ten, rem = n // 10, n % 10
+        return tens_exact[ten] if rem == 0 else (tens_comb[ten] + units[rem])
+    if n < 1000:
+        h, rem = n // 100, n % 100
+        return hundreds_exact[h] if rem == 0 else (hundreds_comb[h] + telugu_number_to_words(rem))
+    if n < 100000:
+        th, rem = n // 1000, n % 1000
+        if th == 1:
+            prefix = "వెయ్యి " if rem else "వెయ్యి"
+        else:
+            th_w = telugu_number_to_words(th)
+            prefix = f"{th_w} వేల " if rem else f"{th_w} వేలు"
+        return prefix if rem == 0 else (prefix + telugu_number_to_words(rem))
+    if n < 10000000:
+        lakh, rem = n // 100000, n % 100000
+        lakh_w = telugu_number_to_words(lakh)
+        prefix = f"{lakh_w} లక్షల " if rem else f"{lakh_w} లక్ష"
+        return prefix if rem == 0 else (prefix + telugu_number_to_words(rem))
+
+    return str(n)
+
+
+# ---------------------------------------------------------------------------
 # 1. speak_en(text) — Pre-translation English normalization
 # ---------------------------------------------------------------------------
 def speak_en(text: str) -> str:
@@ -223,6 +312,14 @@ def fix_residual_digits(text: str, lang: str) -> str:
             int_w = hindi_number_to_words(int_part)
             dec_w = " ".join(hindi_number_to_words(int(d)) for d in dec_digits)
             return f"{int_w} दशमलव {dec_w}"
+        elif lang in ("ta", "tam_Taml"):
+            int_w = tamil_number_to_words(int_part)
+            dec_w = " ".join(tamil_number_to_words(int(d)) for d in dec_digits)
+            return f"{int_w} புள்ளி {dec_w}"
+        elif lang in ("te", "tel_Telu"):
+            int_w = telugu_number_to_words(int_part)
+            dec_w = " ".join(telugu_number_to_words(int(d)) for d in dec_digits)
+            return f"{int_w} బిందువు {dec_w}"
         else:
             int_w = english_number_to_words(int_part)
             dec_w = " ".join(english_number_to_words(int(d)) for d in dec_digits)
@@ -264,6 +361,40 @@ def fix_residual_digits(text: str, lang: str) -> str:
             return hindi_number_to_words(int(m.group(0)))
 
         out = re.sub(r"\b\d+\b", _replace_int_hi, out)
+
+    elif lang in ("ta", "tam_Taml"):
+        out = re.sub(r"(\b\d+\b)\s*%", r"\1 சதவீதம்", out)
+        out = re.sub(r"°\s*C", "டிகிரி செல்சியஸ்", out)
+        out = re.sub(r"°\s*F", "டிகிரி பாரன்ஹீட்", out)
+        out = re.sub(r"Ω", "ஓம்", out)
+        out = re.sub(r"\s*=\s*", " சமம் ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " பெருக்கல் ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " வகுத்தல் ", out)
+        out = re.sub(r"\s*\+\s*", " கூட்டல் ", out)
+        out = re.sub(r"\s*-\s*", " கழித்தல் ", out)
+        out = re.sub(r"\s*→\s*", " வழிவகுக்கிறது ", out)
+
+        def _replace_int_ta(m: re.Match) -> str:
+            return tamil_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_ta, out)
+
+    elif lang in ("te", "tel_Telu"):
+        out = re.sub(r"(\b\d+\b)\s*%", r"\1 శాతం", out)
+        out = re.sub(r"°\s*C", "డిగ్రీ సెల్సియస్", out)
+        out = re.sub(r"°\s*F", "డిగ్రీ ఫారెన్‌హీట్", out)
+        out = re.sub(r"Ω", "ఓమ్", out)
+        out = re.sub(r"\s*=\s*", " సమానం ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " గుణకారం ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " భాగహారం ", out)
+        out = re.sub(r"\s*\+\s*", " ప్లస్ ", out)
+        out = re.sub(r"\s*-\s*", " మైనస్ ", out)
+        out = re.sub(r"\s*→\s*", " దారి తీస్తుంది ", out)
+
+        def _replace_int_te(m: re.Match) -> str:
+            return telugu_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_te, out)
 
     else:
         out = re.sub(r"(\b\d+\b)\s*%", r"\1 percent", out)
@@ -383,6 +514,10 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
             out = re.sub(r"\b\d+\b", lambda m: kannada_number_to_words(int(m.group(0))), out)
         elif lang in ("hi", "hin_Deva"):
             out = re.sub(r"\b\d+\b", lambda m: hindi_number_to_words(int(m.group(0))), out)
+        elif lang in ("ta", "tam_Taml"):
+            out = re.sub(r"\b\d+\b", lambda m: tamil_number_to_words(int(m.group(0))), out)
+        elif lang in ("te", "tel_Telu"):
+            out = re.sub(r"\b\d+\b", lambda m: telugu_number_to_words(int(m.group(0))), out)
         else:
             out = re.sub(r"\b\d+\b", lambda m: english_number_to_words(int(m.group(0))), out)
 

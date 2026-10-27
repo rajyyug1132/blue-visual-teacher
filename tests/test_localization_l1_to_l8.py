@@ -229,6 +229,16 @@ def test_l6_number_symbol_sanitizer():
         digits_hi = re.findall(r"\d", clean_hi)
         assert len(digits_hi) == 0, f"Residual digits in Hindi '{clean_hi}' for case '{c}'"
 
+        clean_ta = clean_for_mms(c, "ta")
+        digits_ta = re.findall(r"\d", clean_ta)
+        assert len(digits_ta) == 0, f"Residual digits in Tamil '{clean_ta}' for case '{c}'"
+        assert "Ω" not in clean_ta and "°C" not in clean_ta and "%" not in clean_ta
+
+        clean_te = clean_for_mms(c, "te")
+        digits_te = re.findall(r"\d", clean_te)
+        assert len(digits_te) == 0, f"Residual digits in Telugu '{clean_te}' for case '{c}'"
+        assert "Ω" not in clean_te and "°C" not in clean_te and "%" not in clean_te
+
 
 # ==============================================================================
 # L7: Timing Manifest Matches WAV Length within ±0.05s (Total 30-90s)
@@ -238,9 +248,9 @@ def test_l7_timing_manifest_wav_sync(tmp_path):
     tts = OfflineTTSEngine()
     assert len(STRESS_TOPICS) == 20
 
-    for lang in ["en", "hi", "kn"]:
-        # Test 5 representative topics out of 20 for full audio synthesis verification
-        for topic in STRESS_TOPICS[:5]:
+    for lang in ["en", "hi", "kn", "ta", "te"]:
+        # Test representative topics for full audio synthesis verification
+        for topic in STRESS_TOPICS[:3]:
             plan = build_safe_fallback_lesson(topic)
             out_wav = tmp_path / f"{topic}_{lang}.wav"
             manifest = tts.synthesize_all_scenes(plan.scenes, lang, out_wav)

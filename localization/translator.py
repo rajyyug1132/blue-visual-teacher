@@ -648,8 +648,8 @@ class OfflineIndicTranslator:
             # Fallback for unexpected item types
             results.append(item.get("original", ""))
 
-        # Ensure zero Devanagari leakage in Kannada output
-        if tgt_lang_short == "kn":
+        # Ensure zero Devanagari leakage in non-Devanagari scripts (Kannada, Tamil, Telugu)
+        if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml", "te", "tel_Telu"):
             results = [sanitize_kannada_output(r) if contains_devanagari(r) else r for r in results]
 
         return results
