@@ -7,7 +7,7 @@ const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname);
 const PORT = parseInt(process.env.PORT, 10) || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -27,7 +27,7 @@ const MIME_TYPES = {
 function createServer() {
   return http.createServer((req, res) => {
     try {
-      const parsedUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      const parsedUrl = new URL(req.url, `http://127.0.0.1:${PORT}`);
       let pathname = decodeURIComponent(parsedUrl.pathname);
 
       // Route root to the web UI (FARHAN_BLUEPRINT.md §7 / AYUSH_BLUEPRINT.md §4)
@@ -75,12 +75,13 @@ if (require.main === module) {
     console.log('====================================================');
     console.log(' Blue Visual Teacher — Local Development Server');
     console.log('====================================================');
-    console.log(` ✓ Running at:        http://${HOST}:${PORT}`);
-    console.log(` ✓ Web UI:            http://${HOST}:${PORT}/`);
-    console.log(` ✓ Direct Player:     http://${HOST}:${PORT}/renderer/player.html?debug=1`);
-    console.log(` ✓ Offline Fixture:   http://${HOST}:${PORT}/fixtures/golden_manifest_en.json`);
+    console.log(` ✓ Running at:        http://localhost:${PORT}`);
+    console.log(` ✓ Local IP:          http://127.0.0.1:${PORT}`);
+    console.log(` ✓ Web UI:            http://localhost:${PORT}/`);
+    console.log(` ✓ Direct Player:     http://localhost:${PORT}/renderer/player.html?debug=1`);
+    console.log(` ✓ Offline Fixture:   http://localhost:${PORT}/fixtures/golden_manifest_en.json`);
     console.log('====================================================');
-    console.log('Press Ctrl+C to stop.\n');
+    console.log('Server is running continuously in the background.\n');
   });
 
   server.on('error', (err) => {
