@@ -739,131 +739,6 @@ def expand_stem_acronyms(text: str, lang: str) -> str:
     return out
 
 
-# ---------------------------------------------------------------------------
-# STEM Classroom Code-Switching Lexicon (Hinglish / Kanglish / Tanglish / Banglish)
-# Real Indian classrooms keep core scientific nouns in English; this lexicon
-# maps them to native script phonetics so TTS models pronounce them naturally.
-# ---------------------------------------------------------------------------
-STEM_CLASSROOM_LEXICON: dict[str, dict[str, str]] = {
-    # Electricity & Electronics
-    "voltage": {"en": "voltage", "hi": "वोल्टेज", "kn": "ವೋಲ್ಟೇಜ್", "ta": "வோல்டேஜ்", "bn": "ভোল্টেজ"},
-    "current": {"en": "current", "hi": "करंट", "kn": "ಕರೆಂಟ್", "ta": "கரண்ட்", "bn": "কারেন্ট"},
-    "resistor": {"en": "resistor", "hi": "रेजिस्टर", "kn": "ರೆಸಿಸ್ಟರ್", "ta": "ரெசிஸ்டர்", "bn": "রেজিস্টার"},
-    "resistance": {"en": "resistance", "hi": "रेजिस्टेंस", "kn": "ರೆಸಿಸ್ಟೆನ್ಸ್", "ta": "ரெசிஸ்டன்ஸ்", "bn": "রেজিস্ট্যান্স"},
-    "circuit": {"en": "circuit", "hi": "सर्किट", "kn": "ಸರ್ಕ್ಯೂಟ್", "ta": "சர்க்யூட்", "bn": "সার্কিট"},
-    "battery": {"en": "battery", "hi": "बैटरी", "kn": "ಬ್ಯಾಟರಿ", "ta": "பேட்டரி", "bn": "ব্যাটারি"},
-    "switch": {"en": "switch", "hi": "स्विच", "kn": "ಸ್ವಿಚ್", "ta": "சுவிட்ச்", "bn": "সুইচ"},
-    "conductor": {"en": "conductor", "hi": "कंडक्टर", "kn": "ಕಂಡಕ್ಟರ್", "ta": "கண்டக்டர்", "bn": "কন্ডাক্টর"},
-    "insulator": {"en": "insulator", "hi": "इंसुलेटर", "kn": "ಇನ್ಸುಲೇಟರ್", "ta": "இன்சுலேட்டர்", "bn": "ইনসুলেটর"},
-    "capacitor": {"en": "capacitor", "hi": "कैपेसिटर", "kn": "ಕೆಪಾಸಿಟರ್", "ta": "கெபாசிட்டர்", "bn": "ক্যাপাসিটর"},
-    "diode": {"en": "diode", "hi": "डायोड", "kn": "ಡಯೋಡ್", "ta": "டையோடு", "bn": "ডায়োড"},
-    "transistor": {"en": "transistor", "hi": "ट्रांजिस्टर", "kn": "ಟ್ರಾನ್ಸಿಸ್ಟರ್", "ta": "டிரான்சிஸ்டர்", "bn": "ট্রানজিস্টর"},
-    "terminal": {"en": "terminal", "hi": "टर्मिनल", "kn": "ಟರ್ಮಿನಲ್", "ta": "டெர்மினல்", "bn": "টার্মিনাল"},
-    "electron": {"en": "electron", "hi": "इलेक्ट्रॉन", "kn": "ಎಲೆಕ್ಟ್ರಾನ್", "ta": "எலக்ட்ரான்", "bn": "ইলেকট্রন"},
-    "proton": {"en": "proton", "hi": "प्रोटॉन", "kn": "ಪ್ರೋಟಾನ್", "ta": "புரோட்டான்", "bn": "প্রোটন"},
-    "neutron": {"en": "neutron", "hi": "न्यूट्रॉन", "kn": "ನ್ಯೂಟ್ರಾನ್", "ta": "நியூட்ரான்", "bn": "নিউট্রন"},
-    "generator": {"en": "generator", "hi": "जनरेटर", "kn": "ಜನರೇಟರ್", "ta": "ஜெனரேட்டர்", "bn": "জেনারেটর"},
-    "motor": {"en": "motor", "hi": "मोटर", "kn": "ಮೋಟಾರ್", "ta": "மோட்டார்", "bn": "মোটর"},
-    "transformer": {"en": "transformer", "hi": "ट्रांसफॉर्मर", "kn": "ಟ್ರಾನ್ಸ್‌ಫಾರ್ಮರ್", "ta": "டிரான்ஸ்பார்மர்", "bn": "ট্রান্সফরমার"},
-    # Mechanics & Waves
-    "velocity": {"en": "velocity", "hi": "वेलोसिटी", "kn": "ವೆಲಾಸಿಟಿ", "ta": "வெலாசிட்டி", "bn": "ভেলোসিটি"},
-    "acceleration": {"en": "acceleration", "hi": "एक्सेलेरेशन", "kn": "ಆಕ್ಸಿಲರೇಷನ್", "ta": "ஆக்ஸிலரேஷன்", "bn": "অ্যাক্সিলারেশন"},
-    "gravity": {"en": "gravity", "hi": "ग्रेविटी", "kn": "ಗ್ರ್ಯಾವಿಟಿ", "ta": "கிராவிட்டி", "bn": "গ্র্যাভিটি"},
-    "friction": {"en": "friction", "hi": "फ्रिक्शन", "kn": "ಫ್ರಿಕ್ಷನ್", "ta": "பிரிக்ஷன்", "bn": "ফ্রিকশন"},
-    "momentum": {"en": "momentum", "hi": "मोमेंटम", "kn": "ಮೊಮೆಂಟಮ್", "ta": "மொமெண்டம்", "bn": "মোমেন্টাম"},
-    "frequency": {"en": "frequency", "hi": "फ्रीक्वेंसी", "kn": "ಫ್ರೀಕ್ವೆನ್ಸಿ", "ta": "பிரீக்வென்சி", "bn": "ফ্রিকোয়েন্সি"},
-    "wavelength": {"en": "wavelength", "hi": "वेवलेंथ", "kn": "ವೇವ್‌ಲೆಂಗ್ತ್", "ta": "வேவ்லென்த்", "bn": "ওয়েভলেংথ"},
-    "amplitude": {"en": "amplitude", "hi": "एम्प्लीट्यूड", "kn": "ಆಂಪ್ಲಿಟ್ಯೂಡ್", "ta": "ஆம்ப்ளிட்யூட்", "bn": "অ্যাম্প্লিটিউড"},
-    "energy": {"en": "energy", "hi": "एनर्जी", "kn": "ಎನರ್ಜಿ", "ta": "எனர்ஜி", "bn": "এনার্জি"},
-    "power": {"en": "power", "hi": "पावर", "kn": "ಪವರ್", "ta": "பவர்", "bn": "পাওয়ার"},
-    "temperature": {"en": "temperature", "hi": "टेम्परेचर", "kn": "ಟೆಂಪರೇಚರ್", "ta": "டெம்பரேச்சர்", "bn": "টেম্পারেচার"},
-    "pressure": {"en": "pressure", "hi": "प्रेशर", "kn": "ಪ್ರೆಶರ್", "ta": "பிரஷர்", "bn": "প্রেসার"},
-    # Chemistry & Biology
-    "atom": {"en": "atom", "hi": "एटम", "kn": "ಆಟಮ್", "ta": "ஆட்டம்", "bn": "অ্যাটম"},
-    "molecule": {"en": "molecule", "hi": "मॉलिक्यूल", "kn": "ಮಾಲಿಕ್ಯೂಲ್", "ta": "மாலிகுல்", "bn": "মলিকিউল"},
-    "photosynthesis": {"en": "photosynthesis", "hi": "फोटोसिंथेसिस", "kn": "ಫೋಟೋಸಿಂಥೆಸಿಸ್", "ta": "போட்டோசிந்தசிஸ்", "bn": "ফটোসিন্থেসিস"},
-    "chlorophyll": {"en": "chlorophyll", "hi": "क्लोरोफिल", "kn": "ಕ್ಲೋರೊಫಿಲ್", "ta": "குளோரோபில்", "bn": "ক্লোরোফিল"},
-    "mitochondria": {"en": "mitochondria", "hi": "माइटोकॉन्ड्रिया", "kn": "ಮೈಟೊಕಾಂಡ್ರಿಯಾ", "ta": "மைட்டோகாண்ட்ரியா", "bn": "মাইটোকন্ড্রিয়া"},
-    "nucleus": {"en": "nucleus", "hi": "न्यूक्लियस", "kn": "ನ್ಯೂಕ್ಲಿಯಸ್", "ta": "நியூக்ளியஸ்", "bn": "নিউক্লিয়াস"},
-    "enzyme": {"en": "enzyme", "hi": "एंजाइम", "kn": "ಎಂಜೈಮ್", "ta": "என்சைம்", "bn": "এনজাইম"},
-    "glucose": {"en": "glucose", "hi": "ग्लूकोज", "kn": "ಗ್ಲೂಕೋಸ್", "ta": "குளுக்கோஸ்", "bn": "গ্লুকোজ"},
-    # Mathematics & Relations
-    "constant": {"en": "constant", "hi": "कांस्टेंट", "kn": "ಕಾನ್‌ಸ್ಟೆಂಟ್", "ta": "கான்ஸ்டன்ட்", "bn": "কনস্ট্যান্ট"},
-    "proportional": {"en": "proportional", "hi": "प्रपोर्शनल", "kn": "ಪ್ರಪೋರ್ಷನಲ್", "ta": "ப்ரபோர்ஷனல்", "bn": "প্রপোর্শনাল"},
-    "ratio": {"en": "ratio", "hi": "रेशियो", "kn": "ರೇಶಿಯೋ", "ta": "ரேஷியோ", "bn": "রেশিও"},
-}
-
-
-def expand_stem_classroom_terms(text: str, lang: str) -> str:
-    """Expand English STEM keywords in native language text to native phonetics for classroom code-switching."""
-    lang_key = lang.split("_")[0]
-    if lang_key == "en":
-        return text
-    out = text
-    for term, mapping in STEM_CLASSROOM_LEXICON.items():
-        if lang_key in mapping:
-            # Match singular or plural (e.g. resistor or resistors)
-            pat = re.compile(rf"\b{re.escape(term)}(?:s|es)?\b", re.IGNORECASE)
-            out = pat.sub(mapping[lang_key], out)
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Classroom STEM Vocabulary Modernizer (Textbook Formal -> Spoken Classroom)
-# Replaces archaic, Sanskritized, or formal bookish terms with conversational
-# modern terms used by CBSE/ICSE teachers across all Indic languages.
-# ---------------------------------------------------------------------------
-CLASSROOM_SPOKEN_REPLACEMENTS: dict[str, list[tuple[re.Pattern, str]]] = {
-    "hi": [
-        (re.compile(r"विद्युत\s+धारा"), "करंट"),
-        (re.compile(r"विभवांतर"), "वोल्टेज"),
-        (re.compile(r"प्रतिरोधक"), "रेजिस्टर"),
-        (re.compile(r"प्रतिरोध"), "रेजिस्टेंस"),
-        (re.compile(r"प्रकाश\s+संश्लेषण"), "फ़ोटोसिंथेसिस"),
-        (re.compile(r"दिष्ट\s+धारा"), "डीसी करंट"),
-        (re.compile(r"प्रत्यावर्ती\s+धारा"), "एसी करंट"),
-        (re.compile(r"चालक"), "कंडक्टर"),
-        (re.compile(r"अचालक"), "इंसुलेटर"),
-    ],
-    "kn": [
-        (re.compile(r"ವಿದ್ಯುತ್\s+ಪ್ರವಾಹ(?:ವು|ವನ್ನು|ದ)?"), "ಕರೆಂಟ್"),
-        (re.compile(r"ವಿಭವಾಂತರ(?:ವು|ವನ್ನು|ದ)?"), "ವೋಲ್ಟೇಜ್"),
-        (re.compile(r"ಪ್ರತಿರೋಧ(?:ವು|ವನ್ನು|ದ)?"), "ರೆಸಿಸ್ಟೆನ್ಸ್"),
-        (re.compile(r"(?:ರೋಧಕ|ಪ್ರತಿರೋಧಕ)(?:ವು|ವನ್ನು|ದ|ಗೆ)?"), "ರೆಸಿಸ್ಟರ್"),
-        (re.compile(r"ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ"), "ಫೋಟೋಸಿಂಥೆಸಿಸ್"),
-        (re.compile(r"ವಾಹಕ(?:ವು|ವನ್ನು|ದ)?"), "ಕಂಡಕ್ಟರ್"),
-    ],
-    "ta": [
-        (re.compile(r"மின்னோட்டம்"), "கரண்ட்"),
-        (re.compile(r"மின்னழுத்தம்"), "வோல்டேஜ்"),
-        (re.compile(r"மின்தடையம்"), "ரெசிஸ்டர்"),
-        (re.compile(r"மின்தடை"), "ரெசிஸ்டன்ஸ்"),
-        (re.compile(r"ஒளிச்சேர்க்கை"), "போட்டோசிந்தசிஸ்"),
-        (re.compile(r"கடத்தி"), "கண்டக்டர்"),
-    ],
-    "bn": [
-        (re.compile(r"তড়িৎ\s+প্রবাহ"), "কারেন্ট"),
-        (re.compile(r"বিভব\s+পার্থক্য"), "ভোল্টেজ"),
-        (re.compile(r"রোধক"), "রেজিস্টার"),
-        (re.compile(r"রোধ"), "রেজিস্ট্যান্স"),
-        (re.compile(r"সালোকসংশ্লেষ"), "ফটোসিন্থেসিস"),
-        (re.compile(r"পরিবাহী"), "কন্ডাক্টর"),
-    ],
-}
-
-
-def modernize_indic_stem_vocabulary(text: str, lang: str) -> str:
-    """Replace archaic, textbook formal Indic terms with natural spoken classroom terms."""
-    lang_key = lang.split("_")[0]
-    replacements = CLASSROOM_SPOKEN_REPLACEMENTS.get(lang_key, [])
-    if not replacements:
-        return text
-    out = text
-    for pat, rep in replacements:
-        out = pat.sub(rep, out)
-    return out
-
-
 DISCOURSE_MARKERS: dict[str, list[str]] = {
     "hi": [
         "लेकिन", "किन्तु", "परन्तु", "क्योंकि", "इसलिए", "अतः", "अर्थात",
@@ -948,13 +823,8 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
       6. Injects clause-boundary micro-pauses for human-like breath rhythm.
       7. Strips unsupported symbols and brackets ([] {} () <> _ ^ ` ~).
     """
-    # 0. Expand STEM classroom terms and acronyms so characters don't get garbled or dropped
-    out = modernize_indic_stem_vocabulary(text, lang)
-    out = expand_stem_classroom_terms(out, lang)
-    out = expand_stem_acronyms(out, lang)
-
-    # Normalize compound word hyphens (e.g. fast-charging -> fast charging)
-    out = re.sub(r"(?<=[^\s\d\(\)\[\]\{\}\<\>])-(?=[^\s\d\(\)\[\]\{\}\<\>])", " ", out)
+    # 0. Expand STEM acronyms first so characters don't get garbled or dropped
+    out = expand_stem_acronyms(text, lang)
 
     # 1. Expand units and symbols to native script words first
     if lang in ("kn", "kan_Knda"):
@@ -1065,8 +935,6 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
     out = re.sub(r",\s*,+", ",", out)
     return out.strip(" ,-")
 
-clean_text_for_tts = clean_for_mms
-
 
 def count_ascii_digits(text: str) -> int:
     """Return count of ASCII digits (0-9) present in text."""
@@ -1080,9 +948,7 @@ def has_ascii_digits(text: str) -> bool:
 
 def expand_numbers_and_symbols(text: str, lang: str) -> str:
     """Expand numbers, scientific units, and mathematical symbols into spoken words."""
-    out = modernize_indic_stem_vocabulary(text, lang)
-    out = expand_stem_classroom_terms(out, lang)
-    out = expand_stem_acronyms(out, lang)
+    out = expand_stem_acronyms(text, lang)
     if lang in ("kn", "kan_Knda"):
         # Math operators
         out = re.sub(r"\s*=\s*", " ಸಮಾನ ", out)

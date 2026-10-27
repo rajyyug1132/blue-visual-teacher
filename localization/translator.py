@@ -36,7 +36,7 @@ except ImportError:
     HAS_TORCH = False
 
 from orchestrator.schema import LessonPlan
-from localization.normalize import fix_residual_digits, speak_en, STEM_CLASSROOM_LEXICON
+from localization.normalize import fix_residual_digits, speak_en
 
 LANG_CODE_MAP = {
     "en": "eng_Latn",
@@ -348,14 +348,10 @@ class OfflineIndicTranslator:
         placeholder_style: str = "bracket",
         protect_patterns: list[re.Pattern] = None,
         backend_fn: Callable[[list[str], str], list[str]] = None,
-        code_switch: bool = False,
     ):
         self.placeholder_style = placeholder_style
+        self.protect_patterns = protect_patterns or PROTECT
         self.backend_fn = backend_fn
-        base_patterns = list(protect_patterns or PROTECT)
-        self.protect_patterns = base_patterns
-        self.code_switch = False
-        self.set_code_switch(code_switch)
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
         self.tokenizer = None
         self.model = None
@@ -678,58 +674,37 @@ class OfflineIndicTranslator:
 
         return results
 
-    def set_code_switch(self, enabled: bool) -> None:
-        """Enable or disable classroom code-switching mode (Hinglish / Kanglish / Tanglish / Banglish)."""
-        self.code_switch = enabled
-        cs_pat = getattr(self, "_code_switch_pat", None)
-        base_patterns = [p for p in self.protect_patterns if p != cs_pat]
-        if enabled:
-            stem_words = sorted(list(STEM_CLASSROOM_LEXICON.keys()), key=len, reverse=True)
-            stem_pat = re.compile(rf"\b(?:" + "|".join(re.escape(w) for w in stem_words) + r")(?:s|es)?\b", re.IGNORECASE)
-            self._code_switch_pat = stem_pat
-            self.protect_patterns = [stem_pat] + base_patterns
-        else:
-            self._code_switch_pat = None
-            self.protect_patterns = base_patterns
-
-    def localize_lesson(self, plan: LessonPlan, lang: str, code_switch: bool | None = None) -> LessonPlan:
-        """Localize a full LessonPlan into the target language with optional classroom code-switching."""
+    def localize_lesson(self, plan: LessonPlan, lang: str) -> LessonPlan:
+        """Localize a full LessonPlan into the target language."""
         if lang == "en":
             return plan
 
-        orig_cs = self.code_switch
-        if code_switch is not None and code_switch != self.code_switch:
-            self.set_code_switch(code_switch)
-        try:
-            localized = plan.model_copy(deep=True)
-            # 1. Call speak_en on scene narration before IndicTrans2
-            for s in localized.scenes:
-                s.narration = speak_en(s.narration)
+        localized = plan.model_copy(deep=True)
+        # 1. Call speak_en on scene narration before IndicTrans2
+        for s in localized.scenes:
+            s.narration = speak_en(s.narration)
 
-            flat_strings = [localized.title]
-            for s in localized.scenes:
-                flat_strings.append(s.narration)
-                flat_strings.extend(s.visual.params.labels)
-                flat_strings.extend(s.visual.params.steps)
+        flat_strings = [localized.title]
+        for s in localized.scenes:
+            flat_strings.append(s.narration)
+            flat_strings.extend(s.visual.params.labels)
+            flat_strings.extend(s.visual.params.steps)
 
-            translated = self.translate_texts(flat_strings, lang)
-            cursor = 0
-            localized.title = translated[cursor]
+        translated = self.translate_texts(flat_strings, lang)
+        cursor = 0
+        localized.title = translated[cursor]
+        cursor += 1
+        for s in localized.scenes:
+            trans_narr = translated[cursor]
+            # 2. Call fix_residual_digits on narration after IndicTrans2
+            narr_fixed = fix_residual_digits(trans_narr, lang)
+            s.narration = ensure_word_budget(narr_fixed, lang)
             cursor += 1
-            for s in localized.scenes:
-                trans_narr = translated[cursor]
-                # 2. Call fix_residual_digits on narration after IndicTrans2
-                narr_fixed = fix_residual_digits(trans_narr, lang)
-                s.narration = ensure_word_budget(narr_fixed, lang)
-                cursor += 1
-                n_labels = len(s.visual.params.labels)
-                s.visual.params.labels = translated[cursor : cursor + n_labels]
-                cursor += n_labels
-                n_steps = len(s.visual.params.steps)
-                s.visual.params.steps = translated[cursor : cursor + n_steps]
-                cursor += n_steps
+            n_labels = len(s.visual.params.labels)
+            s.visual.params.labels = translated[cursor : cursor + n_labels]
+            cursor += n_labels
+            n_steps = len(s.visual.params.steps)
+            s.visual.params.steps = translated[cursor : cursor + n_steps]
+            cursor += n_steps
 
-            return localized
-        finally:
-            if code_switch is not None and code_switch != orig_cs:
-                self.set_code_switch(orig_cs)
+        return localized
