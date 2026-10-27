@@ -48,7 +48,8 @@ export function BackendStatus({ className }: { className?: string }) {
         />
         {state === 'checking' ? 'Checking connection…' : data?.message}
       </p>
-      <p className="mt-1 break-all text-xs text-muted-foreground">{API_BASE_URL}</p>
+      {/* server renders 127.0.0.1, the browser resolves its own hostname: expected, not a bug */}
+      <p className="mt-1 break-all text-xs text-muted-foreground" suppressHydrationWarning>{API_BASE_URL}</p>
       {state === 'down' && (
         <p className="mt-2 text-xs">
           Start it with <code className="font-bold">run_demo</code> in the project folder.
