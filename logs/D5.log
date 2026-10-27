@@ -1,4 +1,4 @@
-D5 TTS 24 kHz, deterministic :: PASS :: 3 passed, 168 deselected, 6 warnings in 35.11s (36.4s)
+D5 TTS 24 kHz, deterministic :: PASS :: 3 passed, 192 deselected, 6 warnings in 40.49s (42.1s)
 
 ...                                                                      [100%]
 ============================== warnings summary ===============================
@@ -24,5 +24,5 @@ tests/test_localization_real.py::test_d5_tts_is_24khz_with_tail_and_deterministi
     with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_silver.json") as r:
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-3 passed, 168 deselected, 6 warnings in 35.11s
+3 passed, 192 deselected, 6 warnings in 40.49s
 
