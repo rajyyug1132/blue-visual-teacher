@@ -18,8 +18,11 @@ import re
 from pathlib import Path
 from typing import Callable, Sequence
 
-if os.environ.get("BVT_HF_HOME"):
-    os.environ.setdefault("HF_HOME", os.environ["BVT_HF_HOME"])
+if not os.environ.get("HF_HOME"):
+    if os.environ.get("BVT_HF_HOME"):
+        os.environ["HF_HOME"] = os.environ["BVT_HF_HOME"]
+    elif Path(r"D:\git\project requirements\hf_cache").is_dir():
+        os.environ["HF_HOME"] = r"D:\git\project requirements\hf_cache" 
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
