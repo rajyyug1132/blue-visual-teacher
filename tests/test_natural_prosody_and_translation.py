@@ -419,3 +419,28 @@ def test_additional_stem_disambiguation_chemistry_physics_biology():
     assert "ಎಸ್‌ಟಿಪಿ" in res_kn
     assert "ಯುವಿ" in res_kn
     assert "ಐಆರ್" in res_kn
+
+
+def test_voice_alias_resolution_enm_enf():
+    """Verify enm and enf friendly voice aliases resolve correctly to model checkpoints."""
+    from localization.tts_engine import resolve_voice, VOICE_ALIASES, OfflineTTSEngine
+
+    assert resolve_voice("enm", "default") == "am_michael"
+    assert resolve_voice("ENM", "default") == "am_michael"
+    assert resolve_voice("michael", "default") == "am_michael"
+    assert resolve_voice("enf", "default") == "af_sarah"
+    assert resolve_voice("ENF", "default") == "af_sarah"
+    assert resolve_voice("sarah", "default") == "af_sarah"
+    assert resolve_voice("him", "default") == "hm_omega"
+    assert resolve_voice("hif", "default") == "hf_alpha"
+
+    # Default fallback
+    assert resolve_voice(None, "am_michael") == "am_michael"
+    assert resolve_voice("unknown_id", "fallback") == "unknown_id"
+
+    # Engine instantiation with aliases
+    tts_m = OfflineTTSEngine(voice_en="enm")
+    assert tts_m.voice_en == "am_michael"
+
+    tts_f = OfflineTTSEngine(voice_en="enf")
+    assert tts_f.voice_en == "af_sarah"

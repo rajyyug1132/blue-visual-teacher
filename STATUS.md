@@ -31,7 +31,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
 | FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
-| TARUN | localization/ | Done (L1–L8 verified) | Full L1–L8 pipeline verified: offline sockets blocked, 1 batched IndicTrans2 call, zero Devanagari in KN, 24kHz MMS seed 42, 0.90 peak norm, 30–90s sync ±0.05s, 8 Noto fonts |  |
+| TARUN | localization/ | Done (L1–L8 verified + SPATS ratio sync + enm/enf educator voices) | SPATS ratio scaling, natural breath pauses, Ohm/variable transliteration, enm (Michael) / enf (Sarah) voice options | All green |
 | AYUSH | exporter/ | — | — | — |
 
 ### Planner bench (5 topics, uncached, RTX 3050 6 GB)
@@ -49,6 +49,7 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 
 - YYUG -> TARUN · localization/translator.py · add `"bn": "ben_Beng"` to LANG_CODE_MAP on tarun/localization (already patched on v1) · Bengali replaced Telugu everywhere except this map, so IndicTrans2 got the raw tag `bn` and test_multilingual_sync failed with "Invalid target language tag: bn" whenever the real model is loaded · blocking? n (fixed on v1)
 
+- TARUN -> FARHAN, AYUSH · localization/tts_engine.py · Added friendly voice identifiers "enm" (Michael, Male Professor) and "enf" (Sarah, Female Educator) for English Kokoro TTS, selectable via voice="enm"|"enf" in TTS calls and test_voice CLI; web UI / API can expose these as user options · blocking: n
 - TARUN -> FARHAN · `fixtures/golden_manifest_en.json` · English audio timing manifest delivered (54.79s total) · unblocks renderer `initLesson` & audio clock · blocking: n
 - TARUN -> AYUSH · `fixtures/golden_manifest_en.json` · English audio timing manifest delivered · unblocks Playwright + FFmpeg export testing · blocking: n
 - TARUN -> YYUG · `orchestrator/schema.py` · Recommend allowing non-English plans to bypass the word minimum (handled in `translator.py` via `ensure_word_budget`) · blocking: n
