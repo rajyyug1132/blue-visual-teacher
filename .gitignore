@@ -1,6 +1,8 @@
-﻿__pycache__/
+__pycache__/
 .venv/
+.venv311/
 .env
+.env*.local
 cache/
 *.mp4
 *.wav
@@ -10,4 +12,5 @@ cache/
 *.bin
 models/
 node_modules/
+.next/
 reports/
