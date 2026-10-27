@@ -1,5 +1,8 @@
 // web/mock.js — Offline Mock API for Blue Visual Teacher (FARHAN_BLUEPRINT.md §7)
-// Simulates FastAPI backend endpoints with realistic 6s staged progress when ?mock=1 is set.
+// Answers the same endpoints as exporter/app.py when the page is opened with ?mock=1, so the UI can
+// be demoed without loading the models. A topic that already exists in cache/artifacts is served
+// from there (manifest + narration + MP4); anything else walks a scripted progress timeline and
+// lands on the bundled golden fixture for its language.
 
 (function (root) {
   const isMockParam = new URLSearchParams(root.location.search).get('mock') === '1';
@@ -8,24 +11,9 @@
   let jobCounter = 1000;
   let originalFetch = root.fetch;
 
-  // Same slug rule as orchestrator.cache.topic_slug, so mock URLs line up with cache/artifacts/<slug>_<lang>/
-  function topicSlug(topic) {
-    return String(topic || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
-  }
-
-  // Languages that ship a golden fixture, used when no real cached artifact exists.
   const FIXTURE_LANGS = ['en', 'hi', 'kn'];
 
-  async function artifactExists(base) {
-    try {
-      const res = await originalFetch.call(root, base + '/manifest.json', { method: 'HEAD' });
-      return res.ok;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  const EXAMPLE_TOPICS = [
+  const EXAMPLES = [
     "Ohm's Law",
     "Photosynthesis",
     "Binary Search",
@@ -38,6 +26,118 @@
     "GST"
   ];
 
+  // The scripted demo timeline. Each stage runs until its `until` second, moving the progress bar
+  // from `fromPct` to `toPct`; `duration` is the per-stage time the telemetry drawer reports.
+  const STAGES = [
+    { name: 'plan', until: 1.2, fromPct: 0, toPct: 20, duration: 1.18 },
+    { name: 'translate', until: 2.5, fromPct: 20, toPct: 40, duration: 1.24 },
+    { name: 'tts', until: 4.0, fromPct: 40, toPct: 65, duration: 1.48 },
+    { name: 'render', until: 5.0, fromPct: 65, toPct: 85, duration: 0.96 },
+    { name: 'encode', until: 5.8, fromPct: 85, toPct: 97, duration: 0.78 }
+  ];
+
+  // A cached lesson only needs a beat of "plan" before the artifact is handed over.
+  const CACHED_DONE_SEC = 0.6;
+
+  // Same slug rule as orchestrator.cache.topic_slug, so mock URLs line up with cache/artifacts/<slug>_<lang>/
+  function topicSlug(topic) {
+    return String(topic || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+  }
+
+  function completedStages(index) {
+    const times = {};
+    for (let i = 0; i < index; i++) times[STAGES[i].name] = STAGES[i].duration;
+    return times;
+  }
+
+  function scriptedProgress(elapsedSec) {
+    for (let i = 0; i < STAGES.length; i++) {
+      const stage = STAGES[i];
+      if (elapsedSec < stage.until) {
+        const startedAt = i === 0 ? 0 : STAGES[i - 1].until;
+        const span = (elapsedSec - startedAt) / (stage.until - startedAt);
+        return {
+          stage: stage.name,
+          pct: stage.fromPct + Math.round(span * (stage.toPct - stage.fromPct)),
+          stage_times: completedStages(i)
+        };
+      }
+    }
+    return { stage: 'done', pct: 100, stage_times: completedStages(STAGES.length) };
+  }
+
+  function progressFor(job, elapsedSec) {
+    if (!job.cached) return scriptedProgress(elapsedSec);
+    return elapsedSec >= CACHED_DONE_SEC
+      ? { stage: 'done', pct: 100, stage_times: { plan: 0.01 } }
+      : { stage: 'plan', pct: 55, stage_times: {} };
+  }
+
+  function json(body, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  async function artifactExists(base) {
+    try {
+      const res = await originalFetch.call(root, base + '/manifest.json', { method: 'HEAD' });
+      return res.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function statusPayload(job, elapsedSec) {
+    const { stage, pct, stage_times } = progressFor(job, elapsedSec);
+    const done = stage === 'done';
+    const fixtureLang = FIXTURE_LANGS.includes(job.lang) ? job.lang : 'en';
+
+    return {
+      job_id: job.jobId,
+      topic: job.topic,
+      lang: job.lang,
+      stage,
+      pct,
+      stage_times,
+      telemetry: {
+        model: 'qwen2.5:3b',
+        tokens: 576,
+        num_scenes: 5,
+        fallback_used: false,
+        device: 'cuda'
+      },
+      error: null,
+      cached: Boolean(job.cached),
+      // A cached lesson keeps its manifest, narration and MP4 side by side in cache/artifacts.
+      manifest_url: done
+        ? (job.cached ? job.base + '/manifest.json' : `/fixtures/golden_manifest_${fixtureLang}.json`)
+        : null,
+      audio_url: done && job.cached ? job.base + '/lesson_audio.wav' : null,
+      // Never advertise an MP4 the server cannot deliver: the download button would 404.
+      mp4_url: done && job.cached ? job.base + '/lesson.mp4' : null
+    };
+  }
+
+  async function createJob(body) {
+    const topic = (body.topic || "Ohm's Law").trim();
+    const lang = body.lang || 'en';
+    const base = '/artifacts/' + topicSlug(topic) + '_' + lang;
+
+    // The job and its clock exist before the cache probe, so the probe latency is not demo time.
+    const job = {
+      jobId: 'mock_job_' + (++jobCounter),
+      topic,
+      lang,
+      base,
+      startTime: Date.now()
+    };
+    job.cached = await artifactExists(base);
+    mockJobs.set(job.jobId, job);
+    return job;
+  }
+
   function installMockInterceptor() {
     originalFetch = root.fetch;
 
@@ -46,37 +146,19 @@
       const url = new URL(urlStr, root.location.origin);
       const method = (options.method || 'GET').toUpperCase();
 
-      // 1. GET /api/languages
-      if (url.pathname === '/api/languages') {
-        return new Response(JSON.stringify(['en', 'hi', 'kn']), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+      if (url.pathname === '/api/languages') return json(['en', 'hi', 'kn']);
+      if (url.pathname === '/api/examples') return json(EXAMPLES);
 
-      // 2. GET /api/examples
-      if (url.pathname === '/api/examples') {
-        return new Response(JSON.stringify(EXAMPLE_TOPICS), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // 3. GET /api/health
       if (url.pathname === '/api/health') {
-        return new Response(JSON.stringify({
+        return json({
           ollama: true,
           ffmpeg: true,
           chromium: true,
           models_loaded: true,
           offline_flags: true
-        }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      // 4. POST /api/generate
       if (url.pathname === '/api/generate' && method === 'POST') {
         let body = {};
         try {
@@ -84,125 +166,20 @@
         } catch (e) {
           body = {};
         }
-
-        const jobId = 'mock_job_' + (++jobCounter);
-        const startTime = Date.now();
-
-        // A real cached lesson (cache/artifacts/<slug>_<lang>/) is served by the dev server exactly
-        // like the FastAPI backend: instant tier-2 hit with manifest, narration wav and MP4.
-        const topic = (body.topic || "Ohm's Law").trim();
-        const lang = body.lang || 'en';
-        const base = '/artifacts/' + topicSlug(topic) + '_' + lang;
-        const cached = await artifactExists(base);
-
-        mockJobs.set(jobId, {
-          jobId,
-          topic,
-          lang,
-          startTime,
-          base,
-          cached
-        });
-
-        return new Response(JSON.stringify({ job_id: jobId }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const job = await createJob(body);
+        return json({ job_id: job.jobId });
       }
 
-      // 5. GET /api/status/:id
       if (url.pathname.startsWith('/api/status/')) {
         const jobId = url.pathname.replace('/api/status/', '');
         const job = mockJobs.get(jobId);
+        if (!job) return json({ error: 'Job not found' }, 404);
 
-        if (!job) {
-          return new Response(JSON.stringify({ error: 'Job not found' }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-
-        const elapsed = (Date.now() - job.startTime) / 1000;
-        let stage = 'plan';
-        let pct = 15;
-        const stage_times = {};
-
-        if (job.cached && elapsed >= 0.6) {
-          // Tier-2 cache hit: nothing is generated, the artifact is served as-is.
-          stage = 'done';
-          pct = 100;
-          stage_times.plan = 0.01;
-        } else if (job.cached) {
-          stage = 'plan';
-          pct = 55;
-        } else if (elapsed < 1.2) {
-          stage = 'plan';
-          pct = Math.round((elapsed / 1.2) * 20);
-        } else if (elapsed < 2.5) {
-          stage = 'translate';
-          stage_times.plan = 1.18;
-          pct = 20 + Math.round(((elapsed - 1.2) / 1.3) * 20);
-        } else if (elapsed < 4.0) {
-          stage = 'tts';
-          stage_times.plan = 1.18;
-          stage_times.translate = 1.24;
-          pct = 40 + Math.round(((elapsed - 2.5) / 1.5) * 25);
-        } else if (elapsed < 5.0) {
-          stage = 'render';
-          stage_times.plan = 1.18;
-          stage_times.translate = 1.24;
-          stage_times.tts = 1.48;
-          pct = 65 + Math.round(((elapsed - 4.0) / 1.0) * 20);
-        } else if (elapsed < 5.8) {
-          stage = 'encode';
-          stage_times.plan = 1.18;
-          stage_times.translate = 1.24;
-          stage_times.tts = 1.48;
-          stage_times.render = 0.96;
-          pct = 85 + Math.round(((elapsed - 5.0) / 0.8) * 12);
-        } else {
-          stage = 'done';
-          pct = 100;
-          stage_times.plan = 1.18;
-          stage_times.translate = 1.24;
-          stage_times.tts = 1.48;
-          stage_times.render = 0.96;
-          stage_times.encode = 0.78;
-        }
-
-        const done = stage === 'done';
-        const fixtureLang = FIXTURE_LANGS.includes(job.lang) ? job.lang : 'en';
-
-        const statusResponse = {
-          job_id: jobId,
-          topic: job.topic,
-          lang: job.lang,
-          stage,
-          pct,
-          stage_times,
-          telemetry: {
-            model: 'qwen2.5:3b',
-            tokens: 576,
-            num_scenes: 5,
-            fallback_used: false,
-            device: 'cuda'
-          },
-          error: null,
-          cached: !!job.cached,
-          // Cached lessons carry their own manifest + narration wav + MP4 next to each other.
-          manifest_url: done ? (job.cached ? job.base + '/manifest.json' : `/fixtures/golden_manifest_${fixtureLang}.json`) : null,
-          audio_url: done && job.cached ? job.base + '/lesson_audio.wav' : null,
-          // Only advertise a download when the MP4 really exists, otherwise the button 404s.
-          mp4_url: done && job.cached ? job.base + '/lesson.mp4' : null
-        };
-
-        return new Response(JSON.stringify(statusResponse), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        const elapsedSec = (Date.now() - job.startTime) / 1000;
+        return json(statusPayload(job, elapsedSec));
       }
 
-      // Delegate all other requests to original fetch
+      // Everything that is not one of the mock endpoints is a real request (fixtures, fonts, media).
       return originalFetch.apply(this, arguments);
     };
 
@@ -212,7 +189,7 @@
   root.MockAPI = {
     isMock: isMockParam,
     install: installMockInterceptor,
-    topics: EXAMPLE_TOPICS
+    topics: EXAMPLES
   };
 
   if (isMockParam) {

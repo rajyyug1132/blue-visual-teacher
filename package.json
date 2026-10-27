@@ -10,6 +10,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node tests/test_renderer.js",
+    "test:units": "node tests/test_server_behavior.js && node tests/test_mock_api.js",
     "test:acceptance": "node tests/test_renderer_f1_f10.js",
     "test:server": "node tests/test_localhost_server.js",
     "test:walkthrough": "node tests/capture_ui_demo.js",
