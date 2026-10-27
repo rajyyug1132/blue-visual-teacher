@@ -185,3 +185,36 @@ def test_run_pipeline_multilingual_sync():
             assert s_lang["start_sec"] == s_en["start_sec"]
             assert s_lang["end_sec"] == s_en["end_sec"]
             assert s_lang["duration_sec"] == s_en["duration_sec"]
+
+
+def test_multilingual_sync_three_scenarios():
+    """Verify 3 distinct real-world curriculum scenarios across all 5 present languages."""
+    scenarios = ["Ohm's Law", "Photosynthesis", "Newton's Third Law"]
+    for topic in scenarios:
+        topic_arg = topic if topic != "Ohm's Law" else None
+        artifacts = run(topic=topic_arg, langs="all")
+        assert set(artifacts.keys()) == set(PRESENT_LANGUAGES)
+
+        en_dir = artifacts["en"]
+        en_wav = en_dir / "lesson_audio.wav"
+        en_man = json.loads((en_dir / "manifest.json").read_text(encoding="utf-8"))
+        with wave.open(str(en_wav), "rb") as w_en:
+            en_frames = w_en.getnframes()
+        en_total_sec = en_man["total_sec"]
+
+        for lang in ["hi", "kn", "ta", "bn"]:
+            lang_dir = artifacts[lang]
+            lang_wav = lang_dir / "lesson_audio.wav"
+            lang_man = json.loads((lang_dir / "manifest.json").read_text(encoding="utf-8"))
+            with wave.open(str(lang_wav), "rb") as w_lang:
+                lang_frames = w_lang.getnframes()
+
+            # Exact frame count and total duration match
+            assert lang_frames == en_frames, f"Frame count drift in topic '{topic}', lang '{lang}'"
+            assert lang_man["total_sec"] == en_total_sec, f"Total duration drift in topic '{topic}', lang '{lang}'"
+
+            # Exact scene-by-scene duration match
+            for s_en, s_lang in zip(en_man["scenes"], lang_man["scenes"]):
+                assert s_lang["start_sec"] == s_en["start_sec"]
+                assert s_lang["end_sec"] == s_en["end_sec"]
+                assert s_lang["duration_sec"] == s_en["duration_sec"]

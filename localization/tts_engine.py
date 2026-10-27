@@ -484,8 +484,8 @@ class OfflineTTSEngine:
         else:
             words = text.split()
             dur = round(max(2.0, len(words) / WORDS_PER_SEC), 3)
-            n_samples = int(dur * TARGET_SR)
-            pad_samples = int(TAIL_PAD_SEC * TARGET_SR)
+            n_samples = int(round(dur * TARGET_SR))
+            pad_samples = int(round(TAIL_PAD_SEC * TARGET_SR))
             total_samples = n_samples + pad_samples
             total_dur = round(total_samples / TARGET_SR, 3)
 
