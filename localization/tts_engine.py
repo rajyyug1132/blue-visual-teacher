@@ -22,9 +22,8 @@ import wave
 from pathlib import Path
 from typing import Any, Sequence
 
-PROJ_REQ = Path(r"D:\git\project requirements")
-if PROJ_REQ.exists():
-    os.environ.setdefault("HF_HOME", str(PROJ_REQ / "hf_cache"))
+if os.environ.get("BVT_HF_HOME"):
+    os.environ.setdefault("HF_HOME", os.environ["BVT_HF_HOME"])
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"

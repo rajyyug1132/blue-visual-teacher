@@ -18,9 +18,8 @@ import re
 from pathlib import Path
 from typing import Callable, Sequence
 
-PROJ_REQ = Path(r"D:\git\project requirements")
-if PROJ_REQ.exists():
-    os.environ.setdefault("HF_HOME", str(PROJ_REQ / "hf_cache"))
+if os.environ.get("BVT_HF_HOME"):
+    os.environ.setdefault("HF_HOME", os.environ["BVT_HF_HOME"])
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -344,10 +343,6 @@ class OfflineIndicTranslator:
                 candidates = [ckpt_dir]
                 if ckpt_dir == "ai4bharat/indictrans2-en-indic-dist-200M":
                     candidates.append("naklitechie/indictrans2-en-indic-dist-200M")
-                if PROJ_REQ.exists():
-                    snap = PROJ_REQ / "hf_cache" / "hub" / "models--naklitechie--indictrans2-en-indic-dist-200M" / "snapshots" / "a814dab1ae6e4ee4c7d785b7e1dcb0ac8e36bcd6"
-                    if snap.exists():
-                        candidates.append(str(snap))
 
                 for c in candidates:
                     try:
