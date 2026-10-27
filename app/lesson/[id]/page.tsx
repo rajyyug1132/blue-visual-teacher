@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { AppShellClient } from '@/components/app/app-shell-client'
+import { API_BASE_URL } from '@/lib/api'
 
 export const metadata: Metadata = { title: 'Lesson' }
 
@@ -25,7 +26,7 @@ export default async function LessonPage({
 
   let initialJob = null
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/status/${encodeURIComponent(id)}`, { cache: 'no-store' })
+    const res = await fetch(`${API_BASE_URL}/api/status/${encodeURIComponent(id)}`, { cache: 'no-store' })
     if (res.ok) initialJob = await res.json()
   } catch {}
 

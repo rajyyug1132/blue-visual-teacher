@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AlertTriangle, ArrowLeft, Loader2, RotateCcw } from 'lucide-react'
 import { useJob } from '@/hooks/use-api'
-import { ApiError, createLesson } from '@/lib/api'
+import { ApiError, createLesson, resolveArtifactUrl } from '@/lib/api'
 import { languageLabel } from '@/lib/languages'
 import { JobStatus } from './job-status'
 import { LessonPlayer } from './lesson-player'
@@ -21,8 +21,8 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
     stage: initialJob.stage || 'done',
     message: null,
     error: initialJob.error || null,
-    videoUrl: initialJob.mp4_url ? `http://127.0.0.1:8000${initialJob.mp4_url}` : null,
-    manifestUrl: initialJob.manifest_url ? `http://127.0.0.1:8000${initialJob.manifest_url}` : null,
+    videoUrl: resolveArtifactUrl(initialJob.mp4_url || initialJob.video_url),
+    manifestUrl: resolveArtifactUrl(initialJob.manifest_url),
     topic: initialJob.topic || topicParam || null,
     language: initialJob.lang || languageParam || null,
     pct: initialJob.pct ?? 100
@@ -107,7 +107,7 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
         <div className="grid items-start gap-6 lg:grid-cols-[1.6fr_1fr]">
           <div className="flex flex-col gap-6">
             {job.status === 'completed' && job.videoUrl ? (
-              <LessonPlayer src={job.videoUrl} title={title} />
+              <LessonPlayer src={job.videoUrl} title={title} manifestUrl={job.manifestUrl} />
             ) : job.status === 'completed' ? (
               <Notice
                 title="Lesson finished, but no video link was returned."

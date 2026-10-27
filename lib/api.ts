@@ -224,10 +224,21 @@ export async function getAuthMe(): Promise<AuthUser | null> {
 }
 
 // --- LESSON API ---
-export async function createLesson(input: { topic: string; language: string }): Promise<Job> {
+export async function createLesson(input: {
+  topic: string
+  language: string
+  level?: string
+  target_sec?: number
+}): Promise<Job> {
   const body = await request('/api/generate', {
     method: 'POST',
-    body: JSON.stringify({ topic: input.topic, lang: input.language, language: input.language }),
+    body: JSON.stringify({
+      topic: input.topic,
+      lang: input.language,
+      language: input.language,
+      level: input.level ?? 'beginner',
+      target_sec: input.target_sec ?? 60,
+    }),
     timeoutMs: 30000,
   })
   return parseJob(body)

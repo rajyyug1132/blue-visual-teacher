@@ -77,6 +77,8 @@ class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=2, max_length=120)
     lang: Optional[str] = "en"
     language: Optional[str] = None
+    level: Optional[str] = "beginner"
+    target_sec: Optional[int] = 60
 
     @model_validator(mode="before")
     @classmethod
@@ -245,7 +247,7 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
     user_id = current_user["id"] if current_user else None
 
     job = {
-        "job_id": job_id, "user_id": user_id, "topic": topic, "lang": target_lang,
+        "job_id": job_id, "user_id": user_id, "topic": topic, "lang": target_lang, "level": req.level or "beginner", "target_sec": req.target_sec or 60,
         "status": "queued", "stage": "queued", "pct": 0, "stage_times": {}, "telemetry": {}, "error": None,
         "mp4_url": None, "manifest_url": None, "audio_url": None, "cached": False
     }

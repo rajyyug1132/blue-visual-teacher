@@ -1,17 +1,15 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Archivo, Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 
-const archivo = Archivo({
-  subsets: ['latin'],
-  weight: ['700', '800', '900'],
+const archivo = localFont({
+  src: './fonts/Archivo-VariableFont_wdth,wght.woff2',
   variable: '--font-archivo',
   display: 'swap',
 })
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: './fonts/Inter-VariableFont_opsz,wght.woff2',
   variable: '--font-inter',
   display: 'swap',
 })
@@ -48,7 +46,6 @@ export default function RootLayout({
     <html lang="en" className={`${archivo.variable} ${inter.variable}`}>
       <body className="min-h-dvh overflow-x-hidden antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

@@ -33,6 +33,8 @@ export function LessonForm({
 
   const [topic, setTopic] = useState(initialTopic.slice(0, MAX_TOPIC))
   const [language, setLanguage] = useState(initialLanguage)
+  const [level, setLevel] = useState<'beginner' | 'intermediate'>('beginner')
+  const [targetSec, setTargetSec] = useState<number>(60)
   const [topicError, setTopicError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<{ message: string; retryable: boolean; offline?: 'preview' | 'down' } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -59,7 +61,12 @@ export function LessonForm({
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const job = await createLesson({ topic: topic.trim(), language: selectedLanguage })
+      const job = await createLesson({
+        topic: topic.trim(),
+        language: selectedLanguage,
+        level,
+        target_sec: targetSec,
+      })
       router.push(lessonHref(job.id, topic.trim(), selectedLanguage))
     } catch (error) {
       const apiErr = error instanceof ApiError ? error : null
@@ -175,9 +182,74 @@ export function LessonForm({
         )}
       </fieldset>
 
+
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 font-display text-xl font-extrabold tracking-tight">Learner level</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(['beginner', 'intermediate'] as const).map((lvl) => {
+              const checked = level === lvl
+              return (
+                <label
+                  key={lvl}
+                  className={cn(
+                    'flex cursor-pointer items-center justify-between gap-2 rounded-2xl border-2 border-ink px-3.5 py-3 transition-colors font-bold capitalize text-sm sm:text-base',
+                    checked ? 'bg-brand-blue text-white' : 'bg-white hover:bg-cream',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="level"
+                    value={lvl}
+                    checked={checked}
+                    onChange={() => setLevel(lvl)}
+                    className="sr-only"
+                  />
+                  <span>{lvl}</span>
+                  <span
+                    aria-hidden="true"
+                    className={cn('size-3.5 rounded-full border-2 shrink-0', checked ? 'border-white bg-white' : 'border-ink')}
+                  />
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label htmlFor="target-sec" className="font-display text-xl font-extrabold tracking-tight">
+              Target length
+            </label>
+            <span className="rounded-full border-2 border-ink bg-white px-3 py-0.5 text-xs font-black">
+              {targetSec}s
+            </span>
+          </div>
+          <div className="mt-2 flex items-center">
+            <input
+              id="target-sec"
+              type="range"
+              min={30}
+              max={90}
+              step={5}
+              value={targetSec}
+              onChange={(e) => setTargetSec(Number(e.target.value))}
+              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-ink/20 accent-brand-blue"
+            />
+          </div>
+          <div className="flex justify-between text-[11px] font-semibold text-muted-foreground">
+            <span>30s (quick)</span>
+            <span>60s (standard)</span>
+            <span>90s (deep)</span>
+          </div>
+        </div>
+      </div>
+
+
       {submitError?.offline ? (
         <RunLocally variant={submitError.offline} />
       ) : submitError && (
+
         <div role="alert" className="flex flex-col gap-3 rounded-2xl border-2 border-destructive bg-white p-4 sm:flex-row sm:items-start">
           <AlertTriangle className="size-5 shrink-0 text-destructive" aria-hidden="true" />
           <div className="flex-1">

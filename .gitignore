@@ -17,3 +17,4 @@ reports/
 artifacts/
 exporter/data/
 next-env.d.ts
+*.tsbuildinfo
