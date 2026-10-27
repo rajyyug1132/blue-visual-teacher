@@ -1,6 +1,3 @@
-D10 README, run_demo.sh, pre-cache :: MISSING :: README.md missing; run_demo.sh missing; only 1 demo topics pre-cached (need 10) (0.0s)
+D10 README, run_demo.sh, pre-cache :: PASS :: ok (0.0s)
 
-pre-cached artifact dirs with lesson.mp4: 1 (1 topics)
-README.md missing
-run_demo.sh missing
-only 1 demo topics pre-cached (need 10)
+pre-cached artifact dirs with lesson.mp4: 63 (21 topics)

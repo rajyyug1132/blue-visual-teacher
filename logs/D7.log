@@ -1,3 +1,146 @@
-D7 export 20 topics x en/hi/kn :: MISSING :: not in repo: exporter/export_mp4.py, exporter/test_harness.py (0.0s)
+D7 export 20 topics x en/hi/kn :: BLOCKED :: export tests all skipped: 2 failed, 3 skipped, 166 deselected, 3 warnings in 8.03s (9.3s)
 
-missing: ['exporter/export_mp4.py', 'exporter/test_harness.py']
+FFsss                                                                    [100%]
+================================== FAILURES ===================================
+____________________ test_d7_golden_lesson_exports_offline ____________________
+
+tmp_path = WindowsPath('C:/Users/karti/AppData/Local/Temp/pytest-of-karti/pytest-86/test_d7_golden_lesson_exports_0')
+
+    def test_d7_golden_lesson_exports_offline(tmp_path):
+        require_exporter()
+        from exporter.export_mp4 import render_and_mux_mp4
+        plan, _ = golden_plan()
+        timing = WordRateTTS().synthesize_all_scenes(plan.scenes, "en", tmp_path / "lesson_audio.wav")
+        total = timing[-1]["end_sec"]
+        (tmp_path / "manifest.json").write_text(json.dumps({"title": plan.title, "lang": "en", "total_sec": total,
+                                                            "audio": "lesson_audio.wav", "scenes": timing}), encoding="utf-8")
+        stages = []
+        t0 = time.perf_counter()
+>       render_and_mux_mp4(tmp_path, "en", lambda s, p: stages.append(s))
+
+tests\test_e2e_offline.py:102: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+exporter\export_mp4.py:49: in render_and_mux_mp4
+    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
+    self._sync(
+.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
+    await self._channel.send(
+.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <playwright._impl._connection.Connection object at 0x000001DA95D94890>
+cb = <function Channel.send.<locals>.<lambda> at 0x000001DA97A39300>
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -> Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+>           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
+E           ╔════════════════════════════════════════════════════════════╗
+E           ║ Looks like Playwright was just installed or updated.       ║
+E           ║ Please run the following command to download new browsers: ║
+E           ║                                                            ║
+E           ║     playwright install                                     ║
+E           ║                                                            ║
+E           ║ <3 Playwright Team                                         ║
+E           ╚════════════════════════════════════════════════════════════╝
+
+.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
+_____________________ test_d7_api_generate_poll_download ______________________
+
+api = (<starlette.testclient.TestClient object at 0x000001DA98EED190>, 'E2E Offline 9b6b87')
+
+    def test_d7_api_generate_poll_download(api):
+        client, topic = api
+        assert client.get("/api/languages").json() == ["en"]
+        health = client.get("/api/health").json()
+        assert health["ffmpeg"] is True and health["offline_flags"] is True
+        st = poll(client, client.post("/api/generate", json={"topic": topic, "lang": "en"}).json()["job_id"])
+>       assert st["stage"] == "done" and st["error"] is None, st
+E       AssertionError: {'job_id': '8a73036eda6e', 'topic': 'E2E Offline 9b6b87', 'lang': 'en', 'stage': 'error', ...}
+E       assert ('error' == 'done'
+E         
+E         - done
+E         + error)
+
+tests\test_e2e_offline.py:142: AssertionError
+------------------------------ Captured log call ------------------------------
+ERROR    bvt:app.py:73 job 8a73036eda6e failed:
+Traceback (most recent call last):
+  File "C:\PROJECT\exporter\app.py", line 65, in _run
+    out = app.state.generate(job["topic"], job["lang"], progress)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\tests\test_e2e_offline.py", line 118, in <lambda>
+    lambda topic, lang, cb: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 121, in generate_lesson
+    export(out, lang, report)
+  File "C:\PROJECT\exporter\export_mp4.py", line 49, in render_and_mux_mp4
+    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 4103, in launch
+    self._sync(
+  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 111, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_browser_type.py", line 101, in launch
+    await self._channel.send(
+  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 78, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 636, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     playwright install                                     ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+============================== warnings summary ===============================
+.venv\Lib\site-packages\torch\jit\_script.py:1491
+  C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\exporter\app.py:78: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\.venv\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_e2e_offline.py::test_d7_golden_lesson_exports_offline - pla...
+FAILED tests/test_e2e_offline.py::test_d7_api_generate_poll_download - Assert...
+2 failed, 3 skipped, 166 deselected, 3 warnings in 8.03s
+

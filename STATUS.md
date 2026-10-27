@@ -10,15 +10,15 @@ Evidence per check in `logs/D#.log`; latest table in `logs/summary.md`.
 | D# | check | state | owner | evidence |
 |---|---|---|---|---|
 | D1 | schema + golden fixture (CC-1 counts [22,27,24,29,21]) | PASS | YYUG | logs/D1.log |
-| D2 | planner ladder, 20 topics >=19 valid, P50 <20 s, math ok | PASS (run 2): 19/20 valid, P50 15.1 s, 0 final failures, all answers spoken (run 1 was P50 39.1 s) | YYUG | logs/D2_run2_pass.log, logs/D2_run1_stress.txt |
-| D3 | tier-1 plan hit <5 ms, tier-2 artifact hit serves MP4 | built (yyug/integration); tests pass | YYUG | logs/D3.log |
-| D4 | IndicTrans2 batched + IndicProcessor, KN no Devanagari | real-model tests pass on yyug/integration | TARUN (assist PR #3) | logs/D4.log |
-| D5 | Kokoro EN/HI, MMS KN seed 42, 24 kHz, 0.35 s tail, deterministic | real-model tests pass (HI via bundled espeak-ng) | TARUN (assist PR #3) | logs/D5.log |
-| D6 | renderer: 8 templates, deterministic, Indic fits 1280x720 | built; tests pass | FARHAN (assist PR #2) | logs/D6.log |
-| D7 | export 20 topics x en/hi/kn, BLUEPRINT 6.2 checks | exporter built, golden export passes; 60-video harness pending | AYUSH (assist PR #4) | logs/D7.log |
-| D8 | UI: language selector, progress, toasts, MP4 download | built; tests pass | FARHAN UI + AYUSH API (PRs #2, #4) | logs/D8.log |
-| D9 | pytest tests/ incl. test_e2e_offline.py, sockets blocked | 163 passed, 3 skipped (opt-in real run) | ALL | logs/D9.log |
-| D10 | README licenses, run_demo.sh, 10 topics pre-cached | README + run_demo done; pre-cache pending | AYUSH (assist PR #4) | logs/D10.log |
+| D2 | planner ladder, 20 topics >=19 valid, P50 <20 s, math ok | PASS: 19/20 valid, P50 15.6 s, 0 final failures, all answers spoken | YYUG | logs/D2.log |
+| D3 | tier-1 plan hit <5 ms, tier-2 artifact hit serves MP4 | FAIL this run: Playwright Chromium missing (export cannot mux MP4) | YYUG | logs/D3.log |
+| D4 | IndicTrans2 batched + IndicProcessor, KN no Devanagari | BLOCKED: d4_ tests skipped | TARUN | logs/D4.log |
+| D5 | Kokoro EN/HI, MMS KN seed 42, 24 kHz, 0.35 s tail, deterministic | PASS | TARUN | logs/D5.log |
+| D6 | renderer: 8 templates, deterministic, Indic fits 1280x720 | PASS | FARHAN | logs/D6.log |
+| D7 | export 20 topics x en/hi/kn, BLUEPRINT 6.2 checks | BLOCKED: d7_ tests skipped/failed (Playwright) | AYUSH | logs/D7.log |
+| D8 | UI: language selector, progress, toasts, MP4 download | FAIL: Playwright Chromium missing | AYUSH | logs/D8.log |
+| D9 | pytest tests/ incl. test_e2e_offline.py, sockets blocked | FAIL: 3 failed, 153 passed, 11 skipped, 4 errors (Playwright) | ALL | logs/D9.log |
+| D10 | README licenses, run_demo.sh, 10 topics pre-cached | PASS | AYUSH | logs/D10.log |
 
 Runtime for these checks: Python 3.11 venv with requirements.txt (transformers 4.46.3, CPU torch), IndicTransToolkit
 built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNINGS.md.
@@ -27,7 +27,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 
 | Owner | Module | State | Last check | Next |
 |---|---|---|---|---|
-| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none; test updated. | 2026-10-27 · tests/test_numeric_guard.py + tests/test_orchestrator.py 127 passed · **default planner: qwen2.5:7b on GPU; TTS/IndicTrans2 on CPU (DEVICE=cpu)** | Rerun D1–D10; D2 live 20-topic can sit around 19/20. |
+| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
 | FARHAN | renderer/ | — | — | — |
 | TARUN | localization/ | On origin/dev: translator.py (protected spans, zero-Devanagari, batched), tts_engine.py (Kokoro EN/HI, MMS KN seed, no double pad), captions.py, normalize.py, warmup.py, golden_manifest_en.json | 14:00 per his board | Merge dev into main |
 | AYUSH | exporter/ | — | — | — |
