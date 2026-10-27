@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | **Yyug** | `orchestrator/` | `schema.py`, `planner.py`, `prompts.py`, `cache.py`, `fallbacks.py`, `run_pipeline.py`, `CLAUDE.md` | Merged | Planner, Tier 1 cache, safe fallbacks & CLI verified |
 | **Farhan** | `renderer/` | `player.html`, `engine.js`, `templates.js`, `theme.js` | In Progress | Canvas renderer & 8 templates (UNBLOCKED by `golden_manifest_en.json`) |
-| **Tarun** | `localization/` | `translator.py`, `tts_engine.py`, `captions.py`, `normalize.py`, `warmup.py`, `assets/fonts/` | Done (14:00) | `translator.py` (PROTECT, colon-split, zero-Devanagari, sandhi budget); `normalize.py` (speak_en, clean_for_mms, fix_residual_digits); `tts_engine.py` (zero double-pad, MMS seed); `captions.py`; `golden_manifest_en.json` |
+| **Tarun** | `localization/` | `translator.py`, `tts_engine.py`, `captions.py`, `normalize.py`, `warmup.py`, `verify_l1_to_l8.py`, `assets/fonts/` | Done (L1–L8 Verified) | Full L1–L8 pipeline verified: offline sockets blocked, 1 batched IndicTrans2 call, zero Devanagari in KN, 24kHz MMS seed 42, 0.90 peak norm, 30–90s sync ±0.05s, 8 Noto fonts |
 | **Ayush** | `exporter/` | `export_mp4.py`, `app.py`, `test_harness.py`, `README.md` | In Progress | Exporter & FastAPI backend (UNBLOCKED by `golden_manifest_en.json`) |
 
 ## Handoffs

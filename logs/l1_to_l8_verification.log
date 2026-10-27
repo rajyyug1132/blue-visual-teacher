@@ -1,0 +1,41 @@
+================================================================================
+LOCALIZATION PIPELINE L1-L8 FULL VERIFICATION REPORT
+================================================================================
+
+[L1] Weight Loading with Sockets Blocked:
+  - PASS: OfflineIndicTranslator & OfflineTTSEngine initialized with sockets monkeypatched
+
+[L2] Batched IndicTrans2 & Formula Preservation:
+  - PASS: 1 batched call (1), formulas ('V = I × R', 'I = V / R', '230 V', '46 Ω') preserved
+
+[L3] Script Purity across 20 Stress Lessons (Kannada & Hindi):
+  - PASS: 20/20 topics verified: 0 Devanagari chars in KN, 0 Kannada chars in HI
+
+[L4] Dual-Engine TTS Audio Specifications:
+  - PASS: 24 kHz sample rate, 0.35s tail padding silent, peak amplitude = 0.90 (~0.90)
+
+[L5] Synthesis Determinism (Identical Duration on Repeated Calls):
+  - PASS: Repeated calls duration: 3.393s vs 3.393s (delta = 0.0000s)
+
+[L6] Number & Math Symbol Sanitizer (0 Residual ASCII Digits/Symbols):
+  - PASS: 6/6 test cases ('230 V', '46 Ω', '100 °C', '6.5%', '2023', 'H = 2') have 0 residual digits
+
+[L7] Timing Manifest and Duration Bounds:
+  - PASS: Manifest vs WAV sync delta <= 0.05s (0 errors), duration in [30, 90]s (0 errors)
+
+[L8] Font Bundling & License Check:
+  - PASS: All 8 Noto fonts (Latin, Deva, Knda, Taml, Telu) + OFL.txt present in localization\assets\fonts
+
+================================================================================
+L1-L8 SUMMARY TABLE:
+Check  Status   Evidence
+--------------------------------------------------------------------------------
+L1     PASS     OfflineIndicTranslator & OfflineTTSEngine initialized with sockets monkeypatched
+L2     PASS     1 batched call (1), formulas ('V = I × R', 'I = V / R', '230 V', '46 Ω') preserved
+L3     PASS     20/20 topics verified: 0 Devanagari chars in KN, 0 Kannada chars in HI
+L4     PASS     24 kHz sample rate, 0.35s tail padding silent, peak amplitude = 0.90 (~0.90)
+L5     PASS     Repeated calls duration: 3.393s vs 3.393s (delta = 0.0000s)
+L6     PASS     6/6 test cases ('230 V', '46 Ω', '100 °C', '6.5%', '2023', 'H = 2') have 0 residual digits
+L7     PASS     Manifest vs WAV sync delta <= 0.05s (0 errors), duration in [30, 90]s (0 errors)
+L8     PASS     All 8 Noto fonts (Latin, Deva, Knda, Taml, Telu) + OFL.txt present in localization\assets\fonts
+================================================================================

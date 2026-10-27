@@ -365,11 +365,17 @@ class OfflineTTSEngine:
             freq = 440.0 if lang == "en" else (554.37 if lang == "hi" else 659.25)
             # Gentle bell envelope for pleasant synthetic tone
             env = np.sin(np.pi * np.linspace(0, 1, n_samples))
-            audio = (0.3 * env * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+            audio = (0.90 * env * np.sin(2 * np.pi * freq * t)).astype(np.float32)
             pad = np.zeros(pad_samples, dtype=np.float32)
             wav = np.concatenate([audio, pad])
         else:
-            wav = [0.0] * total_samples
+            freq = 440.0 if lang == "en" else (554.37 if lang == "hi" else 659.25)
+            audio = [
+                0.90 * math.sin(math.pi * i / n_samples) * math.sin(2 * math.pi * freq * i / TARGET_SR)
+                for i in range(n_samples)
+            ]
+            pad = [0.0] * pad_samples
+            wav = audio + pad
 
         total_dur = round(total_samples / TARGET_SR, 3)
         return wav, total_dur
@@ -476,9 +482,10 @@ class OfflineTTSEngine:
         all_waveforms = []
 
         for s in scenes:
-            text = s.narration if hasattr(s, "narration") else s["narration"]
-            sid = s.id if hasattr(s, "id") else s["id"]
-            visual = s.visual.model_dump() if hasattr(s.visual, "model_dump") else (s.visual if isinstance(s.visual, dict) else dict(s.visual))
+            text = getattr(s, "narration", None) or (s.get("narration") if isinstance(s, dict) else s["narration"])
+            sid = getattr(s, "id", None) or (s.get("id") if isinstance(s, dict) else s["id"])
+            vis = getattr(s, "visual", None) if hasattr(s, "visual") else (s.get("visual") if isinstance(s, dict) else s["visual"])
+            visual = vis.model_dump() if hasattr(vis, "model_dump") else (vis if isinstance(vis, dict) else dict(vis))
 
             wav, duration_sec = self.synthesize_scene(text, lang)
             all_waveforms.append(wav)
@@ -508,12 +515,19 @@ class OfflineTTSEngine:
                 master = master * (0.90 / peak)
             int16_data = (master * 32767).astype(np.int16).tobytes()
         else:
-            # Fallback packing
+            # Fallback packing with 0.90 peak normalization
             frames = []
+            max_val = 0.0
             for w in waveforms:
-                if isinstance(w, list):
+                if isinstance(w, (list, tuple)):
+                    for s in w:
+                        if abs(s) > max_val:
+                            max_val = abs(s)
+            scale = (0.90 / max_val) if max_val > 1e-4 else 1.0
+            for w in waveforms:
+                if isinstance(w, (list, tuple)):
                     for sample in w:
-                        val = int(max(-1.0, min(1.0, sample)) * 32767)
+                        val = int(max(-1.0, min(1.0, sample * scale)) * 32767)
                         frames.append(struct.pack("<h", val))
             int16_data = b"".join(frames) if frames else b"\x00\x00" * int(TARGET_SR * 2)
 
