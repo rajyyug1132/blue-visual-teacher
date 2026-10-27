@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import useSWR from 'swr'
-import { getHealth, getJobStatus, getLanguages, type Job } from '@/lib/api'
+import { getHealth, getJobStatus, getLanguages, getUserLessonHistory, type Job } from '@/lib/api'
 
 const POLL_MS = 2500
 
@@ -12,6 +12,14 @@ export function useLanguages() {
 
 export function useHealth() {
   return useSWR('health', getHealth, { refreshInterval: 30000, revalidateOnFocus: true, shouldRetryOnError: false })
+}
+
+/** GET /api/lessons/history. Returns [] for a signed-out user (the endpoint 401s), never an error banner. */
+export function useLessonHistory(enabled: boolean) {
+  return useSWR(enabled ? 'lesson-history' : null, getUserLessonHistory, {
+    revalidateOnFocus: true,
+    shouldRetryOnError: false
+  })
 }
 
 /**

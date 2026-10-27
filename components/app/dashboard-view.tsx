@@ -1,6 +1,9 @@
+'use client'
+
 import Link from 'next/link'
-import { ArrowUpRight, History } from 'lucide-react'
+import { ArrowUpRight, History, Loader2 } from 'lucide-react'
 import type { DemoSession } from '@/lib/demo-session'
+import { useLessonHistory } from '@/hooks/use-api'
 import { BackendStatus } from './backend-status'
 import { LessonForm } from './lesson-form'
 
@@ -39,19 +42,79 @@ export function DashboardView({ session }: { session: DemoSession }) {
             <h2 id="recent-heading" className="text-xs font-bold uppercase tracking-[0.2em]">
               Recent lessons
             </h2>
-            <div className="mt-4 flex flex-col items-start gap-3">
-              <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-purple text-white">
-                <History className="size-5" aria-hidden="true" />
-              </span>
-              <p className="font-bold">No lesson history yet.</p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                The lesson server doesn&apos;t expose a history endpoint, so past lessons can&apos;t be listed here.
-                Keep the lesson page link to revisit a video.
-              </p>
-            </div>
+            <RecentLessons signedIn={Boolean(session.token)} />
           </section>
         </div>
       </div>
     </div>
+  )
+}
+
+const LANG_LABEL: Record<string, string> = { en: 'English', hi: 'Hindi', kn: 'Kannada' }
+
+function RecentLessons({ signedIn }: { signedIn: boolean }) {
+  const { data, error, isLoading } = useLessonHistory(signedIn)
+
+  if (!signedIn) {
+    return (
+      <div className="mt-4 flex flex-col items-start gap-3">
+        <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-purple text-white">
+          <History className="size-5" aria-hidden="true" />
+        </span>
+        <p className="font-bold">Sign in to keep your lessons.</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Lessons you generate are saved to your account and listed here.
+        </p>
+        <Link href="/login" className="font-bold underline underline-offset-4">
+          Sign in
+        </Link>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        Loading your lessons…
+      </p>
+    )
+  }
+
+  if (error) {
+    return <p className="mt-4 text-sm text-muted-foreground">Couldn&apos;t reach the lesson server just now.</p>
+  }
+
+  const lessons = data ?? []
+  if (lessons.length === 0) {
+    return (
+      <div className="mt-4 flex flex-col items-start gap-3">
+        <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-purple text-white">
+          <History className="size-5" aria-hidden="true" />
+        </span>
+        <p className="font-bold">No lessons yet.</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Generate your first lesson and it will appear here.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <ul className="mt-4 flex flex-col gap-2">
+      {lessons.slice(0, 5).map((lesson) => (
+        <li key={lesson.id}>
+          <Link
+            href={`/lesson/${encodeURIComponent(lesson.id)}`}
+            className="flex items-center justify-between gap-3 rounded-xl border-2 border-ink/15 px-3 py-2 hover:border-ink"
+          >
+            <span className="truncate font-bold">{lesson.topic}</span>
+            <span className="shrink-0 text-xs uppercase tracking-wider text-muted-foreground">
+              {LANG_LABEL[lesson.lang] ?? lesson.lang}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   )
 }
