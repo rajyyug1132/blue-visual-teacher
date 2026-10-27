@@ -1,0 +1,22 @@
+# Vercel deploys the Next.js UI only, as a shop window (lib/showcase.ts).
+# The lesson pipeline is Python and offline-only by design (AGENTS.md) and is never deployed.
+# Without these lines Vercel finds requirements.txt and tries to pip-install torch, CUDA and
+# transformers; that failed building tokenizers from source, and torch alone exceeds the
+# function size limit.
+requirements.txt
+requirements-py311.txt
+.python-version
+*.py
+
+# Pipeline, mock UI, data and tests: nothing the Next app imports.
+orchestrator/
+localization/
+exporter/
+scripts/
+tests/
+fixtures/
+renderer/
+web/
+assets/
+logs/
+server.js

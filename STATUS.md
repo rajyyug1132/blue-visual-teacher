@@ -253,3 +253,15 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
 - **Owner note (AYUSH):** this pass edited your `lib/api.ts`, `lesson-form.tsx`, `backend-status.tsx`, `app-shell.tsx` and
   `dashboard-view.tsx` with small hooks; the logic lives in three new files. If your STEP 3 work on `lesson-form.tsx` conflicts,
   your side wins -- keep the `submitError.offline` branch and the `!showcase` guard on the language warning.
+
+### Pass 4 (YYUG keeper session) · 2026-10-28 00:41
+
+- **Vercel root cause found** (user logged in the CLI, so `vercel inspect --logs` became readable). Two project misconfigurations:
+  Framework Preset was **Other**, so Vercel never treated the repo as Next.js, auto-detected runtimes, found `requirements.txt`
+  and ran `uv pip install` on the whole offline pipeline (torch 528.9 MiB, triton, nvidia CUDA libs, transformers, spacy,
+  playwright). It died building `tokenizers==0.20.3` from source. And the Output Directory was `public`, so even a passing
+  build would have served static files only, not the app.
+- **Fix, version-controlled rather than dashboard clicks:** `vercel.json` pins `"framework": "nextjs"`; `.vercelignore` drops
+  `requirements*.txt`, `.python-version`, `*.py` and the pipeline/mock/test dirs, none of which the Next app imports (checked).
+- **Verified before pushing:** a clean export of v1 with every `.vercelignore` path removed (16 paths, 0 `.py` left) runs
+  `next build` to exit 0.
