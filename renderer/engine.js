@@ -252,31 +252,36 @@
   }
 
   // Public API: Initialize lesson
-  async function initLesson(title, scenes, lang = 'en') {
+  async function initLesson(title, scenesOrManifest, lang = 'en') {
+    let scenes = scenesOrManifest;
+    let lessonLang = lang || 'en';
+    if (scenesOrManifest && !Array.isArray(scenesOrManifest)) {
+      scenes = scenesOrManifest.scenes;
+      if (scenesOrManifest.lang) lessonLang = scenesOrManifest.lang;
+      if (!title && scenesOrManifest.title) title = scenesOrManifest.title;
+    }
     if (!title || !scenes || scenes.length === 0) {
       throw new Error('[Renderer] Invalid arguments to initLesson');
     }
 
     _title = title;
     _scenes = scenes;
-    _lang = lang || 'en';
+    _lang = lessonLang;
     _totalDuration = scenes[scenes.length - 1].end_sec;
 
-    // Attach canvas if in browser environment
     if (typeof document !== 'undefined') {
       _canvas = document.getElementById('stage');
       if (_canvas) {
         _ctx = _canvas.getContext('2d');
       }
 
-      // Wait for fonts to be ready per FARHAN_BLUEPRINT.md §3
       try {
-        if (typeof document !== 'undefined' && document.fonts) {
-          const font = getTheme().getFont(_lang);
-          await Promise.allSettled([
-            document.fonts.load(`24px ${font}`),
-            document.fonts.load(`700 32px ${font}`)
-          ]);
+        if (document.fonts) {
+          const families = ['"Noto Sans"', '"Noto Sans Devanagari"', '"Noto Sans Kannada"'];
+          await Promise.allSettled(families.flatMap((family) => [
+            document.fonts.load(`400 24px ${family}`),
+            document.fonts.load(`700 32px ${family}`)
+          ]));
           await document.fonts.ready;
         }
       } catch (fontErr) {
@@ -312,6 +317,8 @@
     const sceneIdx = _scenes.indexOf(scene);
     const lt = t - scene.start_sec;
     const dur = scene.duration_sec;
+    const p = dur > 0 ? Math.min(1, Math.max(0, lt / dur)) : 1;
+    const entrance = p <= 0.15 ? theme.easeOutCubic(p / 0.15) : 1;
 
     // Calculate transition fade alpha using 0.35s tail
     const TAIL = 0.35;
@@ -335,7 +342,7 @@
 
     // 4. Draw Scene Template with fade
     _ctx.save();
-    _ctx.globalAlpha = fadeAlpha;
+    _ctx.globalAlpha = fadeAlpha * Math.max(entrance, 0.2);
     templates.draw(_ctx, visual.type, visual.params, lt, dur, theme, _lang);
     _ctx.restore();
 

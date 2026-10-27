@@ -2808,15 +2808,20 @@
     // Universal Dispatcher with Graceful Fallback to Bullets
     // -------------------------------------------------------------------------
     draw(ctx, type, params, lt, dur, theme, lang) {
+      const source = params || {};
+      const deduped = Object.assign({}, source, {
+        labels: Array.isArray(source.labels) ? [...new Set(source.labels)] : source.labels,
+        steps: Array.isArray(source.steps) ? [...new Set(source.steps)] : source.steps
+      });
       if (typeof this[type] === 'function') {
         try {
-          this[type](ctx, params, lt, dur, theme, lang);
+          this[type](ctx, deduped, lt, dur, theme, lang);
           return;
         } catch (err) {
           console.warn(`[Templates] Exception in template "${type}", falling back to bullets:`, err);
         }
       }
-      this.bullets(ctx, params, lt, dur, theme, lang);
+      this.bullets(ctx, deduped, lt, dur, theme, lang);
     }
   };
 
