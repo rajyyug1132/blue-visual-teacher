@@ -24,6 +24,30 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml'
 };
 
+// URL prefixes that map onto a directory outside their own URL path, mirroring the mounts in
+// exporter/app.py so the static dev server behaves like the FastAPI backend:
+//   /renderer/assets/fonts/*  ->  assets/fonts/*   (player.html asks for assets/fonts relative to itself)
+//   /artifacts/*              ->  cache/artifacts/* (tier-2 cached lessons: manifest, wav, mp4)
+const ALIASES = [
+  ['/renderer/assets/fonts/', path.join(REPO_ROOT, 'assets', 'fonts')],
+  ['/assets/fonts/', path.join(REPO_ROOT, 'assets', 'fonts')],
+  ['/artifacts/', path.join(REPO_ROOT, 'cache', 'artifacts')]
+];
+
+function resolveFile(pathname) {
+  for (const [prefix, folder] of ALIASES) {
+    if (pathname.startsWith(prefix)) {
+      return path.join(folder, pathname.slice(prefix.length));
+    }
+  }
+  return path.join(REPO_ROOT, pathname);
+}
+
+function isInside(root, target) {
+  const base = root.endsWith(path.sep) ? root : root + path.sep;
+  return target === root || target.startsWith(base);
+}
+
 function createServer() {
   return http.createServer((req, res) => {
     try {
@@ -43,25 +67,69 @@ function createServer() {
         return res.end();
       }
 
-      const safePath = path.normalize(path.join(REPO_ROOT, pathname));
-      if (!safePath.startsWith(REPO_ROOT)) {
+      const safePath = path.normalize(resolveFile(pathname));
+      if (!isInside(REPO_ROOT, safePath)) {
         res.writeHead(403, { 'Content-Type': 'text/plain' });
         return res.end('403 Forbidden: Access outside repository root is denied.');
       }
 
-      if (fs.existsSync(safePath) && fs.statSync(safePath).isFile()) {
-        const ext = path.extname(safePath).toLowerCase();
-        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-        res.writeHead(200, {
-          'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'no-cache'
-        });
-        return fs.createReadStream(safePath).pipe(res);
-      } else {
+      let stat = null;
+      try {
+        stat = fs.statSync(safePath);
+      } catch (e) {
+        stat = null;
+      }
+
+      if (!stat || !stat.isFile()) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end(`404 Not Found: ${pathname}`);
       }
+
+      const ext = path.extname(safePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      const size = stat.size;
+      const headers = {
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-cache'
+      };
+
+      // Byte ranges are required for <audio>/<video> seeking and for Safari/Chromium to report
+      // a real duration; without them a WAV served over this server shows duration NaN.
+      const range = req.headers.range;
+      if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
+        let start = match && match[1] !== '' ? parseInt(match[1], 10) : null;
+        let end = match && match[2] !== '' ? parseInt(match[2], 10) : null;
+
+        if (!match || (start === null && end === null)) {
+          res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
+          return res.end();
+        }
+        if (start === null) {              // suffix range: last N bytes
+          start = Math.max(0, size - end);
+          end = size - 1;
+        } else if (end === null || end >= size) {
+          end = size - 1;
+        }
+        if (start > end || start >= size) {
+          res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
+          return res.end();
+        }
+
+        res.writeHead(206, {
+          ...headers,
+          'Content-Range': `bytes ${start}-${end}/${size}`,
+          'Content-Length': String(end - start + 1)
+        });
+        if (req.method === 'HEAD') return res.end();
+        return fs.createReadStream(safePath, { start, end }).pipe(res);
+      }
+
+      res.writeHead(200, { ...headers, 'Content-Length': String(size) });
+      if (req.method === 'HEAD') return res.end();
+      return fs.createReadStream(safePath).pipe(res);
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       return res.end(`500 Internal Server Error: ${err.message}`);

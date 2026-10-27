@@ -51,6 +51,9 @@
     setupOfflineBadge();
     loadStoredPreferences();
     setupEventListeners();
+    // Captions start enabled and are drawn from the first frame: reflect that in the button
+    captionsBtn.classList.toggle('active', captionsEnabled);
+    captionsBtn.setAttribute('aria-pressed', String(captionsEnabled));
     await fetchAvailableLanguages();
 
     // If loaded with ?mock=1 or default, automatically warm up with golden manifest
@@ -138,9 +141,12 @@
       }
     });
 
-    // Spacebar to Play/Pause (when not typing in an input)
+    // Spacebar to Play/Pause (only when focus is not on a control that handles Space itself,
+    // otherwise the button's own click and this toggle both fire)
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' && document.activeElement !== topicInput) {
+      const tag = document.activeElement && document.activeElement.tagName;
+      const isControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A';
+      if (e.code === 'Space' && !isControl) {
         e.preventDefault();
         togglePlayPause();
       }
@@ -176,16 +182,19 @@
     captionsBtn.addEventListener('click', () => {
       captionsEnabled = !captionsEnabled;
       captionsBtn.classList.toggle('active', captionsEnabled);
+      captionsBtn.setAttribute('aria-pressed', String(captionsEnabled));
       // Re-render current frame with updated caption flag
       const t = parseFloat(scrubber.value || 0);
       window.renderAtTime(t);
     });
 
     muteBtn.addEventListener('click', () => {
-      if (audio) {
-        audio.muted = !audio.muted;
-        muteBtn.textContent = audio.muted ? '🔇' : '🔊';
-      }
+      if (!audio) return;
+      audio.muted = !audio.muted;
+      // Keep the icon element: writing textContent here would delete the span the markup provides.
+      const icon = document.getElementById('mute-icon');
+      if (icon) icon.textContent = audio.muted ? '🔇' : '🔊';
+      muteBtn.setAttribute('aria-pressed', String(audio.muted));
     });
 
     // Action buttons
@@ -236,6 +245,7 @@
     progressCard.style.display = 'flex';
     resetStepper();
     pausePlayback();
+    setDownloadLink(null);
 
     try {
       const response = await fetch('/api/generate', {
@@ -363,10 +373,28 @@
       // Initialize the in-app player directly using engine.js
       await window.initLesson(currentManifest.title, currentManifest.scenes, currentManifest.lang || currentLang);
 
-      // Setup audio clock if present
-      if (currentManifest.audio && audio) {
-        const audioSrc = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1) + currentManifest.audio;
-        audio.src = audioSrc;
+      // Setup audio clock. A manifest can name a narration file that was never rendered, so confirm
+      // it is really served before wiring it up: otherwise the element 404s and the previous
+      // lesson's audio can linger behind the new one.
+      if (audio) {
+        let audioSrc = status.audio_url || null;
+        if (!audioSrc && currentManifest.audio) {
+          audioSrc = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1) + currentManifest.audio;
+        }
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        if (audioSrc) {
+          try {
+            const head = await fetch(audioSrc, { method: 'HEAD' });
+            if (head.ok) {
+              audio.src = audioSrc;
+              audio.load();
+            }
+          } catch (e) {
+            console.warn('[Playback] Narration audio unavailable, playing silent:', audioSrc);
+          }
+        }
       }
 
       // Configure scrubber
@@ -374,12 +402,8 @@
       scrubber.value = 0;
       updateTimeDisplay(0, window.totalDuration);
 
-      // Enable MP4 download
-      if (status.mp4_url) {
-        downloadMp4Btn.href = status.mp4_url;
-        downloadMp4Btn.style.pointerEvents = 'auto';
-        downloadMp4Btn.style.opacity = '1';
-      }
+      // Enable MP4 download only when the file really exists (an advertised URL can 404)
+      await setDownloadLink(status.mp4_url);
 
       // Render initial frame
       window.renderAtTime(0);
@@ -389,6 +413,26 @@
     } catch (err) {
       console.error('[Playback] Failed to initialize lesson:', err);
       showToast('Generated, but lesson manifest failed to load.');
+    }
+  }
+
+  // Enable/disable the MP4 download button after confirming the file is really served
+  async function setDownloadLink(url) {
+    const apply = (usable) => {
+      downloadMp4Btn.href = usable ? url : '#';
+      downloadMp4Btn.style.pointerEvents = usable ? 'auto' : 'none';
+      downloadMp4Btn.style.opacity = usable ? '1' : '0.6';
+      downloadMp4Btn.title = usable ? 'Download the rendered MP4' : 'No MP4 has been rendered for this lesson yet';
+    };
+    if (!url) {
+      apply(false);
+      return;
+    }
+    try {
+      const head = await fetch(url, { method: 'HEAD' });
+      apply(head.ok);
+    } catch (e) {
+      apply(false);
     }
   }
 

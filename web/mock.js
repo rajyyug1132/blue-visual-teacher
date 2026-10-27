@@ -6,6 +6,24 @@
 
   const mockJobs = new Map();
   let jobCounter = 1000;
+  let originalFetch = root.fetch;
+
+  // Same slug rule as orchestrator.cache.topic_slug, so mock URLs line up with cache/artifacts/<slug>_<lang>/
+  function topicSlug(topic) {
+    return String(topic || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+  }
+
+  // Languages that ship a golden fixture, used when no real cached artifact exists.
+  const FIXTURE_LANGS = ['en', 'hi', 'kn'];
+
+  async function artifactExists(base) {
+    try {
+      const res = await originalFetch.call(root, base + '/manifest.json', { method: 'HEAD' });
+      return res.ok;
+    } catch (e) {
+      return false;
+    }
+  }
 
   const EXAMPLE_TOPICS = [
     "Ohm's Law",
@@ -21,7 +39,7 @@
   ];
 
   function installMockInterceptor() {
-    const originalFetch = root.fetch;
+    originalFetch = root.fetch;
 
     root.fetch = async function (resource, options = {}) {
       const urlStr = typeof resource === 'string' ? resource : resource.url;
@@ -70,11 +88,20 @@
         const jobId = 'mock_job_' + (++jobCounter);
         const startTime = Date.now();
 
+        // A real cached lesson (cache/artifacts/<slug>_<lang>/) is served by the dev server exactly
+        // like the FastAPI backend: instant tier-2 hit with manifest, narration wav and MP4.
+        const topic = (body.topic || "Ohm's Law").trim();
+        const lang = body.lang || 'en';
+        const base = '/artifacts/' + topicSlug(topic) + '_' + lang;
+        const cached = await artifactExists(base);
+
         mockJobs.set(jobId, {
           jobId,
-          topic: body.topic || "Ohm's Law",
-          lang: body.lang || 'en',
-          startTime
+          topic,
+          lang,
+          startTime,
+          base,
+          cached
         });
 
         return new Response(JSON.stringify({ job_id: jobId }), {
@@ -100,7 +127,15 @@
         let pct = 15;
         const stage_times = {};
 
-        if (elapsed < 1.2) {
+        if (job.cached && elapsed >= 0.6) {
+          // Tier-2 cache hit: nothing is generated, the artifact is served as-is.
+          stage = 'done';
+          pct = 100;
+          stage_times.plan = 0.01;
+        } else if (job.cached) {
+          stage = 'plan';
+          pct = 55;
+        } else if (elapsed < 1.2) {
           stage = 'plan';
           pct = Math.round((elapsed / 1.2) * 20);
         } else if (elapsed < 2.5) {
@@ -135,6 +170,9 @@
           stage_times.encode = 0.78;
         }
 
+        const done = stage === 'done';
+        const fixtureLang = FIXTURE_LANGS.includes(job.lang) ? job.lang : 'en';
+
         const statusResponse = {
           job_id: jobId,
           topic: job.topic,
@@ -150,8 +188,12 @@
             device: 'cuda'
           },
           error: null,
-          manifest_url: stage === 'done' ? '/fixtures/golden_manifest_en.json' : null,
-          mp4_url: stage === 'done' ? '/artifacts/ohms_law_en/lesson.mp4' : null
+          cached: !!job.cached,
+          // Cached lessons carry their own manifest + narration wav + MP4 next to each other.
+          manifest_url: done ? (job.cached ? job.base + '/manifest.json' : `/fixtures/golden_manifest_${fixtureLang}.json`) : null,
+          audio_url: done && job.cached ? job.base + '/lesson_audio.wav' : null,
+          // Only advertise a download when the MP4 really exists, otherwise the button 404s.
+          mp4_url: done && job.cached ? job.base + '/lesson.mp4' : null
         };
 
         return new Response(JSON.stringify(statusResponse), {
