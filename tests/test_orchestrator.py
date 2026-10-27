@@ -646,6 +646,15 @@ def test_a_short_real_lesson_is_kept_but_a_far_too_short_one_is_not():
         LessonPlan.model_validate({"title": "Voltage and current", "target_sec": 90, "scenes": _scenes([14] * 6)})
 
 
+def test_programming_topics_must_get_a_code_walkthrough():
+    from orchestrator.prompts import is_programming_topic, request
+
+    assert "MUST use visual type \"code_walkthrough\"" in request("Python for loops", "none")
+    assert "code_walkthrough" not in request("Ohm's Law", "checked").splitlines()[-1]
+    assert [is_programming_topic(t) for t in ("Recursion", "Binary Search", "String theory", "Quadratic function")] \
+        == [True, True, False, False]
+
+
 def test_check_result_written_in_words_is_read_as_a_number():
     from orchestrator import mathcheck
 

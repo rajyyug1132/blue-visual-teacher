@@ -1,5 +1,6 @@
 # orchestrator/prompts.py
 import json
+import re
 
 from orchestrator.schema import WORDS_MAX, WORDS_MIN, scenes_for, word_band
 
@@ -46,6 +47,16 @@ LEVEL_NOTES = {
 }
 
 
+# Programming topics get a code_walkthrough in scene 4 (rule 7). Kept narrow on purpose: "string theory" or a
+# maths "function" must not turn into code. The 3B model ignores "may", so the request says "MUST".
+PROGRAMMING_TOPIC = re.compile(r"\b(python|java|javascript|coding|code|programs?|programming|loops?|recursion|recursive|"
+                               r"algorithms?|sorting|bubble sort|binary search|linked lists?|arrays?)\b", re.I)
+
+
+def is_programming_topic(concept: str) -> bool:
+    return bool(PROGRAMMING_TOPIC.search(concept))
+
+
 def request(concept: str, policy: str, level: str = "beginner", target_sec: int = 60) -> str:
     """The user turn for one concept; few-shots use the same shape so the policy line is learned by example.
 
@@ -59,7 +70,12 @@ def request(concept: str, policy: str, level: str = "beginner", target_sec: int 
             f"Number policy: {policy}\n"
             f"Learner level: {level} -- {LEVEL_NOTES.get(level, LEVEL_NOTES['beginner'])}.\n"
             f"Lesson length: {target_sec} seconds -- write exactly {scenes} scenes, {lo}-{hi} words in total "
-            f"({per_lo}-{per_hi} words per scene).")
+            f"({per_lo}-{per_hi} words per scene)."
+            + ("\nProgramming topic: scene 4 MUST use visual type \"code_walkthrough\" (rule 7), "
+               "params.code is a complete 2-6 line program (the loop or function AND its body), and params.trace has "
+               "one step per iteration (3-4 steps): each step's line is the line running, and its vars list every "
+               "variable once with its value at that moment."
+               if is_programming_topic(concept) else ""))
 
 BINARY_SEARCH_QUALITATIVE = {  # few-shot for policy "none": an algorithm explained with no quantities
     "title": "Binary Search: Halving the Search Space",
