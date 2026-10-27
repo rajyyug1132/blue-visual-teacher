@@ -26,6 +26,7 @@ from orchestrator.schema import LessonPlan
 from orchestrator.fallbacks import build_safe_fallback_lesson
 from localization.translator import (
     OfflineIndicTranslator,
+    TranslationUnavailable,
     contains_devanagari,
     contains_kannada,
     sanitize_kannada_output,
@@ -130,6 +131,8 @@ def test_l2_batched_translation_and_formula_preservation():
 def test_l3_script_purity_across_20_stress_lessons():
     """L3: Kannada has 0 Devanagari characters across 20 stress lessons; Hindi has Devanagari."""
     translator = OfflineIndicTranslator()
+    if translator.model is None or translator.tokenizer is None or translator.ip is None:
+        pytest.skip("IndicTrans2 not loaded")
     assert len(STRESS_TOPICS) == 20
 
     for idx, topic in enumerate(STRESS_TOPICS, 1):
@@ -285,3 +288,18 @@ def test_l8_font_bundling():
         assert license_path.exists(), f"Missing licence file: {license_path}"
         content = license_path.read_text(encoding="utf-8")
         assert "SIL OPEN FONT LICENSE" in content, "OFL.txt must contain SIL Open Font License text"
+
+
+def test_translation_unavailable_raised_when_model_none():
+    """Verify TranslationUnavailable is raised for 'kn' and 'hi' when model is None and no backend provided."""
+    translator = OfflineIndicTranslator(ckpt_dir="non_existent_ckpt_dir_to_force_none")
+    # Explicitly ensure model components are None
+    translator.model = None
+    translator.tokenizer = None
+    translator.ip = None
+
+    with pytest.raises(TranslationUnavailable):
+        translator.translate_texts(["Hello world"], "kn")
+
+    with pytest.raises(TranslationUnavailable):
+        translator.translate_texts(["Hello world"], "hi")

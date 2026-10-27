@@ -45,6 +45,11 @@ LANG_CODE_MAP = {
 }
 
 
+class TranslationUnavailable(RuntimeError):
+    """Raised when IndicTrans2 weights or toolkit are missing from offline environment."""
+    pass
+
+
 def contains_devanagari(text: str) -> bool:
     """Check if string contains any Devanagari character (U+0900 to U+097F)."""
     return bool(re.search(r"[\u0900-\u097F]", text))
@@ -372,12 +377,9 @@ class OfflineIndicTranslator:
             return self.backend_fn(texts, tgt_lang_short)
 
         if self.model is None or self.tokenizer is None or self.ip is None:
-            # Safe offline fallback when model is not loaded
-            if tgt_lang_short in ("hi", "hin_Deva"):
-                return [f"यह विवरण {t} के मुख्य सिद्धांतों और व्यावहारिक उदाहरणों की व्याख्या करता है।" if len(t.split()) > 3 else f"हिंदी {t}" for t in texts]
-            elif tgt_lang_short in ("kn", "kan_Knda"):
-                return [f"ಈ ವಿವರಣೆಯು {t} ವಿಷಯದ ಮೂಲ ತತ್ವಗಳನ್ನು ಮತ್ತು ಪ್ರಮುಖ ಅಂಶಗಳನ್ನು ಸ್ಪಷ್ಟವಾಗಿ ತಿಳಿಸುತ್ತದೆ." if len(t.split()) > 3 else f"ಕನ್ನಡ {t}" for t in texts]
-            return list(texts)
+            raise TranslationUnavailable(
+                f"Translation to '{tgt_lang_short}' unavailable: IndicTrans2 model/tokenizer weights are missing from the offline HuggingFace cache, or IndicTransToolkit is not installed."
+            )
 
         tgt_lang = LANG_CODE_MAP.get(tgt_lang_short, tgt_lang_short)
         batch = self.ip.preprocess_batch(texts, src_lang="eng_Latn", tgt_lang=tgt_lang)
