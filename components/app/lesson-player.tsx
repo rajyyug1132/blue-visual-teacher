@@ -29,10 +29,12 @@ export function LessonPlayer({
   src,
   title,
   manifestUrl,
+  initialTime = 0,
 }: {
   src: string
   title: string
   manifestUrl?: string | null
+  initialTime?: number
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [failed, setFailed] = useState(false)
@@ -149,7 +151,12 @@ export function LessonPlayer({
               if (videoRef.current) setCurrentTime(videoRef.current.currentTime)
             }}
             onLoadedMetadata={() => {
-              if (videoRef.current) setDuration(videoRef.current.duration)
+              if (videoRef.current) {
+                setDuration(videoRef.current.duration)
+                if (initialTime > 0 && initialTime < videoRef.current.duration) {
+                  videoRef.current.currentTime = initialTime
+                }
+              }
             }}
             onError={() => setFailed(true)}
             className="size-full bg-black"
