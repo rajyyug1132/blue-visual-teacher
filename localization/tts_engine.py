@@ -499,10 +499,10 @@ class OfflineTTSEngine:
     def __init__(
         self,
         voice_en: str = "af_bella",
-        speed_en: float = 0.95,
+        speed_en: float = 1.0,
         voice_hi: str = "hf_alpha",
-        speed_hi: float = 0.95,
-        mms_speaking_rate: float = 0.95,
+        speed_hi: float = 1.0,
+        mms_speaking_rate: float = 1.0,
     ):
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
         self.voice_en = voice_en
