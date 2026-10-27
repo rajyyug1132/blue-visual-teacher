@@ -333,3 +333,41 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
   - `pytest tests/test_ui.py tests/test_e2e_offline.py -q`: 11 passed, 3 skipped (1m08s)
   - `npm test`: 34/34 renderer tests passed
   - `npm run test:units`: 12 + 5 passed
+
+### Pass 7 (Claude Code keeper) · 2026-10-28 04:15-04:55
+
+- **Decisions (user):** feature freeze moved from 05:00 to 06:00. Antigravity's unfinished telemetry / quiz / replan work
+  (12 files, never gated, includes CONTRACT changes to schema.py without a CC) parked on `antigravity/wip-features`
+  @ `2159e4b`, not merged.
+- **Root causes of "visuals / length don't match", all fixed on v1:**
+  - `55f0707` planner: real short plans were rejected for being under the 90 s budget and replaced by the generic
+    fallback ("traffic rules at a busy junction"). Validator floor now 60% of the request (`schema.accept_band`, CC-2
+    tolerance amendment); mathcheck reads spelled-out answers ("eight").
+  - `7485b97` + `c40369c` (PR #7 merged) renderer: templates drew 40 invented strings (BUS-L/BUS-R/NEXUS, "Component
+    function and subsystem details.", English chrome in HI/KN). Every template now draws only words from the scene's
+    labels/steps/code. Also real OFL Noto fonts (Nirmala/Segoe blobs gone from the tree; still in history) and the
+    code_walkthrough + quiz templates.
+  - `4c39cdd` pipeline: per-scene `params.topic_en` so HI/KN titles get their topic illustration (keyword matching ran
+    on translated text and never matched).
+  - `1ce6c0c` API: the video cache ignored level/length, so a 90 s request returned the cached 60 s video.
+  - `d4c46e1` code_walkthrough schema (CC-2 part 1) + `98f17a7` planner: programming topics MUST get a code_walkthrough
+    scene (live: "Python for loops" -> 3-line loop, 6-step trace).
+- **Verified live:** Water Cycle HI @ 90 s = 77.2 s, 6 scenes, no fallback, water-cycle illustration, no filler.
+  Photosynthesis HI title shows the plant cell. All 9 public demo lessons + every cached lesson re-rendered with the new
+  renderer (audio untouched); production promoted and serving the new videos.
+- **Mode 1 (instant preview):** Antigravity pushed `6a4ddab` (API publishes manifest/audio at render) and `6588795`
+  (player embed mode) DIRECTLY to v1 instead of its branch. Gated after the fact: tsc 0, build ok, pytest 123 passed /
+  3 skipped, npm test 36, units 5. UI half pending.
+- **Docs:** `8cb149c` run_demo points to the product UI (:3000) not :8000; README known limits + demo hardware.
+  `0aa9073` Noto Sans Telugu in assets/fonts (FastAPI mount 404'd it).
+- **Known gaps (not fixed):** labeled_diagram is still three abstract rings, not a labelled cycle; illustration caption
+  pills render empty; titles render as "[ x . ]"; 90 s requests land around 77 s.
+
+- CLAUDE (keeper) -> AYUSH · exporter/app.py, README.md, run_demo.ps1/.sh · keeper edits during the finish pass at the
+  user's request: cache lookup now passes level/target_sec (+ regression test), run_demo prints the :3000 UI, README
+  limits/hardware · review after the freeze · blocking? n
+- CLAUDE (keeper) -> FARHAN · renderer/templates.js, tests/test_renderer.js · templates.draw() now drops any drawn string
+  whose words are not in the lesson; 20 test assertions that used English captions as signals now check
+  lastIllustration or the step text instead; BUS/NEXUS boxes removed · review after the freeze · blocking? n
+- CLAUDE (keeper) -> TARUN · assets/fonts/NotoSansTelugu-Regular.ttf · copied from renderer/assets/fonts · blocking? n
+- CLAUDE (keeper) -> ANTIGRAVITY · v1 · push only your branch (antigravity/mode1); the keeper merges · blocking? n
