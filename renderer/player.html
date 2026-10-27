@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280, height=720, initial-scale=1.0">
+  <title>Blue Visual Teacher Player</title>
+  <style>
+    @font-face {
+      font-family: 'Noto Sans';
+      font-style: normal;
+      font-weight: 400 700;
+      src: local('Noto Sans'), local('Segoe UI'), local('Roboto');
+    }
+    @font-face {
+      font-family: 'Noto Sans Devanagari';
+      font-style: normal;
+      font-weight: 400 700;
+      src: local('Noto Sans Devanagari'), local('Nirmala UI');
+    }
+    @font-face {
+      font-family: 'Noto Sans Kannada';
+      font-style: normal;
+      font-weight: 400 700;
+      src: local('Noto Sans Kannada'), local('Nirmala UI');
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Noto Sans', sans-serif;
+    }
+
+    #stage-container {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+    }
+
+    canvas#stage {
+      display: block;
+      width: 1280px;
+      height: 720px;
+      background-color: #0B1530;
+    }
+
+    /* Debug Scrubber (only visible with ?debug=1) */
+    #debug-controls {
+      display: none;
+      position: absolute;
+      bottom: 8px;
+      left: 64px;
+      right: 64px;
+      z-index: 100;
+      background: rgba(11, 21, 48, 0.92);
+      border: 1px solid #233876;
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: #F4F7FF;
+      font-family: monospace;
+      font-size: 14px;
+      align-items: center;
+      gap: 16px;
+    }
+
+    #debug-scrubber {
+      flex: 1;
+      accent-color: #3DA5FF;
+      cursor: pointer;
+    }
+
+    #debug-time {
+      min-width: 80px;
+      text-align: right;
+      color: #3DA5FF;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage-container">
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <div id="debug-controls">
+      <span>DEBUG SCRUBBER</span>
+      <input type="range" id="debug-scrubber" min="0" max="100" step="0.05" value="0">
+      <span id="debug-time">0.00s</span>
+    </div>
+  </div>
+
+  <audio id="audio-player" style="display: none;"></audio>
+
+  <script src="theme.js"></script>
+  <script src="templates.js"></script>
+  <script src="engine.js"></script>
+
+  <script>
+    (async function() {
+      const params = new URLSearchParams(window.location.search);
+      const isDebug = params.get('debug') === '1';
+      const manifestUrl = params.get('manifest');
+
+      if (isDebug) {
+        const controls = document.getElementById('debug-controls');
+        if (controls) controls.style.display = 'flex';
+      }
+
+      // Auto-load manifest if provided in query string (e.g. ?manifest=../fixtures/golden_manifest_en.json)
+      if (manifestUrl) {
+        try {
+          const res = await fetch(manifestUrl);
+          const manifest = await res.json();
+          await window.initLesson(manifest.title, manifest.scenes, manifest.lang || 'en');
+          
+          const scrubber = document.getElementById('debug-scrubber');
+          const timeDisplay = document.getElementById('debug-time');
+          if (scrubber) {
+            scrubber.max = window.totalDuration;
+            scrubber.addEventListener('input', (e) => {
+              const t = parseFloat(e.target.value);
+              window.renderAtTime(t);
+              if (timeDisplay) timeDisplay.textContent = t.toFixed(2) + 's';
+            });
+          }
+
+          // Initial render at t = 0
+          window.renderAtTime(0);
+        } catch (err) {
+          console.error('[Player] Failed to load manifest:', err);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
