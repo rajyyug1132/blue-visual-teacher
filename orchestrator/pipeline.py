@@ -9,6 +9,7 @@
 # a hit returns the directory immediately, before any model is touched.
 import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -102,6 +103,12 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, tts=None, transl
     wav = out / "lesson_audio.wav"
     tts = tts or warmup(planner=False)["tts"]
     timing = stage("tts", lambda: tts.synthesize_all_scenes(localized.scenes, lang, str(wav)))
+    if timing and timing[-1]["end_sec"] > DURATION_MAX_SEC:
+        localized = localized.model_copy(deep=True)  # never edit the cached English plan
+        start = time.perf_counter()
+        timing, trims = fit_duration(localized, timing, tts, lang, wav)
+        times["duration_fit"] = round(time.perf_counter() - start, 3)
+        telemetry = {**telemetry, "duration_trims": trims}
     total = duration_gate(timing)
 
     manifest = {"title": localized.title, "lang": lang, "total_sec": total, "audio": wav.name,
@@ -120,6 +127,52 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, tts=None, transl
                                                    default=str), encoding="utf-8")
     report("done", 100)
     return out
+
+
+SENTENCE_END = re.compile(r"(?<=[.!?।|])\s+")  # includes the Devanagari danda
+MAX_FIT_PASSES = 4
+MIN_SCENES = 4
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in SENTENCE_END.split(text.strip()) if s]
+
+
+def fit_duration(localized, timing: list[dict], tts, lang: str, wav: Path) -> tuple[list[dict], list[str]]:
+    """Lesson audio over 90 s (Kannada runs ~1.8x the English): shorten instead of rejecting (YYUG_BLUEPRINT 5).
+
+    Each pass makes one cut, then re-synthesizes and re-measures, in this order: drop the last sentence of the
+    longest ordinary scene with more than one sentence; else cut the recap scene (keeping MIN_SCENES); else, as a
+    last resort, trim the worked example (the scene with a check, whose last sentence speaks the answer).
+    Captions use the same trimmed narration, so audio and captions stay in step.
+    """
+    trims = []
+    for _ in range(MAX_FIT_PASSES + 1):
+        if timing[-1]["end_sec"] <= DURATION_MAX_SEC:
+            break
+        order = sorted(range(len(timing)), key=lambda i: -timing[i]["duration_sec"])
+        protected = {i for i, s in enumerate(localized.scenes) if getattr(s, "check", None)}
+        multi = [i for i in order if len(_sentences(localized.scenes[i].narration)) > 1]
+        plain = [i for i in multi if i not in protected]
+        if len(trims) >= MAX_FIT_PASSES:
+            plain = multi = []
+        # Order: trim ordinary scenes -> cut the recap -> trim the worked example (its answer) only as a last resort.
+        if plain:
+            pick = plain[0]
+        elif len(localized.scenes) > MIN_SCENES:
+            dropped = localized.scenes.pop()  # the recap
+            trims.append(f"scene {dropped.id}: cut (recap)")
+            timing = tts.synthesize_all_scenes(localized.scenes, lang, str(wav))
+            continue
+        elif multi:
+            pick = multi[0]
+        else:
+            break
+        scene = localized.scenes[pick]
+        scene.narration = " ".join(_sentences(scene.narration)[:-1])
+        trims.append(f"scene {scene.id}: dropped last sentence")
+        timing = tts.synthesize_all_scenes(localized.scenes, lang, str(wav))
+    return timing, trims
 
 
 class DurationGateError(RuntimeError):

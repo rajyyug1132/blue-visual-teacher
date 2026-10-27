@@ -560,3 +560,50 @@ def test_answer_shown_in_steps_is_fixed_even_when_check_result_differs(fake):
     assert s.visual.params.labels == ["P = 100,000", "r = 5%", "n = 4", "t = 5", "A = 128203.72"]
     assert s.visual.params.steps == ["100,000 × (1 + 0.05/4)^(4×5) = 128203.72"]
     assert s.check.result == "128203.72"
+
+
+# --- duration fit: over-long (usually Kannada) audio is trimmed, not rejected -----------------------------------
+
+class SlowTTS:
+    """1 second per word + 0.35 s tail: long enough that the Ohm's lesson (123 words) runs ~125 s."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def synthesize_all_scenes(self, scenes, lang, out_wav_path):
+        self.calls += 1
+        timing, cursor = [], 0.0
+        for s in scenes:
+            dur = len(s.narration.split()) + 0.35
+            timing.append({"id": s.id, "start_sec": cursor, "end_sec": cursor + dur, "duration_sec": dur,
+                           "narration": s.narration, "visual": s.visual.model_dump()})
+            cursor += dur
+        return timing
+
+
+def test_fit_duration_trims_ordinary_scenes_then_recap_and_keeps_the_answer(tmp_path):
+    from orchestrator.pipeline import DURATION_MAX_SEC, fit_duration
+
+    plan = LessonPlan.model_validate_json(GOOD_JSON)  # scene 4 carries the check and the spoken answer
+    tts = SlowTTS()
+    timing, trims = fit_duration(plan, tts.synthesize_all_scenes(plan.scenes, "kn", None), tts, "kn", tmp_path)
+    assert timing[-1]["end_sec"] <= DURATION_MAX_SEC, (timing[-1]["end_sec"], trims)
+    assert trims == ["scene 2: dropped last sentence", "scene 3: dropped last sentence", "scene 5: cut (recap)"]
+    assert plan.scenes[3].narration.endswith("gives five amperes of current.")  # the answer survived
+    assert len(plan.scenes) == 4 and [t["narration"] for t in timing] == [s.narration for s in plan.scenes]
+
+
+def test_generate_lesson_fits_long_audio_and_leaves_the_cached_plan_alone(tmp_path, monkeypatch):
+    from orchestrator import pipeline
+
+    monkeypatch.setattr(pipeline, "ARTIFACTS", tmp_path)
+    plan = LessonPlan.model_validate_json(GOOD_JSON)
+    exported = []
+    out = pipeline.generate_lesson("Ohm's Law", "kn", tts=SlowTTS(), translator=type("T", (), {
+        "localize_lesson": lambda self, p, lang: p})(), plan_fn=lambda topic: (plan, {}),
+        export=lambda d, lang, cb: exported.append(d))
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    tel = json.loads((out / "telemetry.json").read_text(encoding="utf-8"))
+    assert manifest["total_sec"] <= 90 and len(manifest["scenes"]) == 4 and exported == [out]
+    assert len(tel["planner"]["duration_trims"]) == 3 and "duration_fit" in tel["stage_sec"]
+    assert len(plan.scenes) == 5  # the shared English plan was not modified

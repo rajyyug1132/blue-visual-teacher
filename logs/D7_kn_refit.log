@@ -1,0 +1,10 @@
+PASS Photosynthesis               kn   82.5s gen 81.8s 
+PASS Water Cycle                  kn  86.58s gen 71.2s 
+PASS Mughal Empire                kn  80.55s gen 66.4s 
+kn: P50 71.2s P90 71.2s
+harness: 3/3 pass · fallback topics 0/3 · report C:\PROJECT\reports\stress_20261027_154848.csv
+photosynthesis ['scene 5: dropped last sentence', 'scene 4: dropped last sentence']
+water-cycle ['scene 4: dropped last sentence']
+mughal-empire ['scene 4: dropped last sentence']
+
+[exited with code 0]

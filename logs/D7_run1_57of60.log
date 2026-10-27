@@ -1,0 +1,138 @@
+D7 export 20 topics x en/hi/kn :: FAIL :: orchestrator.pipeline.DurationGateError: lesson audio is 93.17s, outside 30-90s (5 scenes) (2389.3s)
+
+..sss                                                                    [100%]
+============================== warnings summary ===============================
+..\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\torch\jit\_script.py:1491
+  C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\exporter\app.py:78: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 3 skipped, 164 deselected, 4 warnings in 30.53s
+
+WARNING: Defaulting repo_id to hexgrad/Kokoro-82M. Pass repo_id='hexgrad/Kokoro-82M' to suppress this warning.
+WARNING: Defaulting repo_id to hexgrad/Kokoro-82M. Pass repo_id='hexgrad/Kokoro-82M' to suppress this warning.
+PASS Photosynthesis               en  52.05s gen 40.8s 
+PASS Photosynthesis               hi  72.28s gen 48.4s 
+FAIL Photosynthesis               kn      -s gen -s DurationGateError: lesson audio is 99.25s, outside 30-90s (5 scenes)
+PASS Newton's Third Law           en  39.48s gen 57.2s 
+PASS Newton's Third Law           hi   54.6s gen 31.7s 
+PASS Newton's Third Law           kn  68.73s gen 35.6s 
+PASS Binary Search                en  46.83s gen 27.9s 
+PASS Binary Search                hi  63.17s gen 38.4s 
+PASS Binary Search                kn  83.14s gen 44.6s 
+PASS Supply and Demand            en  43.73s gen 35.0s 
+PASS Supply and Demand            hi  66.78s gen 39.6s 
+PASS Supply and Demand            kn  79.16s gen 40.3s 
+PASS DNA Replication              en  51.17s gen 29.8s 
+PASS DNA Replication              hi   71.0s gen 38.6s 
+PASS DNA Replication              kn  84.23s gen 41.0s 
+PASS Pythagoras Theorem           en  45.08s gen 81.8s 
+PASS Pythagoras Theorem           hi   54.6s gen 31.9s 
+PASS Pythagoras Theorem           kn  75.46s gen 37.4s 
+PASS Water Cycle                  en  55.45s gen 74.1s 
+PASS Water Cycle                  hi  64.75s gen 44.4s 
+FAIL Water Cycle                  kn      -s gen -s DurationGateError: lesson audio is 92.82s, outside 30-90s (5 scenes)
+PASS Compound Interest            en  45.35s gen 37.5s 
+PASS Compound Interest            hi  58.02s gen 35.1s 
+PASS Compound Interest            kn  73.49s gen 42.5s 
+PASS Acid-Base Titration          en  41.48s gen 64.9s 
+PASS Acid-Base Titration          hi  58.48s gen 34.4s 
+PASS Acid-Base Titration          kn  68.41s gen 34.9s 
+PASS TCP Three-Way Handshake      en  48.25s gen 27.6s 
+PASS TCP Three-Way Handshake      hi  65.75s gen 40.3s 
+PASS TCP Three-Way Handshake      kn   76.9s gen 41.5s 
+PASS Indian Independence Movement en  46.02s gen 25.4s 
+PASS Indian Independence Movement hi  61.92s gen 32.5s 
+PASS Indian Independence Movement kn  78.81s gen 37.6s 
+PASS Monsoon                      en  40.12s gen 23.0s 
+PASS Monsoon                      hi  54.62s gen 28.2s 
+PASS Monsoon                      kn  64.53s gen 28.6s 
+PASS GST                          en  44.92s gen 60.0s 
+PASS GST                          hi  59.65s gen 31.0s 
+PASS GST                          kn   79.4s gen 36.5s 
+PASS Mughal Empire                en  51.38s gen 28.8s 
+PASS Mughal Empire                hi  67.08s gen 39.8s 
+FAIL Mughal Empire                kn      -s gen -s DurationGateError: lesson audio is 93.17s, outside 30-90s (5 scenes)
+PASS Democracy                    en  39.98s gen 60.0s 
+PASS Democracy                    hi  56.35s gen 28.7s 
+PASS Democracy                    kn  77.83s gen 35.4s 
+PASS Green Revolution             en   46.3s gen 25.5s 
+PASS Green Revolution             hi  57.23s gen 33.7s 
+PASS Green Revolution             kn  78.42s gen 41.0s 
+PASS Mauryan Empire               en  51.67s gen 89.6s 
+PASS Mauryan Empire               hi  58.08s gen 38.3s 
+PASS Mauryan Empire               kn  73.78s gen 43.1s 
+PASS Fundamental Rights           en  46.35s gen 26.4s 
+PASS Fundamental Rights           hi   63.0s gen 39.2s 
+PASS Fundamental Rights           kn  75.62s gen 39.4s 
+PASS Climate Change               en   38.6s gen 20.6s 
+PASS Climate Change               hi  58.23s gen 28.3s 
+PASS Climate Change               kn  74.77s gen 32.0s 
+PASS Panchayati Raj               en   47.9s gen 25.4s 
+PASS Panchayati Raj               hi  62.55s gen 34.5s 
+PASS Panchayati Raj               kn  81.56s gen 42.6s 
+en: P50 32.4s P90 74.1s
+hi: P50 34.8s P90 40.3s
+kn: P50 39.4s P90 42.6s
+harness: 57/60 pass · fallback topics 1/20 · report C:\PROJECT\reports\stress_20261027_154019.csv
+C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\torch\nn\modules\rnn.py:1011: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  super().__init__("LSTM", *args, **kwargs)
+C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\torch\nn\utils\weight_norm.py:145: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+C:\Users\karti\AppData\Local\Temp\claude\C--PROJECT\ac269e5e-324c-4fcd-8dcb-5ff3de78f28b\scratchpad\rt\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+Traceback (most recent call last):
+  File "C:\PROJECT\exporter\test_harness.py", line 50, in check_pair
+    out = pipeline.generate_lesson(topic, lang)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 105, in generate_lesson
+    total = duration_gate(timing)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 139, in duration_gate
+    raise DurationGateError(
+orchestrator.pipeline.DurationGateError: lesson audio is 99.25s, outside 30-90s (5 scenes)
+Traceback (most recent call last):
+  File "C:\PROJECT\exporter\test_harness.py", line 50, in check_pair
+    out = pipeline.generate_lesson(topic, lang)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 105, in generate_lesson
+    total = duration_gate(timing)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 139, in duration_gate
+    raise DurationGateError(
+orchestrator.pipeline.DurationGateError: lesson audio is 92.82s, outside 30-90s (5 scenes)
+Traceback (most recent call last):
+  File "C:\PROJECT\exporter\test_harness.py", line 50, in check_pair
+    out = pipeline.generate_lesson(topic, lang)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 105, in generate_lesson
+    total = duration_gate(timing)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\PROJECT\orchestrator\pipeline.py", line 139, in duration_gate
+    raise DurationGateError(
+orchestrator.pipeline.DurationGateError: lesson audio is 93.17s, outside 30-90s (5 scenes)
+
