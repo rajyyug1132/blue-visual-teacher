@@ -42,9 +42,15 @@
   let activeJobId = null;
   let pollTimer = null;
   let lastTopic = "Ohm's Law";
+  let activeTopic = "Ohm's Law";
+  let activeRequestId = 0;
 
   // Stage mapping
   const STAGE_ORDER = ['plan', 'translate', 'tts', 'render', 'encode'];
+
+  function topicSlug(topic) {
+    return String(topic || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+  }
 
   // 1. Initialize
   async function init() {
@@ -141,8 +147,7 @@
       }
     });
 
-    // Spacebar to Play/Pause (only when focus is not on a control that handles Space itself,
-    // otherwise the button's own click and this toggle both fire)
+    // Spacebar to Play/Pause
     window.addEventListener('keydown', (e) => {
       const tag = document.activeElement && document.activeElement.tagName;
       const isControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A';
@@ -159,8 +164,8 @@
         const selectedLang = chip.getAttribute('data-lang');
         if (selectedLang !== currentLang) {
           setLanguage(selectedLang);
-          if (currentManifest && topicInput.value.trim()) {
-            handleGenerate(); // re-generate with cached plan
+          if (topicInput.value.trim()) {
+            handleGenerate();
           }
         }
       }
@@ -191,7 +196,6 @@
     muteBtn.addEventListener('click', () => {
       if (!audio) return;
       audio.muted = !audio.muted;
-      // Keep the icon element: writing textContent here would delete the span the markup provides.
       const icon = document.getElementById('mute-icon');
       if (icon) icon.textContent = audio.muted ? '🔇' : '🔊';
       muteBtn.setAttribute('aria-pressed', String(audio.muted));
@@ -231,21 +235,92 @@
     return true;
   }
 
+  // Clear canvas with a clear, professional generation placeholder
+  function drawGenerationState(topic) {
+    const canvas = document.getElementById('stage');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.save();
+    ctx.fillStyle = '#07112B';
+    ctx.fillRect(0, 0, 1280, 720);
+
+    // Subtle background grid
+    ctx.strokeStyle = 'rgba(61, 165, 255, 0.08)';
+    ctx.lineWidth = 1;
+    for (let x = 64; x < 1216; x += 64) {
+      ctx.beginPath();
+      ctx.moveTo(x, 64);
+      ctx.lineTo(x, 656);
+      ctx.stroke();
+    }
+    for (let y = 64; y < 656; y += 64) {
+      ctx.beginPath();
+      ctx.moveTo(64, y);
+      ctx.lineTo(1216, y);
+      ctx.stroke();
+    }
+
+    // Status card
+    ctx.fillStyle = '#0E1E45';
+    ctx.strokeStyle = '#3DA5FF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(320, 260, 640, 200, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#3DA5FF';
+    ctx.font = '700 26px "Noto Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Planning Lesson: ${topic}`, 640, 330);
+
+    ctx.fillStyle = '#F4F7FB';
+    ctx.font = '500 16px "Noto Sans", sans-serif';
+    ctx.fillText('Synthesizing pedagogical structure & preparing visual scenes...', 640, 380);
+
+    ctx.fillStyle = '#8FA3C7';
+    ctx.font = '400 13px "Noto Sans", sans-serif';
+    ctx.fillText('Previous lesson cleared • Strict topic integrity enforced', 640, 420);
+
+    ctx.restore();
+  }
+
   async function handleGenerate() {
     const topic = topicInput.value.trim();
     if (!validateInput(topic)) return;
 
     hideToast();
     lastTopic = topic;
+    activeTopic = topic;
     savePreferences(topic, currentLang);
 
-    // Reset UI state
+    activeRequestId++;
+    const reqId = activeRequestId;
+
+    // Reset and invalidate previous lesson state immediately
     isGenerating = true;
     generateBtn.disabled = true;
+    playPauseBtn.disabled = true;
     progressCard.style.display = 'flex';
     resetStepper();
     pausePlayback();
     setDownloadLink(null);
+
+    // Invalidate existing manifest and audio so old lesson cannot linger
+    currentManifest = null;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    }
+    scrubber.value = 0;
+    scrubber.max = 0;
+    updateTimeDisplay(0, 0);
+
+    // Render clear loading canvas
+    drawGenerationState(topic);
 
     try {
       const response = await fetch('/api/generate', {
@@ -260,21 +335,27 @@
 
       const data = await response.json();
       activeJobId = data.job_id;
-      startPolling(activeJobId);
+      startPolling(activeJobId, reqId);
     } catch (err) {
       console.error('[Generation] Request failed:', err);
       showToast('Server not reachable, is run_demo running? You can also test with ?mock=1.');
       isGenerating = false;
       generateBtn.disabled = false;
+      playPauseBtn.disabled = false;
       progressCard.style.display = 'none';
     }
   }
 
   // 4. Polling Job Status every 400ms
-  function startPolling(jobId) {
+  function startPolling(jobId, reqId) {
     if (pollTimer) clearInterval(pollTimer);
 
     pollTimer = setInterval(async () => {
+      if (reqId !== activeRequestId) {
+        clearInterval(pollTimer);
+        return;
+      }
+
       try {
         const res = await fetch(`/api/status/${jobId}`);
         if (!res.ok) {
@@ -285,7 +366,7 @@
 
         if (status.stage === 'done') {
           clearInterval(pollTimer);
-          await finishGeneration(status);
+          await finishGeneration(status, reqId);
         } else if (status.stage === 'error' || status.error) {
           clearInterval(pollTimer);
           throw new Error(status.error || 'Generation encountered an error');
@@ -296,6 +377,14 @@
         showToast('Generation halted: ' + (err.message || 'Server connection lost'));
         isGenerating = false;
         generateBtn.disabled = false;
+        playPauseBtn.disabled = false;
+        // Highlight active step as error
+        STAGE_ORDER.forEach(s => {
+          const el = document.getElementById(`step-${s}`);
+          if (el && (el.classList.contains('active') || el.className === 'step-item')) {
+            el.className = 'step-item error';
+          }
+        });
       }
     }, 400);
   }
@@ -360,26 +449,49 @@
     progressBar.style.width = '0%';
   }
 
-  // 5. Completion and Player Wiring
-  async function finishGeneration(status) {
+  // 5. Completion and Player Wiring with Strict Integrity Guard
+  async function finishGeneration(status, reqId) {
+    if (reqId && reqId !== activeRequestId) {
+      return; // Obsolete request
+    }
+
     isGenerating = false;
     generateBtn.disabled = false;
+    playPauseBtn.disabled = false;
 
     try {
-      const manifestUrl = status.manifest_url || '/fixtures/golden_manifest_en.json';
-      const res = await fetch(manifestUrl);
-      currentManifest = await res.json();
+      let manifest = status.manifest || null;
+      if (!manifest && status.manifest_url) {
+        const res = await fetch(status.manifest_url);
+        if (!res.ok) throw new Error(`Failed to load manifest: HTTP ${res.status}`);
+        manifest = await res.json();
+      }
+
+      if (!manifest) {
+        throw new Error(`Generation completed but no manifest was returned for topic '${activeTopic}'.`);
+      }
+
+      // INTEGRITY CHECK: Refuse to display unrelated Ohm's Law lesson for other topics
+      const reqSlug = topicSlug(activeTopic);
+      const manifestTitle = (manifest.title || '').toLowerCase();
+      if (reqSlug !== 'ohm-s-law' && reqSlug !== 'ohms-law') {
+        if (manifestTitle.includes("ohm's law") || manifestTitle.includes('ohms law') || (manifestTitle.includes('voltage') && manifestTitle.includes('resistance'))) {
+          throw new Error(`Integrity error: received Ohm's Law lesson for unrelated topic '${activeTopic}'. Refusing to display.`);
+        }
+      }
+
+      currentManifest = manifest;
 
       // Initialize the in-app player directly using engine.js
       await window.initLesson(currentManifest.title, currentManifest.scenes, currentManifest.lang || currentLang);
 
-      // Setup audio clock. A manifest can name a narration file that was never rendered, so confirm
-      // it is really served before wiring it up: otherwise the element 404s and the previous
-      // lesson's audio can linger behind the new one.
+      // Setup audio clock
       if (audio) {
         let audioSrc = status.audio_url || null;
         if (!audioSrc && currentManifest.audio) {
-          audioSrc = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1) + currentManifest.audio;
+          if (status.manifest_url) {
+            audioSrc = status.manifest_url.substring(0, status.manifest_url.lastIndexOf('/') + 1) + currentManifest.audio;
+          }
         }
         audio.pause();
         audio.removeAttribute('src');
@@ -402,7 +514,7 @@
       scrubber.value = 0;
       updateTimeDisplay(0, window.totalDuration);
 
-      // Enable MP4 download only when the file really exists (an advertised URL can 404)
+      // Enable MP4 download only when the file really exists
       await setDownloadLink(status.mp4_url);
 
       // Render initial frame
@@ -412,7 +524,13 @@
       startPlayback();
     } catch (err) {
       console.error('[Playback] Failed to initialize lesson:', err);
-      showToast('Generated, but lesson manifest failed to load.');
+      showToast(err.message || 'Generated, but lesson manifest failed to load.');
+      STAGE_ORDER.forEach(s => {
+        const el = document.getElementById(`step-${s}`);
+        if (el && el.classList.contains('active')) {
+          el.className = 'step-item error';
+        }
+      });
     }
   }
 
@@ -439,6 +557,7 @@
   // Load default Ohm's law lesson on boot
   async function loadDefaultLesson() {
     try {
+      activeTopic = "Ohm's Law";
       const res = await fetch('/fixtures/golden_manifest_en.json');
       currentManifest = await res.json();
       await window.initLesson(currentManifest.title, currentManifest.scenes, currentManifest.lang || 'en');

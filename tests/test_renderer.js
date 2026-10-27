@@ -275,8 +275,476 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   assert.deepStrictEqual(graphDetCtx1.ops, graphDetCtx2.ops, 'Repeated graph renders must produce identical operations');
   console.log('✓ graph template is strictly deterministic.');
 
+  // 19. Batch 1 Fix 1: Equation template dynamic worked steps / no Ohm's law leakage
+  console.log('\nTest 19: Equation template dynamic worked steps (no Ohm\'s law leakage)');
+  const eqCtx1 = new MockCanvasContext();
+  templates.equation(eqCtx1, {
+    labels: ['E = (1/2) * m * v^2', 'm : Mass (kg)', 'v : Velocity (m/s)'],
+    steps: ['m = 2 kg, v = 3 m/s', 'E = 0.5 * 2 * 9 = 9 Joules']
+  }, 2.0, 5.0, theme, 'en');
+  const eqTexts1 = eqCtx1.ops.filter(op => op.startsWith('fillText('));
+  const hasOhmLeakage1 = eqTexts1.some(op => /12\s*V|4\s*Ω|3\s*A/i.test(op));
+  assert(!hasOhmLeakage1, 'General physics equation must NEVER display hardcoded Ohm\'s Law values (12V, 4Ω, 3A)');
+  assert(eqTexts1.some(op => op.includes('9 Joules')), 'Supplied worked calculation step must be rendered in right panel');
+
+  const eqCtx2 = new MockCanvasContext();
+  templates.equation(eqCtx2, {
+    labels: ['F = m * a', 'm : Mass', 'a : Acceleration'],
+    steps: []
+  }, 2.0, 5.0, theme, 'en');
+  const eqTexts2 = eqCtx2.ops.filter(op => op.startsWith('fillText('));
+  const hasOhmLeakage2 = eqTexts2.some(op => /12\s*V|4\s*Ω|3\s*A/i.test(op));
+  assert(!hasOhmLeakage2, 'Equation without steps must NEVER display hardcoded Ohm\'s Law calculation');
+  console.log('✓ Equation template dynamically renders supplied steps and never leaks Ohm\'s Law constants into arbitrary equations.');
+
+  // 20. Batch 1 Fix 2: Compare template semantic correctness / no DC/AC leakage
+  console.log('\nTest 20: Compare template semantic correctness (no DC/AC leakage)');
+  const compBioCtx = new MockCanvasContext();
+  templates.compare(compBioCtx, {
+    labels: ['Plant Cell', 'Animal Cell'],
+    steps: ['Rigid cellulose cell wall', 'Flexible cell membrane', 'Large central vacuole', 'Small temporary vacuoles']
+  }, 2.0, 5.0, theme, 'en');
+  const compBioTexts = compBioCtx.ops.filter(op => op.startsWith('fillText('));
+  const hasWaveformTextBio = compBioTexts.some(op => /\bDC\b|\bAC\b|Direct Current|Alternating Current/i.test(op));
+  assert(!hasWaveformTextBio, 'Biology comparison must NEVER render DC or AC text/labels');
+  assert(compBioTexts.some(op => /Plant Cell/i.test(op)), 'Must render Plant Cell heading');
+  assert(compBioTexts.some(op => /Animal Cell/i.test(op)), 'Must render Animal Cell heading');
+
+  const compGenCtx = new MockCanvasContext();
+  templates.compare(compGenCtx, {
+    labels: ['Solar Energy', 'Wind Energy'],
+    steps: ['Photovoltaic sunlight conversion', 'Kinetic turbine rotation']
+  }, 2.0, 5.0, theme, 'en');
+  const compGenTexts = compGenCtx.ops.filter(op => op.startsWith('fillText('));
+  const hasWaveformTextGen = compGenTexts.some(op => /\bDC\b|\bAC\b/i.test(op));
+  assert(!hasWaveformTextGen, 'General comparison must NEVER render DC or AC badges');
+
+  // Verify genuine DC vs AC comparison correctly supports electrical badges
+  const compElecCtx = new MockCanvasContext();
+  templates.compare(compElecCtx, {
+    labels: ['Direct Current (DC)', 'Alternating Current (AC)'],
+    steps: ['Constant unidirectional flow', 'Periodic sinusoidal oscillation']
+  }, 2.0, 5.0, theme, 'en');
+  const compElecTexts = compElecCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(compElecTexts.some(op => op.includes('DC')), 'Genuine electrical comparison must render DC badge');
+  assert(compElecTexts.some(op => op.includes('AC')), 'Genuine electrical comparison must render AC badge');
+  console.log('✓ Compare template correctly adapts illustration and badges semantically by topic.');
+
+  // 21. Batch 1 Fix 3: Flow template 6-node full retention and layout
+  console.log('\nTest 21: Flow template 6-node full retention');
+  const flow6Ctx = new MockCanvasContext();
+  const stages6 = ['Ingestion', 'Digestion', 'Absorption', 'Assimilation', 'Egestion', 'Metabolism'];
+  templates.flow(flow6Ctx, {
+    labels: stages6,
+    steps: ['End-to-end biological processing cycle completes.']
+  }, 2.0, 5.0, theme, 'en');
+  const flow6Texts = flow6Ctx.ops.filter(op => op.startsWith('fillText('));
+  stages6.forEach(st => {
+    assert(flow6Texts.some(op => op.includes(st)), `Flow template must render node "${st}" without dropping`);
+  });
+  assert(flow6Texts.some(op => op.includes('06')), 'Flow template must render numeral 06 for 6th card');
+  assert(flow6Texts.some(op => op.includes('biological processing')), 'Outcome takeaway box must render supplied step');
+  console.log('✓ Flow template supports up to 6 nodes without dropping content or overflowing canvas bounds.');
+
+  // 22. Phase 2 Batch 2 Task 2.5: Robust fitText caller enforcement & zero silent drop
+  console.log('\nTest 22: Robust fitText caller enforcement and layout adaptation');
+  theme.clearDiagnostics();
+  const testBox = { width: 200, height: 60 };
+  const multiLineText = 'This is a multi-line educational concept description explaining scientific principles in detail.';
+  const fitAdapt = theme.fitText(measureCtx, multiLineText, testBox, 16, 12, 500, 'en', { label: 'test.concept' });
+  assert(fitAdapt.lines.length >= 2, 'Must wrap into multiple lines');
+  assert(fitAdapt.fontSize >= 12, 'Font size must not drop below minPx');
+  assert(fitAdapt.requiredHeight > 0, 'Must report requiredHeight layout geometry');
+
+  // Verify allowGrowth option allows callers to expand without truncation
+  const constrainedBox = { width: 100, height: 30 };
+  const fitGrew = theme.fitText(measureCtx, 'Long sentence that needs more height than provided by the small box', constrainedBox, 16, 12, 500, 'en', { allowGrowth: true, label: 'test.growth' });
+  assert.strictEqual(fitGrew.grew, true, 'allowGrowth must allow vertical expansion');
+  assert.strictEqual(fitGrew.truncated, false, 'allowGrowth must not truncate text');
+
+  // Verify diagnostic logging on unadapted overflow
+  theme.clearDiagnostics();
+  const fitOverflow = theme.fitText(measureCtx, 'Massive text that cannot fit even at minimum font size inside tiny box without growth', { width: 50, height: 20 }, 14, 12, 500, 'en', { label: 'test.overflow' });
+  assert.strictEqual(theme.hasOverflows(), true, 'Must log diagnostic when text exceeds bounding box');
+  const overflowLog = theme.getOverflows();
+  assert(overflowLog[0].msg.includes('[test.overflow]'), 'Diagnostic log must record caller label');
+  console.log('✓ fitText caller enforcement provides layout geometry, growth adaptation, and diagnostic observability.');
+
+  // 23. Phase 2 Batch 2 Task 2.6: Operator-aware equation tokenization
+  console.log('\nTest 23: Operator-aware equation tokenization (exponents, fractions, parentheses)');
+  const eqAdvCtx = new MockCanvasContext();
+  templates.equation(eqAdvCtx, {
+    labels: ['E = (1/2) * m * v^2', 'm : Mass (kg)', 'v : Velocity (m/s)'],
+    steps: ['E = 0.5 * 2 * 9 = 9 Joules']
+  }, 2.0, 5.0, theme, 'en');
+  const eqAdvTexts = eqAdvCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(eqAdvTexts.some(op => op.includes('E')), 'Must render energy variable E');
+  assert(eqAdvTexts.some(op => op.includes('=')), 'Must render equality operator =');
+  assert(eqAdvTexts.some(op => op.includes('1/2')), 'Must render fraction coefficient 1/2 as a coherent number chip');
+  assert(eqAdvTexts.some(op => op.includes('m')), 'Must render mass variable m');
+  assert(eqAdvTexts.some(op => op.includes('v')), 'Must render velocity variable v');
+  assert(eqAdvTexts.some(op => op.includes('2')), 'Must render exponent 2');
+  assert(eqAdvTexts.some(op => op.includes('(')), 'Must render opening parenthesis');
+  assert(eqAdvTexts.some(op => op.includes(')')), 'Must render closing parenthesis');
+  console.log('✓ Equation template properly formats operators, fraction coefficients, and superscript exponents.');
+
+  // 24. Phase 2 Batch 2 Task 2.7: Minimum Readable Typography (~12px+ across templates)
+  console.log('\nTest 24: Minimum readable typography enforcement (~12px+ target)');
+  const timeTypoCtx = new MockCanvasContext();
+  templates.timeline(timeTypoCtx, {
+    labels: ['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5', 'Stage 6'],
+    steps: ['Long detailed description explaining historical context in detail for stage 1', 'Step 2 description', 'Step 3 description', 'Step 4 description', 'Step 5 description', 'Step 6 description']
+  }, 2.0, 5.0, theme, 'en');
+  // Check font declarations in ops
+  const fontOps = timeTypoCtx.ops.filter(op => op.startsWith('setFont('));
+  const smallFonts = fontOps.filter(op => {
+    const match = op.match(/(d+)px/);
+    return match && parseInt(match[1], 10) < 12;
+  });
+  assert(smallFonts.length === 0, 'Timeline body and event descriptions must never drop below 12px');
+
+  const graphTypoCtx = new MockCanvasContext();
+  templates.graph(graphTypoCtx, {
+    labels: ['Pressure (P)', 'Volume (V)'],
+    steps: ['Boyle\'s Law inverse relationship', 'Independent variable input', 'Measured gas response']
+  }, 2.0, 5.0, theme, 'en');
+  const graphTexts = graphTypoCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(graphTexts.some(op => op.includes('Boyle')), 'Graph conceptual mode must render explanation at readable size');
+  console.log('✓ Minimum readable typography maintained at >= 12px for body and descriptive text.');
+
+  // 25. Phase 2 Batch 2 Task 2.8: Title fallback — Neutral scientific composition
+  console.log('\nTest 25: Title fallback neutral scientific composition (topic-appropriate)');
+  const titleNeutralCtx = new MockCanvasContext();
+  templates.title(titleNeutralCtx, {
+    labels: ['Universal Gravitation', 'CLASSICAL MECHANICS'],
+    steps: ['Every particle attracts every other particle with a gravitational force.']
+  }, 1.5, 5.0, theme, 'en');
+  const neutralTexts = titleNeutralCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(neutralTexts.some(op => op.includes('COORDINATES') || op.includes('EMPIRICAL') || op.includes('ACTIVE DYNAMICS')), 'Neutral scientific composition must render telemetry badge');
+  assert(!neutralTexts.some(op => op.includes('RESISTOR')), 'Non-electrical topic must not render resistor');
+  assert(!neutralTexts.some(op => op.includes('Sea water')), 'Non-environmental topic must not render sea water');
+
+  // Verify Biology topic renders cellular structure
+  const titleBioCtx = new MockCanvasContext();
+  templates.title(titleBioCtx, {
+    labels: ['Plant Cell Structure', 'CELLULAR BIOLOGY'],
+    steps: ['Plant cells contain specialized organelles for photosynthesis and structural support.']
+  }, 1.5, 5.0, theme, 'en');
+  const bioTexts = titleBioCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(bioTexts.some(op => op.includes('CELLULAR BIOLOGY MODEL')), 'Biological topic must render cell biology model');
+  console.log('✓ Title template selects appropriate topic illustration and uses neutral scientific composition for generic topics.');
+
+  // 26. Phase 2 Batch 2 Task 2.9: Equation-panel dynamic adaptation (1 to 5 variables, 1 to 4 steps)
+  console.log('\nTest 26: Equation-panel dynamic adaptation (5 variables, 4 calculation steps)');
+  const eq5Ctx = new MockCanvasContext();
+  templates.equation(eq5Ctx, {
+    labels: [
+      'F = G * m1 * m2 / r^2',
+      'G : Gravitational constant',
+      'm1 : Mass of first object',
+      'm2 : Mass of second object',
+      'r : Distance between centers',
+      'F : Gravitational force'
+    ],
+    steps: [
+      'Step 1: Given values m1=10kg, m2=20kg',
+      'Step 2: Substitute into Newton\'s law',
+      'Step 3: Calculate numerator and denominator',
+      'Step 4: Final gravitational force result = 1.33e-9 N'
+    ]
+  }, 2.0, 5.0, theme, 'en');
+  const eq5Texts = eq5Ctx.ops.filter(op => op.startsWith('fillText('));
+  assert(eq5Texts.some(op => op.includes('G')), 'Must render variable G');
+  assert(eq5Texts.some(op => op.includes('m1')), 'Must render variable m1');
+  assert(eq5Texts.some(op => op.includes('m2')), 'Must render variable m2');
+  assert(eq5Texts.some(op => op.includes('r')), 'Must render variable r');
+  assert(eq5Texts.some(op => op.includes('F')), 'Must render variable F');
+  assert(eq5Texts.some(op => op.includes('STEP 01')), 'Must render Step 1');
+  assert(eq5Texts.some(op => op.includes('STEP 04')), 'Must render Step 4 without dropping');
+  console.log('✓ Equation template adapts layout to render up to 5 variables and 4 worked steps cleanly.');
+
+  // 27. Phase 2 Batch 2 Task 2.10: Labeled-diagram fallback (topic-neutral system schematic)
+  console.log('\nTest 27: Labeled-diagram fallback topic-neutral system schematic');
+  const diagNeuralCtx = new MockCanvasContext();
+  templates.labeled_diagram(diagNeuralCtx, {
+    labels: ['Neural Architecture', 'Input Layer', 'Hidden Nodes', 'Activation Unit', 'Loss Function', 'Output Dense'],
+    steps: ['Forward propagation passes signals through layers.']
+  }, 2.0, 5.0, theme, 'en');
+  const diagNeuralTexts = diagNeuralCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(!diagNeuralTexts.some(op => op.includes('CENTRAL DIAGRAM PLACEHOLDER')), 'Must not render placeholder string');
+  assert(diagNeuralTexts.some(op => op.includes('NEURAL ARCHITECTURE')), 'Must dynamically render topic name on schematic header');
+  assert(diagNeuralTexts.some(op => op.includes('Input Layer')), 'Must render peripheral callout Input Layer');
+  assert(diagNeuralTexts.some(op => op.includes('Output Dense')), 'Must render 5th peripheral callout Output Dense');
+  console.log('✓ Labeled-diagram replaces placeholder with dynamic topic schematic, calibrated nexus, and peripheral callouts.');
+
+  // 28. Task 1 Correction: Real fitText overflow handling & observable detection
+  console.log('\nTest 28: Real fitText overflow handling and non-silent detection');
+  theme.clearDiagnostics();
+  assert.strictEqual(theme.hasOverflows(), false, 'Must start with zero overflows');
+  const overflowBox = { width: 80, height: 25 };
+  const fitOver = theme.fitText(measureCtx, 'Extremely long sentence that cannot fit inside tiny box at all', overflowBox, 14, 12, 500, 'en', { label: 'audit.test' });
+  assert.strictEqual(fitOver.fits, false, 'fitText must report fits: false');
+  assert.strictEqual(fitOver.truncated, true, 'fitText must report truncated: true');
+  assert(fitOver.overflowError && fitOver.overflowError.includes('TEXT_OVERFLOW'), 'fitText must report structured overflowError');
+  assert.strictEqual(theme.hasOverflows(), true, 'theme.hasOverflows() must detect unhandled overflow');
+
+  // Verify observable warning badge on canvas
+  const canvasOverCtx = new MockCanvasContext();
+  theme.drawFittedLines(canvasOverCtx, fitOver, 20, 20);
+  const overOps = canvasOverCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(overOps.some(op => op.includes('! CONTENT OVERFLOW')), 'Must render observable CONTENT OVERFLOW badge on canvas');
+
+  // Verify assertNoOverflow() throws on active overflow
+  let assertedError = false;
+  try {
+    theme.assertNoOverflow();
+  } catch (err) {
+    assertedError = true;
+    assert(err.message.includes('audit.test'), 'assertNoOverflow must include caller label');
+  }
+  assert(assertedError, 'assertNoOverflow must throw when overflow exists');
+  theme.clearDiagnostics();
+  assert.strictEqual(theme.assertNoOverflow(), true, 'assertNoOverflow passes when diagnostics are clean');
+  console.log('✓ Real fitText overflow handling provides structured error, observable canvas badge, and assertNoOverflow enforcement.');
+
+  // 29. Task 2 Correction: Scientific formula parsing (implicit multiplication, exponents, fractions, parentheses, indexed variables)
+  console.log('\nTest 29: Scientific formula parsing (implicit multiplication & complex expressions)');
+  const eqFmaCtx = new MockCanvasContext();
+  templates.equation(eqFmaCtx, { labels: ['F=ma', 'm : Mass', 'a : Acceleration'] }, 2.0, 5.0, theme, 'en');
+  const fmaTexts = eqFmaCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(fmaTexts.some(op => op.includes('F')), 'Must render F');
+  assert(fmaTexts.some(op => op.includes('fillText("m",')), 'Must render variable factor m');
+  assert(fmaTexts.some(op => op.includes('fillText("a",')), 'Must render variable factor a');
+  assert(!fmaTexts.some(op => op.includes('fillText("ma",')), 'Must not lump ma into a single variable token');
+
+  const eqEmcCtx = new MockCanvasContext();
+  templates.equation(eqEmcCtx, { labels: ['E=mc^2', 'm : Mass', 'c : Speed of light'] }, 2.0, 5.0, theme, 'en');
+  const emcTexts = eqEmcCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(emcTexts.some(op => op.includes('fillText("m",')), 'Must render separate mass variable m');
+  assert(emcTexts.some(op => op.includes('fillText("c",')), 'Must render separate speed of light variable c');
+  assert(emcTexts.some(op => op.includes('fillText("2",')), 'Must render superscript exponent 2');
+  assert(!emcTexts.some(op => op.includes('fillText("mc",')), 'Must not lump mc into a single token');
+
+  const eqVirCtx = new MockCanvasContext();
+  templates.equation(eqVirCtx, { labels: ['V=IR', 'I : Current', 'R : Resistance'] }, 2.0, 5.0, theme, 'en');
+  const virTexts = eqVirCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(virTexts.some(op => op.includes('I')), 'Must render separate current variable I');
+  assert(virTexts.some(op => op.includes('R')), 'Must render separate resistance variable R');
+
+  const eqGroupCtx = new MockCanvasContext();
+  templates.equation(eqGroupCtx, { labels: ['(a+b)/c', 'a : Term 1', 'b : Term 2', 'c : Divisor'] }, 2.0, 5.0, theme, 'en');
+  const groupTexts = eqGroupCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(groupTexts.some(op => op.includes('(')), 'Must render opening parenthesis');
+  assert(groupTexts.some(op => op.includes(')')), 'Must render closing parenthesis');
+  assert(groupTexts.some(op => op.includes('÷')), 'Must render division operator');
+
+  const eqIdxCtx = new MockCanvasContext();
+  templates.equation(eqIdxCtx, { labels: ['p = m1 * v1 + m2 * v2'] }, 2.0, 5.0, theme, 'en');
+  const idxTexts = eqIdxCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(idxTexts.some(op => op.includes('m1')), 'Must preserve indexed variable m1 as atomic');
+  assert(idxTexts.some(op => op.includes('v1')), 'Must preserve indexed variable v1 as atomic');
+  assert(idxTexts.some(op => op.includes('m2')), 'Must preserve indexed variable m2 as atomic');
+  assert(idxTexts.some(op => op.includes('v2')), 'Must preserve indexed variable v2 as atomic');
+  console.log('✓ Formula tokenizer correctly splits implicit multiplication, handles exponents, groups, and preserves indexed variables.');
+
+  // 30. Task 3 Correction: Title-topic classification collision fixes
+  console.log('\nTest 30: Title-topic classification collision fixes and positive cases');
+  const collisionCtx1 = new MockCanvasContext();
+  templates.title(collisionCtx1, { labels: ['Electrochemical Cell', 'CHEMISTRY'], steps: ['Galvanic reactions generate potential.'] }, 1.5, 5.0, theme, 'en');
+  const coll1Texts = collisionCtx1.ops.filter(op => op.startsWith('fillText('));
+  assert(!coll1Texts.some(op => op.includes('RESISTOR')), 'Electrochemical Cell must not render circuit resistor');
+  assert(coll1Texts.some(op => op.includes('EMPIRICAL OBSERVATIONAL FRAMEWORK') || op.includes('COORDINATES')), 'Electrochemical Cell must route to neutral composition');
+
+  const collisionCtx2 = new MockCanvasContext();
+  templates.title(collisionCtx2, { labels: ['Organic Chemistry', 'CHEMISTRY'], steps: ['Structure and reactivity of carbon compounds.'] }, 1.5, 5.0, theme, 'en');
+  const coll2Texts = collisionCtx2.ops.filter(op => op.startsWith('fillText('));
+  assert(!coll2Texts.some(op => op.includes('CELLULAR BIOLOGY MODEL')), 'Organic Chemistry must not render biological cell model');
+  assert(coll2Texts.some(op => op.includes('EMPIRICAL OBSERVATIONAL FRAMEWORK') || op.includes('COORDINATES')), 'Organic Chemistry must route to neutral composition');
+
+  const collisionCtx3 = new MockCanvasContext();
+  templates.title(collisionCtx3, { labels: ['Carnot Cycle', 'THERMODYNAMICS'], steps: ['Reversible thermodynamic heat engine cycle.'] }, 1.5, 5.0, theme, 'en');
+  const coll3Texts = collisionCtx3.ops.filter(op => op.startsWith('fillText('));
+  assert(!coll3Texts.some(op => op.includes('Sea water') || op.includes('Evaporation')), 'Carnot Cycle must not render water cycle illustration');
+  assert(coll3Texts.some(op => op.includes('EMPIRICAL OBSERVATIONAL FRAMEWORK') || op.includes('COORDINATES')), 'Carnot Cycle must route to neutral composition');
+
+  const collisionCtx4 = new MockCanvasContext();
+  templates.title(collisionCtx4, { labels: ['Krebs Cycle', 'BIOCHEMISTRY'], steps: ['Series of chemical reactions used by aerobic organisms.'] }, 1.5, 5.0, theme, 'en');
+  const coll4Texts = collisionCtx4.ops.filter(op => op.startsWith('fillText('));
+  assert(!coll4Texts.some(op => op.includes('Sea water') || op.includes('Evaporation')), 'Krebs Cycle must not render water cycle illustration');
+
+  // Verify positive recognized topics still work
+  const posCircuitCtx = new MockCanvasContext();
+  templates.title(posCircuitCtx, { labels: ['Electric Circuit', 'ELECTRONICS'], steps: ['Closed loop conductor path.'] }, 1.5, 5.0, theme, 'en');
+  assert(posCircuitCtx.ops.some(op => op.includes('CLOSED CIRCUIT LOOP')), 'Electric Circuit must render circuit illustration');
+
+  const posWaterCtx = new MockCanvasContext();
+  templates.title(posWaterCtx, { labels: ['The Water Cycle', 'EARTH SCIENCE'], steps: ['Continuous evaporation and precipitation.'] }, 1.5, 5.0, theme, 'en');
+  assert(!posWaterCtx.ops.some(op => op.includes('RESISTOR')), 'Water cycle must not render resistor');
+  assert(!posWaterCtx.ops.some(op => op.includes('CELLULAR BIOLOGY MODEL')), 'Water cycle must not render cell');
+  console.log('✓ Title topic classification correctly isolates collisions and routes ambiguous topics to neutral composition.');
+
+  // 31. Task 4 Correction: Hindi and Kannada timeline text retention
+  console.log('\nTest 31: Hindi and Kannada timeline text retention without dropped lines');
+  theme.clearDiagnostics();
+  const timeKnCtx = new MockCanvasContext();
+  templates.timeline(timeKnCtx, {
+    labels: ['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5', 'Stage 6'],
+    steps: [
+      'ನಿಖರವಾದ ವೋಲ್ಟ್‌ಮೀಟರ್‌ನೊಂದಿಗೆ ಪ್ರಯೋಗಾಲಯದ ಪರಿಸ್ಥಿತಿಗಳಲ್ಲಿ ಭೌತಿಕ ನಿಯಮವನ್ನು ಗಮನಿಸಿ',
+      'ಹಂತ 2 ವಿವರಣೆ',
+      'ಹಂತ 3 ವಿವರಣೆ',
+      'ಹಂತ 4 ವಿವರಣೆ',
+      'ಹಂತ 5 ವಿವರಣೆ',
+      'ಹಂತ 6 ವಿವರಣೆ'
+    ]
+  }, 2.0, 5.0, theme, 'kn');
+  const timeKnTexts = timeKnCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(!timeKnTexts.some(op => op.includes('ವೋಲ್ಟ್‌ಮೀಟರ್‌ನೊ...')), 'Kannada long word must not be truncated with ellipsis');
+  assert(timeKnTexts.some(op => op.includes('ವೋಲ್ಟ್‌ಮೀಟರ್') || op.includes('ನಿಖರವಾದ')), 'Kannada text must be retained across lines');
+  assert.strictEqual(theme.hasOverflows(), false, 'Kannada timeline rendering must have zero text overflows');
+
+  const timeHiCtx = new MockCanvasContext();
+  templates.timeline(timeHiCtx, {
+    labels: ['चरण 1', 'चरण 2', 'चरण 3', 'चरण 4', 'चरण 5', 'चरण 6'],
+    steps: [
+      'सटीक वोल्टमीटर के साथ प्रयोगशाला में भौतिक नियम का अवलोकन करें',
+      'चरण 2 विवरण',
+      'चरण 3 विवरण',
+      'चरण 4 विवरण',
+      'चरण 5 विवरण',
+      'चरण 6 विवरण'
+    ]
+  }, 2.0, 5.0, theme, 'hi');
+  const timeHiTexts = timeHiCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(timeHiTexts.some(op => op.includes('अवलोकन करें')), 'Hindi timeline must retain final line without dropping');
+  assert.strictEqual(theme.hasOverflows(), false, 'Hindi timeline rendering must have zero text overflows');
+  console.log('✓ Timeline layout retains full Hindi and Kannada text without truncation or dropped lines.');
+
+  // 32. Task 5 Correction: Template capacity validation beyond caps
+  console.log('\nTest 32: Template capacity validation beyond supported caps');
+  theme.clearDiagnostics();
+  const eqOverCtx = new MockCanvasContext();
+  templates.equation(eqOverCtx, {
+    labels: [
+      'y = a*x^3 + b*x^2 + c*x + d',
+      'a : Coeff 1', 'b : Coeff 2', 'c : Coeff 3', 'd : Constant', 'x : Independent', 'y : Dependent', 'z : Extra'
+    ],
+    steps: ['Step 1: Given', 'Step 2: Sub', 'Step 3: Calc', 'Step 4: Solve', 'Step 5: Verify', 'Step 6: Finish']
+  }, 2.0, 5.0, theme, 'en');
+  assert.strictEqual(theme.hasCapacityViolations(), true, 'Must report capacity violation when variables/steps exceed caps');
+  const eqViols = theme.getCapacityViolations();
+  assert(eqViols.some(v => v.template === 'equation' && v.limitType === 'variable_definitions' && v.count === 7), 'Must record equation variable cap violation (7 > 5)');
+  assert(eqViols.some(v => v.template === 'equation' && v.limitType === 'worked_steps' && v.count === 6), 'Must record equation steps cap violation (6 > 5)');
+
+  const flowOverCtx = new MockCanvasContext();
+  templates.flow(flowOverCtx, {
+    labels: ['Process Flow'],
+    steps: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8']
+  }, 2.0, 5.0, theme, 'en');
+  const flowViols = theme.getCapacityViolations();
+  assert(flowViols.some(v => v.template === 'flow' && v.count === 8), 'Must record flow capacity violation (8 > 6)');
+
+  const timeOverCtx = new MockCanvasContext();
+  templates.timeline(timeOverCtx, {
+    labels: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8'],
+    steps: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8']
+  }, 2.0, 5.0, theme, 'en');
+  const timeViols = theme.getCapacityViolations();
+  assert(timeViols.some(v => v.template === 'timeline' && v.count === 8), 'Must record timeline capacity violation (8 > 6)');
+
+  const diagOverCtx = new MockCanvasContext();
+  templates.labeled_diagram(diagOverCtx, {
+    labels: ['Core', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8'],
+    steps: ['S1']
+  }, 2.0, 5.0, theme, 'en');
+  const diagViols = theme.getCapacityViolations();
+  assert(diagViols.some(v => v.template === 'labeled_diagram' && v.count === 8), 'Must record labeled_diagram capacity violation (8 > 6)');
+  console.log('✓ Template capacity validation accurately detects and records input exceeding supported caps across all templates.');
+
+  // 33. Phase 2 Batch 3 Task 3.1: Full retention of 5 schema-valid equation worked steps
+  console.log('\nTest 33: Full retention of 5 schema-valid equation worked steps');
+  theme.clearDiagnostics();
+  const eq5StepsCtx = new MockCanvasContext();
+  templates.equation(eq5StepsCtx, {
+    labels: [
+      'P = V * I',
+      'V : Voltage in Volts (230 V)',
+      'I : Current in Amperes (10 A)',
+      'P : Electrical Power in Watts'
+    ],
+    steps: [
+      'Given: V = 230 V, I = 10 A',
+      'Formula: P = V * I',
+      'Substitution: P = 230 * 10',
+      'Computation: P = 2300 W',
+      'Conclusion: Appliance consumes 2.3 kW'
+    ]
+  }, 2.0, 5.0, theme, 'en');
+  const eq5StepsTexts = eq5StepsCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(eq5StepsTexts.some(op => op.includes('STEP 01')), 'Must render Step 1');
+  assert(eq5StepsTexts.some(op => op.includes('STEP 02')), 'Must render Step 2');
+  assert(eq5StepsTexts.some(op => op.includes('STEP 03')), 'Must render Step 3');
+  assert(eq5StepsTexts.some(op => op.includes('STEP 04')), 'Must render Step 4');
+  assert(eq5StepsTexts.some(op => op.includes('STEP 05')), 'Must render Step 5 (5th schema-valid step must not be dropped)');
+  assert(eq5StepsTexts.some(op => op.includes('Appliance consumes 2.3 kW')), 'Must render 5th step text');
+  assert.strictEqual(theme.hasCapacityViolations(), false, '5 schema-valid steps must not trigger capacity violation');
+  assert.strictEqual(theme.hasOverflows(), false, '5 steps must render with zero overflow errors');
+  console.log('✓ Equation template cleanly retains all 5 schema-valid calculation steps without capacity violation or text overflow.');
+
+  // 34. Phase 2 Batch 3 Task 3.2: Connected overflow detection in standard templates & stable deduplication
+  console.log('\nTest 34: Connected overflow detection in standard templates & stable deduplication');
+  theme.clearDiagnostics();
+
+  // 1. Intentionally overflowing text in standard bullets template
+  const overflowBulletsCtx = new MockCanvasContext();
+  const massiveText = 'This is an extraordinarily verbose explanation designed specifically to exceed the physical vertical boundaries of a card container in the bullets template. '.repeat(25);
+  templates.bullets(overflowBulletsCtx, {
+    labels: ['Overflow Test'],
+    steps: [massiveText]
+  }, 2.0, 5.0, theme, 'en');
+
+  assert.strictEqual(theme.hasOverflows(), true, 'Must detect overflow in standard bullets template');
+  const bulletsOverOps = overflowBulletsCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(bulletsOverOps.some(op => op.includes('! CONTENT OVERFLOW')), 'Standard bullets template must actively render [! CONTENT OVERFLOW] badge');
+  const initialOverflowCount = theme.getOverflows().length;
+  assert(initialOverflowCount >= 1, 'Must record structured overflow diagnostic');
+
+  // 2. Stable deduplication across repeated frame renders (scrubbing)
+  for (let t = 0; t < 10; t++) {
+    templates.bullets(overflowBulletsCtx, {
+      labels: ['Overflow Test'],
+      steps: [massiveText]
+    }, 2.0, 5.0, theme, 'en');
+  }
+  assert.strictEqual(theme.getOverflows().length, initialOverflowCount, 'Repeated scrubbing renders must not duplicate overflow records');
+
+  // 3. Distinct overflowing text boxes remain distinguishable
+  const secondOverflowCtx = new MockCanvasContext();
+  const secondMassiveText = 'Completely different text in another card that also exceeds the bounding box completely. '.repeat(25);
+  templates.bullets(secondOverflowCtx, {
+    labels: ['Second Overflow Test'],
+    steps: [secondMassiveText]
+  }, 2.0, 5.0, theme, 'en');
+  assert.strictEqual(theme.getOverflows().length, initialOverflowCount + 1, 'Distinct overflowing text boxes must remain distinct in diagnostics');
+
+  // 4. Normal fitting content produces zero badges and zero false positive overflows
+  theme.clearDiagnostics();
+  const cleanCtx = new MockCanvasContext();
+  templates.bullets(cleanCtx, {
+    labels: ['Clean Test'],
+    steps: ['Concise bullet one.', 'Concise bullet two.', 'Concise bullet three.']
+  }, 2.0, 5.0, theme, 'en');
+  const cleanOps = cleanCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(!cleanOps.some(op => op.includes('! CONTENT OVERFLOW')), 'Clean content must not render overflow badge');
+  assert.strictEqual(theme.hasOverflows(), false, 'Clean content must not trigger false positive overflow records');
+
+  // 5. Deliberate reset between lesson sessions
+  theme.clearDiagnostics();
+  assert.strictEqual(theme.getOverflows().length, 0, 'theme.clearDiagnostics() resets diagnostic state completely');
+  console.log('✓ Standard templates actively render overflow badge, deduplicate repeated scrubbing, and avoid false positives.');
+
   console.log('\n=======================================');
-  console.log('ALL 18 RENDERER TESTS PASSED CLEANLY');
+  console.log('ALL 34 RENDERER TESTS PASSED CLEANLY');
   console.log('=======================================');
 }).catch(err => {
   console.error('\n❌ TEST RUN FAILED:', err);

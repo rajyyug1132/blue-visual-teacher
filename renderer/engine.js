@@ -44,30 +44,61 @@
     return last;
   }
 
-  // Draw header bar
-  function drawHeader(ctx, title, sceneIndex, totalScenes, theme, lang) {
+  // Draw header bar matching approved reference designs
+  function drawHeader(ctx, title, sceneIndex, totalScenes, theme, lang, visualType = '') {
     const font = theme.getFont(lang);
     ctx.save();
-    // Top bar background
-    ctx.fillStyle = theme.colors.bg;
-    ctx.fillRect(0, 0, 1280, theme.safeArea.headerHeight);
 
-    // Bottom border line
-    ctx.fillStyle = theme.colors.panelBorder;
-    ctx.fillRect(64, theme.safeArea.headerHeight - 2, 1152, 2);
-
-    // Title left
-    ctx.font = `600 22px ${font}`;
-    ctx.fillStyle = theme.colors.muted;
+    // 1. Top Brand Mark Left: BLUE VISUAL TEACHER ■
+    ctx.font = `800 14px ${font}`;
+    ctx.fillStyle = theme.colors.text;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const truncatedTitle = title.length > 60 ? title.substring(0, 57) + '...' : title;
-    ctx.fillText(truncatedTitle, 64, theme.safeArea.headerHeight / 2);
+    const brandText = 'BLUE VISUAL TEACHER';
+    ctx.fillText(brandText, 64, 28);
+    const brandWidth = ctx.measureText(brandText).width;
+    theme.drawBrandAccent(ctx, 64 + brandWidth + 8, 33, 11);
 
-    // Scene counter right
-    ctx.textAlign = 'right';
-    ctx.fillStyle = theme.colors.accent;
-    ctx.fillText(`Scene ${sceneIndex + 1} of ${totalScenes}`, 1216, theme.safeArea.headerHeight / 2);
+    // 2. Right Indicators: Language pill and Step/Process pill
+    const stepLabel = `STEP 0${sceneIndex + 1} · ${(visualType || 'SCENE').toUpperCase()}`;
+    const stepPillWidth = ctx.measureText(`[ ${stepLabel} ]`).width + 24;
+    const stepX = 1216 - stepPillWidth;
+    theme.drawPill(ctx, stepLabel, stepX, 15, {
+      bg: '#FFFFFF',
+      color: theme.colors.text,
+      border: theme.colors.border,
+      lineWidth: 1.5,
+      height: 26,
+      fontSize: 12,
+      weight: 700,
+      font,
+      bracketed: true
+    });
+
+    // Language selector pill: [ EN | हि | ಕನ್ನಡ ]
+    const langLabel = 'EN | हि | ಕನ್ನಡ';
+    const langPillWidth = ctx.measureText(`[ ${langLabel} ]`).width + 24;
+    const langX = stepX - langPillWidth - 12;
+    theme.drawPill(ctx, langLabel, langX, 15, {
+      bg: '#FFFFFF',
+      color: theme.colors.text,
+      border: theme.colors.border,
+      lineWidth: 1.5,
+      height: 26,
+      fontSize: 12,
+      weight: 700,
+      font,
+      bracketed: true
+    });
+
+    // 3. Crisp horizontal separator rule at y = 52
+    ctx.strokeStyle = theme.colors.border;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(64, 52);
+    ctx.lineTo(1216, 52);
+    ctx.stroke();
+
     ctx.restore();
   }
 
@@ -81,8 +112,8 @@
     const boxH = theme.safeArea.captionHeight;
 
     ctx.save();
-    // Caption card background
-    theme.drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 12, 'rgba(19, 34, 74, 0.95)', theme.colors.panelBorder);
+    // Warm ivory / crisp white caption card with bold black outline
+    theme.drawCard(ctx, boxX, boxY, boxW, boxH, 14, '#FFFFFF', theme.colors.border, 2);
 
     const words = narration.trim().split(/\s+/);
     if (words.length === 0) {
@@ -291,17 +322,20 @@
       fadeAlpha = Math.max(0.1, (dur - lt) / TAIL);
     }
 
-    // 1. Clear background
+    // 1. Clear background (warm ivory)
     _ctx.fillStyle = theme.colors.bg;
     _ctx.fillRect(0, 0, 1280, 720);
 
-    // 2. Draw Header
-    drawHeader(_ctx, _title, sceneIdx, _scenes.length, theme, _lang);
+    // 2. Draw subtle square graph paper grid
+    theme.drawGraphGrid(_ctx, 1280, 720, 28);
 
-    // 3. Draw Scene Template with fade
+    // 3. Draw Header
+    const visual = scene.visual || { type: 'bullets', params: { labels: [], steps: [] } };
+    drawHeader(_ctx, _title, sceneIdx, _scenes.length, theme, _lang, visual.type);
+
+    // 4. Draw Scene Template with fade
     _ctx.save();
     _ctx.globalAlpha = fadeAlpha;
-    const visual = scene.visual || { type: 'bullets', params: { labels: [], steps: [] } };
     templates.draw(_ctx, visual.type, visual.params, lt, dur, theme, _lang);
     _ctx.restore();
 

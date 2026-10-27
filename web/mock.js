@@ -2,7 +2,7 @@
 // Answers the same endpoints as exporter/app.py when the page is opened with ?mock=1, so the UI can
 // be demoed without loading the models. A topic that already exists in cache/artifacts is served
 // from there (manifest + narration + MP4); anything else walks a scripted progress timeline and
-// lands on the bundled golden fixture for its language.
+// provides topic-accurate pedagogical scene manifests matching orchestrator standards.
 
 (function (root) {
   const isMockParam = new URLSearchParams(root.location.search).get('mock') === '1';
@@ -89,6 +89,78 @@
     }
   }
 
+  async function checkFileExists(urlPath) {
+    try {
+      const res = await originalFetch.call(root, urlPath, { method: 'HEAD' });
+      return res.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Convert a LessonPlan schema into a player timing manifest
+  function planToManifest(plan, lang) {
+    let t = 0;
+    const scenes = (plan.scenes || []).map((s, idx) => {
+      const words = (s.narration || '').trim().split(/\s+/).filter(Boolean).length;
+      const dur = Math.max(4.0, Math.min(25.0, Math.round((words / 2.3 + 0.35) * 100) / 100));
+      const start = Math.round(t * 100) / 100;
+      t += dur;
+      const end = Math.round(t * 100) / 100;
+      return {
+        id: s.id || (idx + 1),
+        start_sec: start,
+        end_sec: end,
+        duration_sec: dur,
+        narration: s.narration || '',
+        visual: s.visual || { type: 'bullets', params: { labels: ['Summary'], steps: [] } }
+      };
+    });
+    return {
+      title: plan.title || 'Educational Lesson',
+      lang: lang || 'en',
+      total_sec: Math.round(t * 100) / 100,
+      audio: null,
+      sample_rate: 24000,
+      scenes: scenes
+    };
+  }
+
+  // Safe pedagogical fallback matching orchestrator.fallbacks.build_safe_fallback_lesson
+  function buildTopicFallbackManifest(topic, lang) {
+    const rawWords = String(topic || '').trim().split(/\s+/).slice(0, 4);
+    const c = rawWords.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') || 'This Topic';
+    const title = `Understanding ${c}: Core Principles & Application`;
+    const scenes = [
+      {
+        id: 1,
+        narration: `Have you ever wondered how ${c} works in everyday real-world systems and why researchers and educators study it closely?`,
+        visual: { type: 'title', params: { labels: [c, 'Core Concept & Intuition', 'Step-by-Step Overview'], steps: [`Mastering ${c} in One Minute`] } }
+      },
+      {
+        id: 2,
+        narration: `Think of ${c} like organizing traffic through a systematic intersection: clear principles transform complex inputs into smooth, predictable outcomes.`,
+        visual: { type: 'compare', params: { labels: [`Without ${c}`, `With ${c}`], steps: ['Unstructured & inefficient process', 'Systematic & predictable result'] } }
+      },
+      {
+        id: 3,
+        narration: `At its core, ${c} operates through three connected stages: receiving the initial input state, applying the governing transformation, and producing the verified outcome.`,
+        visual: { type: 'flow', params: { labels: ['1. Initial State', `2. Governing ${c} Rule`, '3. Verified Result'], steps: ['Deterministic progression at each stage'] } }
+      },
+      {
+        id: 4,
+        narration: `In a practical example of ${c}, when we observe how components interact under varying conditions, the overall system response follows direct physical balance.`,
+        visual: { type: 'labeled_diagram', params: { labels: [`${c} System`, 'Primary Input', 'Control Mechanism', 'Observed Output'], steps: ['Step 1: Measure input parameters', 'Step 2: Observe system adaptation'] } }
+      },
+      {
+        id: 5,
+        narration: `To recap ${c}: remember the core intuition, trace how inputs lead to outputs, and apply this mental model when analyzing real-world observations.`,
+        visual: { type: 'bullets', params: { labels: [`Key Takeaways: ${c}`], steps: ['Understand the foundational intuition', 'Follow the three-stage progression model', 'Verify outcomes through concrete observation'] } }
+      }
+    ];
+    return planToManifest({ title, scenes }, lang);
+  }
+
   function statusPayload(job, elapsedSec) {
     const { stage, pct, stage_times } = progressFor(job, elapsedSec);
     const done = stage === 'done';
@@ -104,12 +176,14 @@
       telemetry: {
         model: 'qwen2.5:3b',
         tokens: 576,
-        num_scenes: 5,
-        fallback_used: false,
+        num_scenes: (job.manifest && job.manifest.scenes) ? job.manifest.scenes.length : 5,
+        fallback_used: Boolean(job.fallback_used),
         device: 'cuda'
       },
       error: null,
       cached: Boolean(job.cached),
+      // Deliver topic-accurate manifest directly when available
+      manifest: done ? (job.cached ? null : (job.manifest || null)) : null,
       // A cached lesson keeps its manifest, narration and MP4 side by side in cache/artifacts.
       manifest_url: done
         ? (job.cached ? job.base + '/manifest.json' : `/fixtures/golden_manifest_${fixtureLang}.json`)
@@ -123,17 +197,41 @@
   async function createJob(body) {
     const topic = (body.topic || "Ohm's Law").trim();
     const lang = body.lang || 'en';
-    const base = '/artifacts/' + topicSlug(topic) + '_' + lang;
+    const slug = topicSlug(topic);
+    const base = '/artifacts/' + slug + '_' + lang;
 
     // The job and its clock exist before the cache probe, so the probe latency is not demo time.
     const job = {
       jobId: 'mock_job_' + (++jobCounter),
       topic,
       lang,
+      slug,
       base,
       startTime: Date.now()
     };
     job.cached = await artifactExists(base);
+
+    // If uncached, resolve topic-accurate plan or pedagogical fallback
+    if (!job.cached) {
+      const planUrl = '/cache/plans/' + slug + '.json';
+      const cachedPlan = await checkFileExists(planUrl);
+      if (cachedPlan) {
+        try {
+          const res = await originalFetch.call(root, planUrl);
+          if (res.ok) {
+            const planData = await res.json();
+            job.manifest = planToManifest(planData, lang);
+          }
+        } catch (e) {}
+      }
+      if (!job.manifest) {
+        if (slug !== 'ohm-s-law' && slug !== 'ohms-law') {
+          job.manifest = buildTopicFallbackManifest(topic, lang);
+          job.fallback_used = true;
+        }
+      }
+    }
+
     mockJobs.set(job.jobId, job);
     return job;
   }
@@ -189,7 +287,10 @@
   root.MockAPI = {
     isMock: isMockParam,
     install: installMockInterceptor,
-    topics: EXAMPLES
+    topics: EXAMPLES,
+    topicSlug,
+    planToManifest,
+    buildTopicFallbackManifest
   };
 
   if (isMockParam) {

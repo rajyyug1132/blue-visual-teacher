@@ -303,6 +303,13 @@ h1 {
   color: #07112B;
 }
 
+.step-item.error .step-circle {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #FFFFFF;
+  box-shadow: 0 0 12px rgba(255, 92, 92, 0.5);
+}
+
 .step-label {
   font-size: 12px;
   font-weight: 600;
@@ -315,6 +322,10 @@ h1 {
 
 .step-item.done .step-label {
   color: var(--text);
+}
+
+.step-item.error .step-label {
+  color: var(--bad);
 }
 
 .step-time {

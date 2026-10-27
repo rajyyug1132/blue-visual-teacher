@@ -33,7 +33,9 @@ const ROOT_REDIRECT = '/web/index.html?mock=1';
 const ALIASES = [
   ['/renderer/assets/fonts/', path.join(REPO_ROOT, 'assets', 'fonts')],
   ['/assets/fonts/', path.join(REPO_ROOT, 'assets', 'fonts')],
-  ['/artifacts/', path.join(REPO_ROOT, 'cache', 'artifacts')]
+  ['/artifacts/', path.join(REPO_ROOT, 'cache', 'artifacts')],
+  ['/cache/plans/', path.join(REPO_ROOT, 'cache', 'plans')],
+  ['/cache/artifacts/', path.join(REPO_ROOT, 'cache', 'artifacts')]
 ];
 
 function resolveFile(pathname) {
