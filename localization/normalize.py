@@ -509,6 +509,145 @@ STEM_DISAMBIGUATION: dict[str, dict] = {
             "bn": "বায়ুমণ্ডলীয় চাপ",
         },
     },
+    "MOLE": {
+        "stem_cues": {
+            "chemistry", "avogadro", "substance", "molar", "molarity", "mass", "gram", "grams",
+            "particles", "atoms", "molecules", "reaction", "stoichiometry", "gas", "volume",
+            "concentration", "mol", "nacl"
+        },
+        "non_stem_cues": {
+            "skin", "face", "spot", "cheek", "beauty", "rodent", "underground", "animal",
+            "mammal", "spy", "secret", "agent", "lawn", "garden", "traitor", "infiltrator"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "allow_plural": True,
+        "mapping": {"en": "mole", "hi": "मोल", "kn": "ಮೋಲ್", "ta": "மோல்", "bn": "মোল"},
+    },
+    "BASE": {
+        "stem_cues": {
+            "acid", "alkali", "alkaline", "ph", "reaction", "hydroxide", "neutralize",
+            "neutralization", "litmus", "logarithm", "exponent", "binary", "decimal", "radix",
+            "salt", "indicator", "solution", "chemistry", "ion"
+        },
+        "non_stem_cues": {
+            "baseball", "army", "military", "station", "floor", "headquarters", "bottom",
+            "foundation", "camp", "ground", "support", "pillar", "soldier", "soldiers", "patrol"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "allow_plural": True,
+        "mapping": {"en": "base", "hi": "क्षार", "kn": "ಪ್ರತ್ಯಾಮ್ಲ", "ta": "காரம்", "bn": "ক্ষার"},
+    },
+    "SALT": {
+        "stem_cues": {
+            "acid", "base", "ionic", "neutralization", "compound", "nacl", "crystal", "chloride",
+            "sodium", "cation", "anion", "reaction", "solution", "chemistry", "precipitate",
+            "electrolysis"
+        },
+        "non_stem_cues": {
+            "food", "cook", "taste", "kitchen", "dining", "sprinkle", "pinch", "pepper",
+            "soup", "dish", "flavor", "salad", "recipe"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "allow_plural": True,
+        "mapping": {"en": "salt", "hi": "लवण", "kn": "ಲವಣ", "ta": "உப்பு சேர்மம்", "bn": "লবণ"},
+    },
+    "CELL": {
+        "stem_cues": {
+            "biology", "tissue", "membrane", "nucleus", "cytoplasm", "mitochondria", "organelle",
+            "organism", "electrolysis", "battery", "galvanic", "voltaic", "anode", "cathode",
+            "dna", "division", "plant", "microscope", "wall"
+        },
+        "non_stem_cues": {
+            "prison", "jail", "lockup", "police", "criminal", "inmate", "convict", "bars",
+            "guard", "excel", "spreadsheet", "row", "column", "mobile", "cellular", "call", "phone"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "allow_plural": True,
+        "mapping": {"en": "cell", "hi": "कोशिका", "kn": "ಜೀವಕೋಶ", "ta": "செல்", "bn": "কোষ"},
+    },
+    "MASS": {
+        "stem_cues": {
+            "acceleration", "force", "gravity", "weight", "kg", "kilogram", "grams", "inertia",
+            "momentum", "newton", "density", "volume", "matter", "physics", "velocity", "motion",
+            "energy"
+        },
+        "non_stem_cues": {
+            "church", "christian", "prayer", "sunday", "gathering", "crowd", "people", "media",
+            "communication", "priest", "cathedral", "altar"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {"en": "mass", "hi": "द्रव्यमान", "kn": "ದ್ರವ್ಯರಾಶಿ", "ta": "நிறை", "bn": "ভর"},
+    },
+    "WORK": {
+        "stem_cues": {
+            "force", "displacement", "joule", "joules", "energy", "power", "distance",
+            "calculate", "formula", "physics", "mechanics", "motion"
+        },
+        "non_stem_cues": {
+            "job", "office", "career", "employee", "labor", "boss", "salary", "daily",
+            "commute", "shift", "company", "colleague", "resume"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {"en": "work", "hi": "कार्य", "kn": "ಕಾರ್ಯ", "ta": "வேலை", "bn": "কার্য"},
+    },
+    "CURRENT": {
+        "stem_cues": {
+            "voltage", "resistance", "ampere", "amperes", "circuit", "circuits", "ohm", "wire",
+            "charge", "flow", "electricity", "electron", "electrons", "conductor", "resistor"
+        },
+        "non_stem_cues": {
+            "affairs", "events", "year", "month", "present", "news", "latest", "ongoing",
+            "update", "modern", "today", "date", "situation"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {"en": "current", "hi": "विद्युत धारा", "kn": "ವಿದ್ಯುತ್ ಪ್ರವಾಹ", "ta": "மின்னோட்டம்", "bn": "বিদ্যুৎ প্রবাহ"},
+    },
+    "POWER": {
+        "stem_cues": {
+            "watt", "watts", "kilowatt", "joule", "energy", "horsepower", "electrical",
+            "voltage", "circuit", "generator"
+        },
+        "non_stem_cues": {
+            "political", "politics", "government", "regime", "ruler", "leader", "minister",
+            "authority", "influence", "corrupt", "election", "vote"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {"en": "power", "hi": "शक्ति", "kn": "ಸಾಮರ್ಥ್ಯ", "ta": "திறன்", "bn": "ক্ষমতা"},
+    },
+    "AM": {
+        "stem_cues": {
+            "radio", "frequency", "modulation", "signal", "carrier", "wave", "waves",
+            "broadcast", "transmitter", "receiver", "khz", "amplitude", "transmission"
+        },
+        "non_stem_cues": {
+            "morning", "clock", "alarm", "pm", "night", "wake", "student", "boy", "girl",
+            "here", "fine", "happy", "ready", "tomorrow", "today"
+        },
+        "default_caps_stem": True,
+        "allow_lowercase": False,
+        "mapping": {"en": "A M", "hi": "एएम", "kn": "ಎಎಂ", "ta": "ஏஎம்", "bn": "এএম"},
+    },
+    "FM": {
+        "stem_cues": {
+            "radio", "frequency", "modulation", "signal", "carrier", "wave", "waves",
+            "broadcast", "transmitter", "receiver", "mhz", "sound", "channel", "station",
+            "transmission"
+        },
+        "non_stem_cues": {
+            "finance", "minister", "ministry", "budget", "parliament", "tax"
+        },
+        "default_caps_stem": True,
+        "allow_lowercase": False,
+        "mapping": {"en": "F M", "hi": "एफएम", "kn": "ಎಫ್‌ಎಂ", "ta": "எஃப்எம்", "bn": "এফএম"},
+    },
 }
 
 UNAMBIGUOUS_STEM_ACRONYMS: dict[str, dict[str, str]] = {
@@ -531,6 +670,13 @@ UNAMBIGUOUS_STEM_ACRONYMS: dict[str, dict[str, str]] = {
     "HTML": {"en": "H T M L", "hi": "एचटीएमएल", "kn": "ಎಚ್‌ಟಿಎಮ್‌ಎಲ್", "ta": "ஹெச்டிஎம்எல்", "bn": "এইচটিএমএল"},
     "EMF": {"en": "E M F", "hi": "ईएमएफ", "kn": "ಇಎಂಎಫ್", "ta": "இஎம்எஃப்", "bn": "ইএমএফ"},
     "RMS": {"en": "R M S", "hi": "आरएमएस", "kn": "ಆರ್‌ಎಂಎಸ್", "ta": "ஆர்எம்எஸ்", "bn": "আরএমএস"},
+    "pH": {"en": "p H", "hi": "पीएच", "kn": "ಪಿಎಚ್", "ta": "பிஹெச்", "bn": "পিএইচ"},
+    "PH": {"en": "p H", "hi": "पीएच", "kn": "ಪಿಎಚ್", "ta": "பிஹெச்", "bn": "পিএইচ"},
+    "STP": {"en": "S T P", "hi": "एसटीपी", "kn": "ಎಸ್‌ಟಿಪಿ", "ta": "எஸ்டிபி", "bn": "এসটিপি"},
+    "NTP": {"en": "N T P", "hi": "एनटीपी", "kn": "ಎನ್‌ಟಿಪಿ", "ta": "என்டிபி", "bn": "এনটিপি"},
+    "UV": {"en": "U V", "hi": "यूवी", "kn": "ಯುವಿ", "ta": "யுவி", "bn": "ইউভি"},
+    "IR": {"en": "I R", "hi": "आईआर", "kn": "ಐಆರ್", "ta": "ஐஆர்", "bn": "আইআর"},
+    "ADP": {"en": "A D P", "hi": "एडीपी", "kn": "ಎಡಿಪಿ", "ta": "ஏடிபி", "bn": "এডিপি"},
 }
 
 # Unified mapping for backwards compatibility and static lookups
@@ -547,7 +693,11 @@ def expand_stem_acronyms(text: str, lang: str) -> str:
 
     # Phase 1: Disambiguate and expand ambiguous STEM terms with 2A & 2B checks
     for term, cfg in STEM_DISAMBIGUATION.items():
-        pat = re.compile(rf"\b({term}|{term.capitalize()})\b", re.IGNORECASE if cfg.get("allow_lowercase") else 0)
+        plural_pat = r"(?:s|es)?" if cfg.get("allow_plural") else ""
+        pat = re.compile(
+            rf"\b({term}|{term.capitalize()}){plural_pat}\b",
+            re.IGNORECASE if cfg.get("allow_lowercase") else 0,
+        )
 
         def _replace_ambiguous(match: re.Match) -> str:
             token = match.group(0)
@@ -566,9 +716,11 @@ def expand_stem_acronyms(text: str, lang: str) -> str:
 
             # 2A: Scoring
             if non_stem_hits > stem_hits:
-                return token  # Strong non-STEM context (e.g. King Ram, room AC)
+                return token  # Strong non-STEM context (e.g. King Ram, room AC, skin mole)
             if stem_hits > non_stem_hits:
-                return cfg["mapping"].get(lang_key, token)  # Strong STEM context (e.g. 16 GB Ram)
+                if lang_key == "en" and cfg.get("allow_plural") and token.lower().endswith("s"):
+                    return token
+                return cfg["mapping"].get(lang_key, token)  # Strong STEM context
 
             # Default to 2B case rule
             if is_all_caps and cfg.get("default_caps_stem", True):

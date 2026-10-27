@@ -325,3 +325,97 @@ def test_stem_disambiguation_approach_2a_and_2b():
     assert "जीपीयू" in res_unambig
     assert "एटीपी" in res_unambig
 
+
+
+# ---------------------------------------------------------------------------
+# 10. Additional STEM Terms Disambiguation (Chemistry, Physics, Biology)
+# ---------------------------------------------------------------------------
+def test_additional_stem_disambiguation_chemistry_physics_biology():
+    """Verify chemistry, physics, and biology terms (mole, base, salt, cell, mass, work, AM/FM, pH)."""
+    # 1. MOLE: Chemistry vs Skin/Rodent
+    t_mole_chem = "One mole of NaCl contains Avogadro number of particles in solution."
+    assert "ಮೋಲ್" in expand_stem_acronyms(t_mole_chem, "kn")
+    assert "मोल" in expand_stem_acronyms(t_mole_chem, "hi")
+    assert "மோல்" in expand_stem_acronyms(t_mole_chem, "ta")
+    assert "মোল" in expand_stem_acronyms(t_mole_chem, "bn")
+
+    t_mole_skin = "The patient had a dark mole on his cheek."
+    res_mole_skin = expand_stem_acronyms(t_mole_skin, "kn")
+    assert "mole" in res_mole_skin
+    assert "ಮೋಲ್" not in res_mole_skin
+
+    # 2. BASE: Chemistry vs Military
+    t_base_chem = "An acid reacts with a base to form salt and water."
+    assert "ಪ್ರತ್ಯಾಮ್ಲ" in expand_stem_acronyms(t_base_chem, "kn")
+    assert "क्षार" in expand_stem_acronyms(t_base_chem, "hi")
+
+    t_base_mil = "The soldiers returned to the military base after patrol."
+    res_base_mil = expand_stem_acronyms(t_base_mil, "kn")
+    assert "base" in res_base_mil
+    assert "ಪ್ರತ್ಯಾಮ್ಲ" not in res_base_mil
+
+    # 3. SALT: Chemistry vs Food
+    t_salt_chem = "Neutralization reaction between acid and base produces salt."
+    assert "ಲವಣ" in expand_stem_acronyms(t_salt_chem, "kn")
+    assert "लवण" in expand_stem_acronyms(t_salt_chem, "hi")
+
+    t_salt_food = "Please pass the salt and pepper for the soup."
+    res_salt_food = expand_stem_acronyms(t_salt_food, "kn")
+    assert "salt" in res_salt_food
+    assert "ಲವಣ" not in res_salt_food
+
+    # 4. CELL: Biology vs Prison
+    t_cell_bio = "Each plant cell has a nucleus and protective cell wall."
+    assert "ಜೀವಕೋಶ" in expand_stem_acronyms(t_cell_bio, "kn")
+    assert "कोशिका" in expand_stem_acronyms(t_cell_bio, "hi")
+
+    t_cell_jail = "The prisoner was locked in a solitary cell."
+    res_cell_jail = expand_stem_acronyms(t_cell_jail, "kn")
+    assert "cell" in res_cell_jail
+    assert "ಜೀವಕೋಶ" not in res_cell_jail
+
+    # 5. MASS: Physics vs Church
+    t_mass_phys = "Force equals mass times acceleration in Newton second law of motion."
+    assert "ದ್ರವ್ಯರಾಶಿ" in expand_stem_acronyms(t_mass_phys, "kn")
+    assert "द्रव्यमान" in expand_stem_acronyms(t_mass_phys, "hi")
+
+    t_mass_church = "The Sunday mass at the local church started at nine."
+    res_mass_church = expand_stem_acronyms(t_mass_church, "kn")
+    assert "mass" in res_mass_church
+    assert "ದ್ರವ್ಯರಾಶಿ" not in res_mass_church
+
+    # 6. WORK: Physics vs Job
+    t_work_phys = "In physics, work is done when force causes displacement."
+    assert "ಕಾರ್ಯ" in expand_stem_acronyms(t_work_phys, "kn")
+    assert "कार्य" in expand_stem_acronyms(t_work_phys, "hi")
+
+    t_work_job = "He went to work at the corporate office today."
+    res_work_job = expand_stem_acronyms(t_work_job, "kn")
+    assert "work" in res_work_job
+
+    # 7. AM and FM: Radio vs Time
+    t_am_radio = "The AM radio transmitter broadcasts audio signal at 800 kHz frequency."
+    assert "ಎಎಂ" in expand_stem_acronyms(t_am_radio, "kn")
+    assert "एएम" in expand_stem_acronyms(t_am_radio, "hi")
+
+    t_am_clock = "The morning flight departs at 8 AM tomorrow."
+    res_am_clock = expand_stem_acronyms(t_am_clock, "kn")
+    assert "AM" in res_am_clock
+    assert "ಎಎಂ" not in res_am_clock
+
+    t_fm_radio = "The FM station transmits stereo music at 98.3 MHz frequency."
+    assert "ಎಫ್‌ಎಂ" in expand_stem_acronyms(t_fm_radio, "kn")
+    assert "एफएम" in expand_stem_acronyms(t_fm_radio, "hi")
+
+    # 8. Unambiguous STEM terms: pH, UV, IR, STP
+    t_unambig_more = "Pure water has pH 7 at STP, while UV and IR light carry electromagnetic energy."
+    res_hi = expand_stem_acronyms(t_unambig_more, "hi")
+    res_kn = expand_stem_acronyms(t_unambig_more, "kn")
+    assert "पीएच" in res_hi
+    assert "एसटीपी" in res_hi
+    assert "यूवी" in res_hi
+    assert "आईआर" in res_hi
+    assert "ಪಿಎಚ್" in res_kn
+    assert "ಎಸ್‌ಟಿಪಿ" in res_kn
+    assert "ಯುವಿ" in res_kn
+    assert "ಐಆರ್" in res_kn

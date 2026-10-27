@@ -83,6 +83,21 @@ class StubTTSEngine:
         return timing_manifest
 
 
+def find_ffmpeg() -> str | None:
+    """Locate ffmpeg binary in system PATH or bundled project tools directory."""
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    candidates = [
+        Path(os.environ.get("BVT_TOOLS", "")) / "ffmpeg" / "bin" / "ffmpeg.exe",
+        Path(r"D:\git\project requirements\tools\ffmpeg\bin\ffmpeg.exe"),
+        Path(r"C:\tools\ffmpeg\bin\ffmpeg.exe"),
+    ]
+    for c in candidates:
+        if c.is_file():
+            return str(c)
+    return None
+
+
 def stub_render_and_mux_mp4(
     html_path,
     timing_manifest,
@@ -92,11 +107,12 @@ def stub_render_and_mux_mp4(
     progress_callback=None,
 ):
     """Stand-in for exporter.export_mp4.render_and_mux_mp4: solid-colour video muxed with the lesson audio."""
-    if shutil.which("ffmpeg") is None:
+    ffmpeg_bin = find_ffmpeg()
+    if ffmpeg_bin is None:
         return None
     total = timing_manifest[-1]["end_sec"]
     subprocess.run([
-        "ffmpeg", "-y", "-loglevel", "error",
+        ffmpeg_bin, "-y", "-loglevel", "error",
         "-f", "lavfi", "-i", f"color=c=0x0b1d3a:s=1280x720:r=20:d={total}",
         "-i", str(audio_wav_path),
         "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
