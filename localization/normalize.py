@@ -896,6 +896,9 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
     out = expand_stem_classroom_terms(text, lang)
     out = expand_stem_acronyms(out, lang)
 
+    # Normalize compound word hyphens (e.g. fast-charging -> fast charging)
+    out = re.sub(r"(?<=[^\s\d\(\)\[\]\{\}\<\>])-(?=[^\s\d\(\)\[\]\{\}\<\>])", " ", out)
+
     # 1. Expand units and symbols to native script words first
     if lang in ("kn", "kan_Knda"):
         out = re.sub(r"°\s*C", " ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್ ", out)

@@ -348,7 +348,7 @@ class OfflineIndicTranslator:
         placeholder_style: str = "bracket",
         protect_patterns: list[re.Pattern] = None,
         backend_fn: Callable[[list[str], str], list[str]] = None,
-        code_switch: bool = True,
+        code_switch: bool = False,
     ):
         self.placeholder_style = placeholder_style
         self.backend_fn = backend_fn
