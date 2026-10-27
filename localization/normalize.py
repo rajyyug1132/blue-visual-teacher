@@ -377,3 +377,47 @@ def count_ascii_digits(text: str) -> int:
 def has_ascii_digits(text: str) -> bool:
     """Check if any ASCII digit (0-9) is present in text."""
     return bool(re.search(r"\d", text))
+
+
+def expand_numbers_and_symbols(text: str, lang: str) -> str:
+    """Expand numbers, scientific units, and mathematical symbols into spoken words."""
+    out = text
+    if lang in ("kn", "kan_Knda"):
+        # Math operators
+        out = re.sub(r"\s*=\s*", " ಸಮಾನ ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " ಗುಣಿಸು ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " ಭಾಗಿಸು ", out)
+        out = re.sub(r"\s*\+\s*", " ಪ್ಲಸ್ ", out)
+        out = re.sub(r"\s*-\s*", " ಮೈನಸ್ ", out)
+        # Units
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:V|Volts?)\b", r"\1 ವೋಲ್ಟ್", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Ω|Ohms?)\b", r"\1 ಓಮ್", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:A|Amperes?|Amps?)\b", r"\1 ಆಂಪಿಯರ್", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:W|Watts?)\b", r"\1 ವ್ಯಾಟ್", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Hz|Hertz)\b", r"\1 ಹರ್ಟ್ಜ್", out)
+        out = re.sub(r"°\s*C", "ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್", out)
+        out = re.sub(r"°\s*F", "ಡಿಗ್ರಿ ಫ್ಯಾರನ್‌ಹೀಟ್", out)
+        out = re.sub(r"%", "ಪ್ರತಿಶತ", out)
+        # Residual symbols with words
+        out = fix_residual_digits(out, "kn")
+    elif lang in ("hi", "hin_Deva"):
+        out = re.sub(r"\s*=\s*", " बराबर ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " गुणा ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " भागाकार ", out)
+        out = re.sub(r"\s*\+\s*", " प्लस ", out)
+        out = re.sub(r"\s*-\s*", " माइनस ", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:V|Volts?)\b", r"\1 वोल्ट", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Ω|Ohms?)\b", r"\1 ओम", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:A|Amperes?|Amps?)\b", r"\1 एम्पीयर", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:W|Watts?)\b", r"\1 वाट", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Hz|Hertz)\b", r"\1 हर्ट्ज़", out)
+        out = re.sub(r"°\s*C", "डिग्री सेल्सियस", out)
+        out = re.sub(r"°\s*F", "डिग्री फ़ारेनहाइट", out)
+        out = re.sub(r"%", "प्रतिशत", out)
+        out = fix_residual_digits(out, "hi")
+    else:
+        out = speak_en(text)
+        out = fix_residual_digits(out, "en")
+
+    return re.sub(r"\s+", " ", out).strip()
+
