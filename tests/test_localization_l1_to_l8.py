@@ -8,7 +8,7 @@ Covers:
   L5: Deterministic synthesis: same text produces identical audio duration twice.
   L6: Number/symbol sanitizer: 0 digits or raw symbols reach MMS-TTS.
   L7: Timing manifest matches WAV length within ±0.05s; total 30-90s for 20 lessons in en/hi/kn.
-  L8: Fonts (Noto Sans, Devanagari, Kannada, Tamil, Telugu) and OFL licence in assets/fonts.
+  L8: Fonts (Noto Sans, Devanagari, Kannada, Tamil, Bengali) and OFL licence in assets/fonts.
 """
 
 from __future__ import annotations
@@ -234,10 +234,11 @@ def test_l6_number_symbol_sanitizer():
         assert len(digits_ta) == 0, f"Residual digits in Tamil '{clean_ta}' for case '{c}'"
         assert "Ω" not in clean_ta and "°C" not in clean_ta and "%" not in clean_ta
 
-        clean_te = clean_for_mms(c, "te")
-        digits_te = re.findall(r"\d", clean_te)
-        assert len(digits_te) == 0, f"Residual digits in Telugu '{clean_te}' for case '{c}'"
-        assert "Ω" not in clean_te and "°C" not in clean_te and "%" not in clean_te
+        clean_bn = clean_for_mms(c, "bn")
+        digits_bn = re.findall(r"\d", clean_bn)
+        assert len(digits_bn) == 0, f"Residual digits in Bengali '{clean_bn}' for case '{c}'"
+        assert "Ω" not in clean_bn and "°C" not in clean_bn and "%" not in clean_bn
+
 
 
 # ==============================================================================
@@ -248,7 +249,7 @@ def test_l7_timing_manifest_wav_sync(tmp_path):
     tts = OfflineTTSEngine()
     assert len(STRESS_TOPICS) == 20
 
-    for lang in ["en", "hi", "kn", "ta", "te"]:
+    for lang in ["en", "hi", "kn", "ta", "bn"]:
         # Test representative topics for full audio synthesis verification
         for topic in STRESS_TOPICS[:3]:
             plan = build_safe_fallback_lesson(topic)
@@ -275,7 +276,7 @@ def test_l7_timing_manifest_wav_sync(tmp_path):
 # L8: Font Bundling & OFL License
 # ==============================================================================
 def test_l8_font_bundling():
-    """L8: Noto Sans + Devanagari + Kannada (+Tamil, Telugu) and OFL.txt present in assets/fonts."""
+    """L8: Noto Sans + Devanagari + Kannada (+Tamil, Bengali) and OFL.txt present in assets/fonts."""
     for font_dir in [Path("assets/fonts"), Path("localization/assets/fonts")]:
         assert font_dir.exists(), f"{font_dir} directory must exist"
 
@@ -287,7 +288,7 @@ def test_l8_font_bundling():
             "NotoSansKannada-Regular.ttf",
             "NotoSansKannada-Bold.ttf",
             "NotoSansTamil-Regular.ttf",
-            "NotoSansTelugu-Regular.ttf",
+            "NotoSansBengali-Regular.ttf",
         ]
         for f in expected_fonts:
             font_path = font_dir / f

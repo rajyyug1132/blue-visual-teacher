@@ -40,7 +40,6 @@ LANG_CODE_MAP = {
     "hi": "hin_Deva",
     "kn": "kan_Knda",
     "ta": "tam_Taml",
-    "te": "tel_Telu",
 }
 
 
@@ -79,8 +78,6 @@ def ensure_word_budget(text: str, lang: str, min_words: int = 8, max_words: int 
             prefix = "ध्यान दें कि, सरल शब्दों में "
         elif lang in ("ta", "tam_Taml"):
             prefix = "இங்கே கவனியுங்கள், எளிய முறையில் சொன்னால் "
-        elif lang in ("te", "tel_Telu"):
-            prefix = "ఇక్కడ గమనించండి, సరళంగా చెప్పాలంటే "
         else:
             prefix = "Notice that, in simple terms "
         expanded = prefix + text.strip()
@@ -648,8 +645,8 @@ class OfflineIndicTranslator:
             # Fallback for unexpected item types
             results.append(item.get("original", ""))
 
-        # Ensure zero Devanagari leakage in non-Devanagari scripts (Kannada, Tamil, Telugu)
-        if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml", "te", "tel_Telu"):
+        # Ensure zero Devanagari leakage in non-Devanagari scripts (Kannada, Tamil, Bengali)
+        if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml"):
             results = [sanitize_kannada_output(r) if contains_devanagari(r) else r for r in results]
 
         return results

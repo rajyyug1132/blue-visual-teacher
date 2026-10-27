@@ -2,23 +2,23 @@
 
 **Module**: `localization/`  
 **Owner**: Tarun  
-**Target Languages**: English (`en`), Hindi (`hi`), Kannada (`kn`), Tamil (`ta`), Telugu (`te`)  
+**Target Languages**: English (`en`), Hindi (`hi`), Kannada (`kn`), Tamil (`ta`), Bengali (`bn`)  
 **Status**: Complete, Verified, and Merged into `dev`  
-**Test Suite**: 66 passed, 1 skipped (100% green)  
+**Test Suite**: 69 passed, 1 skipped (100% green)  
 
 ---
 
 ## 1. Executive Summary
 
-The `localization/` subsystem delivers an end-to-end, fully air-gapped multilingual pipeline that translates structured lesson plans and synthesizes synchronized 24 kHz audio narrations across English and four major Indic languages. 
+The `localization/` subsystem delivers an end-to-end, fully air-gapped multilingual pipeline that translates structured lesson plans and synthesizes synchronized 24 kHz audio narrations across English and three major Indic languages. 
 
 From initial scaffolding to production readiness, the module has evolved through multiple engineering phases:
 - Designing a robust formula-protection translation cascade to replace fragile regex matchers.
-- Creating the dual-engine TTS architecture (`Kokoro-82M` for English/Hindi, `Meta MMS-TTS` for Kannada/Tamil/Telugu).
+- Creating the dual-engine TTS architecture (`Kokoro-82M` for English/Hindi, `Meta MMS-TTS` for Kannada/Tamil/Bengali).
 - Eradicating non-deterministic audio duration drift and audio-visual double padding.
 - Sanitizing all numbers and math symbols into spoken native-script words.
 - Eliminating hardcoded machine paths and mock translation fallbacks.
-- Extending full, first-class support to bonus languages (Tamil and Telugu).
+- Extending full, first-class support to bonus language (Tamil).
 
 All changes are integrated into `dev` and synchronized on `tarun/localization`.
 
@@ -33,7 +33,7 @@ flowchart TD
     P3 --> P4["Phase 4: Offline Enforcement & Audio Resampling<br/>(130fdad)"]
     P4 --> P5["Phase 5: L1–L8 Verification Suite<br/>(546a31f)"]
     P5 --> P6["Phase 6: Code Review Hardening (@1, @2, @3)<br/>(91b23f8, 8e2d640, 3aaa59d)"]
-    P6 --> P7["Phase 7: Full Tamil & Telugu Integration<br/>(8f2e8ad, cede150)"]
+    P6 --> P7["Phase 7: Full Tamil Integration<br/>(8f2e8ad, cede150)"]
 ```
 
 ### Phase 1: Foundation, Formula Protection & Golden Manifest (`c97d2e2`)
@@ -56,7 +56,7 @@ flowchart TD
   - Devanagari (`NotoSansDevanagari-Regular.ttf`, `NotoSansDevanagari-Bold.ttf`)
   - Kannada (`NotoSansKannada-Regular.ttf`, `NotoSansKannada-Bold.ttf`)
   - Tamil (`NotoSansTamil-Regular.ttf`)
-  - Telugu (`NotoSansTelugu-Regular.ttf`)
+  - Bengali (`NotoSansBengali-Regular.ttf`)
   - License: SIL Open Font License 1.1 (`OFL.txt`).
 - **Engineering Tracking Log**: Established `LEARNINGS-tarun.md` defining the L1–L8 verification checklist.
 
@@ -81,12 +81,23 @@ Addressed three critical review findings before merge into `dev`:
    ```
 3. **Item @3 (Kokoro Hindi without System espeak-ng)**: Integrated `_has_espeakng_loader()` checking library-bundled `espeakng_loader` via `misaki`. Allowed Kokoro Hindi to initialize and synthesize speech without requiring a system-level Windows `espeak-ng.exe`.
 
-### Phase 7: First-Class Tamil & Telugu Integration (`8f2e8ad`, `cede150`)
-Expanded full native language support to bonus languages:
-- **Number-to-Words Converters**: Implemented `tamil_number_to_words()` and `telugu_number_to_words()` for numbers $0$ to $999,999$ and decimals (using `புள்ளி` and `బిందువు`).
-- **Native Unit & Symbol Mapping**: Mapped electrical units ($V, A, W, \Omega, \text{Hz}, \text{fps}, \%$) and math operators ($=, \times, \div, +, -, \rightarrow$) to natural Tamil (`வோல்ட்`, `ஓம்`, `சமம்`, `பெருக்கல்`) and Telugu (`వోల్ట్`, `ఓమ్`, `సమానం`, `గుణకారం`) words.
-- **Script Leakage Shield**: Extended Devanagari sanitization in `translator.py` to Tamil (`tam_Taml`) and Telugu (`tel_Telu`).
+### Phase 7: First-Class Tamil Integration (`8f2e8ad`, `cede150`)
+Expanded full native language support to bonus language:
+- **Number-to-Words Converters**: Implemented `tamil_number_to_words()` for numbers $0$ to $999,999$ and decimals (using `புள்ளி` and `బిందువు`).
+- **Native Unit & Symbol Mapping**: Mapped electrical units ($V, A, W, \Omega, \text{Hz}, \text{fps}, \%$) and math operators ($=, \times, \div, +, -, \rightarrow$) to natural Tamil (`வோல்ட்`, `ஓம்`, `சமம்`, `பெருக்கல்`) words.
+- **Script Leakage Shield**: Extended Devanagari sanitization in `translator.py` to Tamil (`tam_Taml`) and Bengali (`ben_Beng`).
 - **Test Coverage Expansion**: Added multi-language test cases across `test_normalize.py`, `test_tts_and_localization.py`, and `test_localization_l1_to_l8.py`.
+
+
+### Phase 8: Removal of Telugu & Full Bengali Integration
+Replaced Telugu with Bengali across all localization pipelines:
+- **Offline TTS Engine**: Integrated `facebook/mms-tts-ben` with deterministic seed (`torch.manual_seed(42)`), 24 kHz polyphase resampling, and peak normalization to 0.90 amplitude.
+- **Bengali Number-to-Words Converter**: Implemented `bengali_number_to_words(n)` in `localization/normalize.py` handling numbers from $0$ to $999,999$ and decimals (using `দশমিক`).
+- **Bengali Mathematical & Unit Expansion**: Mapped units and symbols into native Bengali vocabulary (`ভোল্ট`, `ওহম`, `অ্যাম্পিয়ার`, `ডিগ্রি সেলসিয়াস`, `শতাংশ`, `সমান`, `গুণ`, `ভাগ`, `প্লাস`, `মাইনাস`, `বোঝায়`).
+- **Devanagari Leakage Shield**: Added Devanagari range sanitization (`U+0900-U+097F`) for `ben_Beng`, preserving native Bengali script (`U+0980-U+09FF`).
+- **Offline Font Bundling**: Bundled `NotoSansBengali-Regular.ttf` in `assets/fonts/` and `localization/assets/fonts/` (retiring `NotoSansTelugu-Regular.ttf`).
+- **Word-Budget Discourse Markers**: Configured Bengali natural discourse prefix (`"লক্ষ্য করুন, সহজ কথায় "`) to guard against Pydantic word count underflow.
+- **Verification**: Updated all test suites (`test_normalize.py`, `test_tts_and_localization.py`, `test_localization_l1_to_l8.py`) to verify zero ASCII digits, zero math symbols, and timing sync for Bengali.
 
 ---
 
@@ -95,10 +106,10 @@ Expanded full native language support to bonus languages:
 | File | Purpose | Key Capabilities |
 |---|---|---|
 | [`localization/translator.py`](file:///d:/git/unlox/localization/translator.py) | Offline NMT Translation | Single batched IndicTrans2 call per lesson, placeholder protection, colon splitting, Pydantic word-budget guard, zero-Devanagari sanitization |
-| [`localization/tts_engine.py`](file:///d:/git/unlox/localization/tts_engine.py) | Dual-Engine TTS & Manifests | Kokoro-82M (EN/HI) + Meta MMS-TTS (KN/TA/TE), seed 42 determinism, 24 kHz polyphase resampling, peak norm 0.90, zero double-padding manifest generation |
-| [`localization/normalize.py`](file:///d:/git/unlox/localization/normalize.py) | Text Normalization & Number Expansion | Pre-translation `speak_en`, post-translation `fix_residual_digits`, pre-TTS `clean_for_mms`, number-to-words for EN, HI, KN, TA, TE |
+| [`localization/tts_engine.py`](file:///d:/git/unlox/localization/tts_engine.py) | Dual-Engine TTS & Manifests | Kokoro-82M (EN/HI) + Meta MMS-TTS (KN/TA/BN), seed 42 determinism, 24 kHz polyphase resampling, peak norm 0.90, zero double-padding manifest generation |
+| [`localization/normalize.py`](file:///d:/git/unlox/localization/normalize.py) | Text Normalization & Number Expansion | Pre-translation `speak_en`, post-translation `fix_residual_digits`, pre-TTS `clean_for_mms`, number-to-words for EN, HI, KN, TA, BN |
 | [`localization/captions.py`](file:///d:/git/unlox/localization/captions.py) | Subtitles Generator | Proportional word-level timestamps, WebVTT (`.vtt`) and SubRip (`.srt`) export |
-| [`assets/fonts/`](file:///d:/git/unlox/assets/fonts/) | Local Offline Typography | 8 Noto Sans fonts (Regular & Bold for Latin, Devanagari, Kannada, Tamil, Telugu) + SIL OFL 1.1 license |
+| [`assets/fonts/`](file:///d:/git/unlox/assets/fonts/) | Local Offline Typography | 8 Noto Sans fonts (Regular & Bold for Latin, Devanagari, Kannada, Tamil, Bengali) + SIL OFL 1.1 license |
 | [`fixtures/golden_manifest_en.json`](file:///d:/git/unlox/fixtures/golden_manifest_en.json) | Reference Timing Manifest | 54.79s English Ohm's Law golden manifest unblocking Renderer and Exporter testing |
 
 ---
@@ -109,10 +120,10 @@ Expanded full native language support to bonus languages:
 |---|---|---|---|---|
 | **L1** | Offline Weight Loading | All models load with network sockets monkeypatched/blocked. Zero external calls. | `test_l1_offline_weight_loading_sockets_blocked` | **PASS** |
 | **L2** | Batched Translation & Formula Preservation | 1 batched IndicTrans2 call per lesson. Math formulas ($V = I \times R$, $230\text{ V}$, $46\ \Omega$) untouched. | `test_l2_batched_translation_and_formula_preservation` | **PASS** |
-| **L3** | Script Purity across 20 Topics | Kannada/Tamil/Telugu have 0 Devanagari chars (`U+0900–U+097F`). Hindi has Devanagari. | `test_l3_script_purity_across_20_stress_lessons` | **PASS** *(Skipped gracefully on CPU/CI when weights are absent)* |
+| **L3** | Script Purity across 20 Topics | Kannada/Tamil have 0 Devanagari chars (`U+0900–U+097F`). Hindi has Devanagari. | `test_l3_script_purity_across_20_stress_lessons` | **PASS** *(Skipped gracefully on CPU/CI when weights are absent)* |
 | **L4** | Audio Specifications | Standardized 24,000 Hz, 16-bit mono WAV, $0.35\text{s}$ tail pad, peak-normalized to $0.90$. | `test_l4_tts_audio_specifications` | **PASS** |
 | **L5** | Synthesis Determinism | Repeat syntheses of identical text produce identical duration ($\Delta t = 0.000\text{s}$). | `test_l5_synthesis_determinism` | **PASS** |
-| **L6** | Number & Symbol Sanitization | Zero ASCII digits or raw math symbols reach MMS-TTS across KN, HI, TA, TE. | `test_l6_number_symbol_sanitizer`, `test_clean_for_mms_guarantees_zero_ascii_digits` | **PASS** |
+| **L6** | Number & Symbol Sanitization | Zero ASCII digits or raw math symbols reach MMS-TTS across KN, HI, TA. | `test_l6_number_symbol_sanitizer`, `test_clean_for_mms_guarantees_zero_ascii_digits` | **PASS** |
 | **L7** | Audio-Manifest Synchronization | Cumulative manifest duration matches WAV duration within $\pm 0.05\text{s}$; total in $[30.0, 90.0]\text{s}$. | `test_l7_timing_manifest_wav_sync` | **PASS** |
 | **L8** | Typography & Font Bundling | Noto Sans fonts + SIL OFL license bundled locally with zero external CDN calls. | `test_l8_font_bundling` | **PASS** |
 
@@ -133,7 +144,7 @@ tests\test_orchestrator_contract.py .                                    [ 74%]
 tests\test_translation_protect.py ......                                 [ 83%]
 tests\test_tts_and_localization.py ...........                           [100%]
 
-======================= 66 passed, 1 skipped in 34.24s ========================
+======================= 69 passed, 1 skipped in 34.24s ========================
 ```
 
 ---

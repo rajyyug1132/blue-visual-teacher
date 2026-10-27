@@ -53,7 +53,7 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-from localization.normalize import clean_for_mms, tamil_number_to_words, telugu_number_to_words
+from localization.normalize import clean_for_mms, tamil_number_to_words, bengali_number_to_words
 
 TARGET_SR = 24000
 TAIL_PAD_SEC = 0.35
@@ -215,10 +215,10 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
             int_words = tamil_number_to_words(int_part)
             dec_words = " ".join(tamil_number_to_words(int(d)) for d in dec_str)
             return f"{int_words} புள்ளி {dec_words}"
-        elif lang in ("te", "tel_Telu"):
-            int_words = telugu_number_to_words(int_part)
-            dec_words = " ".join(telugu_number_to_words(int(d)) for d in dec_str)
-            return f"{int_words} బిందువు {dec_words}"
+        elif lang in ("bn", "ben_Beng"):
+            int_words = bengali_number_to_words(int_part)
+            dec_words = " ".join(bengali_number_to_words(int(d)) for d in dec_str)
+            return f"{int_words} দশমিক {dec_words}"
         else:
             int_words = english_number_to_words(int_part)
             dec_words = " ".join(english_number_to_words(int(d)) for d in dec_str)
@@ -303,30 +303,30 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
 
         out = re.sub(r"\b\d+\b", _replace_int_ta, out)
 
-    elif lang in ("te", "tel_Telu"):
+    elif lang in ("bn", "ben_Beng"):
         symbol_map = [
-            (r"\b(\d+)\s*(?:Ω|Ohms?|ఓమ్)\b", r"\1 ఓమ్"),
-            (r"\b(\d+)\s*(?:V|Volts?|వోల్ట్)\b", r"\1 వోల్ట్"),
-            (r"\b(\d+)\s*(?:A|Amperes?|ఆంపియర్)\b", r"\1 ఆంపియర్"),
-            (r"\b(\d+)\s*(?:W|Watts?|వాట్)\b", r"\1 వాట్"),
-            (r"\b(\d+)\s*(?:Hz|Hertz|హెర్ట్జ్)\b", r"\1 హెర్ట్జ్"),
-            (r"\b(\d+)\s*%", r"\1 శాతం"),
-            (r"\b(\d+)\s*fps\b", r"\1 ఫ్రేమ్ పర్ సెకను"),
-            (r"\b(\d+)\s*(?:s|sec|సెకను)\b", r"\1 సెకను"),
-            (r"\s*=\s*", " సమానం "),
-            (r"\s*(?:×|\*)\s*", " గుణకారం "),
-            (r"\s*(?:÷|\/)\s*", " భాగహారం "),
-            (r"\s*\+\s*", " ప్లస్ "),
-            (r"\s*-\s*", " మైనస్ "),
-            (r"\s*→\s*", " దారి తీస్తుంది "),
+            (r"\b(\d+)\s*(?:Ω|Ohms?|ওহম)\b", r"\1 ওহম"),
+            (r"\b(\d+)\s*(?:V|Volts?|ভোল্ট)\b", r"\1 ভোল্ট"),
+            (r"\b(\d+)\s*(?:A|Amperes?|অ্যাম্পিয়ার)\b", r"\1 অ্যাম্পিয়ার"),
+            (r"\b(\d+)\s*(?:W|Watts?|ওয়াট)\b", r"\1 ওয়াট"),
+            (r"\b(\d+)\s*(?:Hz|Hertz|হার্টজ)\b", r"\1 হার্টজ"),
+            (r"\b(\d+)\s*%", r"\1 শতাংশ"),
+            (r"\b(\d+)\s*fps\b", r"\1 ফ্রেম প্রতি সেকেন্ড"),
+            (r"\b(\d+)\s*(?:s|sec|সেকেন্ড)\b", r"\1 সেকেন্ড"),
+            (r"\s*=\s*", " সমান "),
+            (r"\s*(?:×|\*)\s*", " গুণ "),
+            (r"\s*(?:÷|\/)\s*", " ভাগ "),
+            (r"\s*\+\s*", " প্লাস "),
+            (r"\s*-\s*", " মাইনাস "),
+            (r"\s*→\s*", " বোঝায় "),
         ]
         for pat, repl in symbol_map:
             out = re.sub(pat, repl, out)
 
-        def _replace_int_te(m: re.Match) -> str:
-            return telugu_number_to_words(int(m.group(0)))
+        def _replace_int_bn(m: re.Match) -> str:
+            return bengali_number_to_words(int(m.group(0)))
 
-        out = re.sub(r"\b\d+\b", _replace_int_te, out)
+        out = re.sub(r"\b\d+\b", _replace_int_bn, out)
 
     else:
         symbol_map = [
@@ -403,7 +403,6 @@ class OfflineTTSEngine:
                 ("kn", "facebook/mms-tts-kan"),
                 ("hi", "facebook/mms-tts-hin"),
                 ("ta", "facebook/mms-tts-tam"),
-                ("te", "facebook/mms-tts-tel"),
             ]:
                 try:
                     self.mms_tokenizers[code] = AutoTokenizer.from_pretrained(

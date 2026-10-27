@@ -194,47 +194,41 @@ def tamil_number_to_words(n: int) -> str:
     return str(n)
 
 
-def telugu_number_to_words(n: int) -> str:
-    """Convert an integer (0 to 9999999) to Telugu words."""
+
+# ---------------------------------------------------------------------------
+bengali_digits_0_to_99 = {
+    0: "শূন্য", 1: "এক", 2: "দুই", 3: "তিন", 4: "চার", 5: "পাঁচ", 6: "ছয়", 7: "সাত", 8: "আট", 9: "নয়", 10: "দশ",
+    11: "এগারো", 12: "বারো", 13: "তেরো", 14: "চৌদ্দ", 15: "পনেরো", 16: "ষোলো", 17: "সতেরো", 18: "আঠারো", 19: "উনিশ", 20: "বিশ",
+    21: "একুশ", 22: "বাইশ", 23: "তেইশ", 24: "চব্বিশ", 25: "পঁচিশ", 26: "ছাব্বিশ", 27: "সাতাশ", 28: "আঠাশ", 29: "ঊনত্রিশ", 30: "ত্রিশ",
+    31: "একত্রিশ", 32: "বত্রিশ", 33: "তেত্রিশ", 34: "চৌত্রিশ", 35: "পঁয়ত্রিশ", 36: "ছত্রিশ", 37: "সাঁইত্রিশ", 38: "আটত্রিশ", 39: "ঊনচল্লিশ", 40: "চল্লিশ",
+    41: "একচল্লিশ", 42: "বিয়াল্লিশ", 43: "তেতাল্লিশ", 44: "চুয়াল্লিশ", 45: "পঁয়তাল্লিশ", 46: "ছেচল্লিশ", 47: "সাতচল্লিশ", 48: "আটচল্লিশ", 49: "ঊনপঞ্চাশ", 50: "পঞ্চাশ",
+    51: "একান্ন", 52: "বায়ান্ন", 53: "তিপ্পান্ন", 54: "চুয়ান্ন", 55: "পঞ্চান্ন", 56: "ছাপ্পান্ন", 57: "সাতান্ন", 58: "আটান্ন", 59: "ঊনষাট", 60: "ষাট",
+    61: "একষট্টি", 62: "বাষট্টি", 63: "তেষট্টি", 64: "চৌষট্টি", 65: "পঁয়ষট্টি", 66: "ছেষট্টি", 67: "সাতষট্টি", 68: "আটষট্টি", 69: "ঊনসত্তর", 70: "সত্তর",
+    71: "একাত্তর", 72: "বাহাত্তর", 73: "তিয়াত্তর", 74: "চুয়াত্তর", 75: "পঁচাত্তর", 76: "ছিয়াত্তর", 77: "সাতাত্তর", 78: "আঠাত্তর", 79: "ঊনআশি", 80: "আশি",
+    81: "একাশি", 82: "বিরাশি", 83: "তিরাশি", 84: "চৌরাশি", 85: "পঁচাশি", 86: "ছিয়াশি", 87: "সাতাশি", 88: "অষ্টআশি", 89: "ঊননব্বই", 90: "নব্বই",
+    91: "একানব্বই", 92: "বিরানব্বই", 93: "তিরানব্বই", 94: "চৌরানব্বই", 95: "পঁচানব্বই", 96: "ছিয়ানব্বই", 97: "সাতানব্বই", 98: "আটানব্বই", 99: "নিরানব্বই"
+}
+
+def bengali_number_to_words(n: int) -> str:
+    """Convert an integer (0 to 9999999) to Bengali words."""
     if n == 0:
-        return "సున్నా"
+        return "শূন্য"
     if n < 0:
-        return "మైనస్ " + telugu_number_to_words(abs(n))
-
-    units = ["", "ఒకటి", "రెండు", "మూడు", "నాలుగు", "ఐదు", "ఆరు", "ఏడు", "ఎనిమిది", "తొమ్మిది"]
-    teens = [
-        "పది", "పదకొండు", "పన్నెండు", "పదమూడు", "పద్నాలుగు",
-        "పదిహేను", "పదహారు", "పదిహేడు", "పద్దెనిమిది", "పంతొమ్మిది"
-    ]
-    tens_exact = ["", "", "ఇరవై", "ముప్పై", "నలభై", "యాభై", "అరవై", "డెబ్బై", "ఎనభై", "తొంబై"]
-    tens_comb = ["", "", "ఇరవై ", "ముప్పై ", "నలభై ", "యాభై ", "అరవై ", "డెబ్బై ", "ఎనభై ", "తొంబై "]
-    hundreds_exact = ["", "వంద", "రెండు వందలు", "మూడు వందలు", "నాలుగు వందలు", "ఐదు వందలు", "ఆరు వందలు", "ఏడు వందలు", "ఎనిమిది వందలు", "తొమ్మిది వందలు"]
-    hundreds_comb = ["", "వందల ", "రెండు వందల ", "మూడు వందల ", "నాలుగు వందల ", "ఐదు వందల ", "ఆరు వందల ", "ఏడు వందల ", "ఎనిమిది వందల ", "తొమ్మిది వందల "]
-
-    if n < 10:
-        return units[n]
-    if n < 20:
-        return teens[n - 10]
+        return "মাইনাস " + bengali_number_to_words(abs(n))
     if n < 100:
-        ten, rem = n // 10, n % 10
-        return tens_exact[ten] if rem == 0 else (tens_comb[ten] + units[rem])
+        return bengali_digits_0_to_99[n]
     if n < 1000:
         h, rem = n // 100, n % 100
-        return hundreds_exact[h] if rem == 0 else (hundreds_comb[h] + telugu_number_to_words(rem))
+        prefix = "একশো" if h == 1 else f"{bengali_digits_0_to_99[h]}শো"
+        return f"{prefix} {bengali_number_to_words(rem)}" if rem else prefix
     if n < 100000:
         th, rem = n // 1000, n % 1000
-        if th == 1:
-            prefix = "వెయ్యి " if rem else "వెయ్యి"
-        else:
-            th_w = telugu_number_to_words(th)
-            prefix = f"{th_w} వేల " if rem else f"{th_w} వేలు"
-        return prefix if rem == 0 else (prefix + telugu_number_to_words(rem))
+        prefix = "এক হাজার" if th == 1 else f"{bengali_number_to_words(th)} হাজার"
+        return f"{prefix} {bengali_number_to_words(rem)}" if rem else prefix
     if n < 10000000:
         lakh, rem = n // 100000, n % 100000
-        lakh_w = telugu_number_to_words(lakh)
-        prefix = f"{lakh_w} లక్షల " if rem else f"{lakh_w} లక్ష"
-        return prefix if rem == 0 else (prefix + telugu_number_to_words(rem))
-
+        prefix = "এক লাখ" if lakh == 1 else f"{bengali_number_to_words(lakh)} লাখ"
+        return f"{prefix} {bengali_number_to_words(rem)}" if rem else prefix
     return str(n)
 
 
@@ -316,10 +310,10 @@ def fix_residual_digits(text: str, lang: str) -> str:
             int_w = tamil_number_to_words(int_part)
             dec_w = " ".join(tamil_number_to_words(int(d)) for d in dec_digits)
             return f"{int_w} புள்ளி {dec_w}"
-        elif lang in ("te", "tel_Telu"):
-            int_w = telugu_number_to_words(int_part)
-            dec_w = " ".join(telugu_number_to_words(int(d)) for d in dec_digits)
-            return f"{int_w} బిందువు {dec_w}"
+        elif lang in ("bn", "ben_Beng"):
+            int_w = bengali_number_to_words(int_part)
+            dec_w = " ".join(bengali_number_to_words(int(d)) for d in dec_digits)
+            return f"{int_w} দশমিক {dec_w}"
         else:
             int_w = english_number_to_words(int_part)
             dec_w = " ".join(english_number_to_words(int(d)) for d in dec_digits)
@@ -379,22 +373,22 @@ def fix_residual_digits(text: str, lang: str) -> str:
 
         out = re.sub(r"\b\d+\b", _replace_int_ta, out)
 
-    elif lang in ("te", "tel_Telu"):
-        out = re.sub(r"(\b\d+\b)\s*%", r"\1 శాతం", out)
-        out = re.sub(r"°\s*C", "డిగ్రీ సెల్సియస్", out)
-        out = re.sub(r"°\s*F", "డిగ్రీ ఫారెన్‌హీట్", out)
-        out = re.sub(r"Ω", "ఓమ్", out)
-        out = re.sub(r"\s*=\s*", " సమానం ", out)
-        out = re.sub(r"\s*(?:×|\*)\s*", " గుణకారం ", out)
-        out = re.sub(r"\s*(?:÷|\/)\s*", " భాగహారం ", out)
-        out = re.sub(r"\s*\+\s*", " ప్లస్ ", out)
-        out = re.sub(r"\s*-\s*", " మైనస్ ", out)
-        out = re.sub(r"\s*→\s*", " దారి తీస్తుంది ", out)
+    elif lang in ("bn", "ben_Beng"):
+        out = re.sub(r"(\b\d+\b)\s*%", r"\1 শতাংশ", out)
+        out = re.sub(r"°\s*C", "ডিগ্রি সেলসিয়াস", out)
+        out = re.sub(r"°\s*F", "ডিগ্রি ফারেনহাইট", out)
+        out = re.sub(r"Ω", "ওহম", out)
+        out = re.sub(r"\s*=\s*", " সমান ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " গুণ ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " ভাগ ", out)
+        out = re.sub(r"\s*\+\s*", " প্লাস ", out)
+        out = re.sub(r"\s*-\s*", " মাইনাস ", out)
+        out = re.sub(r"\s*→\s*", " বোঝায় ", out)
 
-        def _replace_int_te(m: re.Match) -> str:
-            return telugu_number_to_words(int(m.group(0)))
+        def _replace_int_bn(m: re.Match) -> str:
+            return bengali_number_to_words(int(m.group(0)))
 
-        out = re.sub(r"\b\d+\b", _replace_int_te, out)
+        out = re.sub(r"\b\d+\b", _replace_int_bn, out)
 
     else:
         out = re.sub(r"(\b\d+\b)\s*%", r"\1 percent", out)
@@ -476,20 +470,20 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"\s*(?:÷|\/)\s*", " வகுத்தல் ", out)
         out = re.sub(r"\s*\+\s*", " கூட்டல் ", out)
         out = re.sub(r"\s*-\s*", " கழித்தல் ", out)
-    elif lang in ("te", "tel_Telu"):
-        out = re.sub(r"°\s*C", " డిగ్రీ సెల్సియస్ ", out)
-        out = re.sub(r"°\s*F", " డిగ్రీ ఫారెన్‌హీట్ ", out)
-        out = re.sub(r"Ω", " ఓమ్ ", out)
-        out = re.sub(r"%", " శాతం ", out)
-        out = re.sub(r"\bV\b", "వోల్ట్", out)
-        out = re.sub(r"\bA\b", "ఆంపియర్", out)
-        out = re.sub(r"\bW\b", "వాట్", out)
-        out = re.sub(r"\bHz\b", "హెర్ట్జ్", out)
-        out = re.sub(r"\s*=\s*", " సమానం ", out)
-        out = re.sub(r"\s*(?:×|\*)\s*", " గుణకారం ", out)
-        out = re.sub(r"\s*(?:÷|\/)\s*", " భాగహారం ", out)
-        out = re.sub(r"\s*\+\s*", " ప్లస్ ", out)
-        out = re.sub(r"\s*-\s*", " మైనస్ ", out)
+    elif lang in ("bn", "ben_Beng"):
+        out = re.sub(r"°\s*C", " ডিগ্রি সেলসিয়াস ", out)
+        out = re.sub(r"°\s*F", " ডিগ্রি ফারেনহাইট ", out)
+        out = re.sub(r"Ω", " ওহম ", out)
+        out = re.sub(r"%", " শতাংশ ", out)
+        out = re.sub(r"\bV\b", "ভোল্ট", out)
+        out = re.sub(r"\bA\b", "অ্যাম্পিয়ার", out)
+        out = re.sub(r"\bW\b", "ওয়াট", out)
+        out = re.sub(r"\bHz\b", "হার্টজ", out)
+        out = re.sub(r"\s*=\s*", " সমান ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " গুণ ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " ভাগ ", out)
+        out = re.sub(r"\s*\+\s*", " প্লাস ", out)
+        out = re.sub(r"\s*-\s*", " মাইনাস ", out)
     else:
         out = re.sub(r"°\s*C", " degrees Celsius ", out)
         out = re.sub(r"°\s*F", " degrees Fahrenheit ", out)
@@ -516,8 +510,8 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
             out = re.sub(r"\b\d+\b", lambda m: hindi_number_to_words(int(m.group(0))), out)
         elif lang in ("ta", "tam_Taml"):
             out = re.sub(r"\b\d+\b", lambda m: tamil_number_to_words(int(m.group(0))), out)
-        elif lang in ("te", "tel_Telu"):
-            out = re.sub(r"\b\d+\b", lambda m: telugu_number_to_words(int(m.group(0))), out)
+        elif lang in ("bn", "ben_Beng"):
+            out = re.sub(r"\b\d+\b", lambda m: bengali_number_to_words(int(m.group(0))), out)
         else:
             out = re.sub(r"\b\d+\b", lambda m: english_number_to_words(int(m.group(0))), out)
 

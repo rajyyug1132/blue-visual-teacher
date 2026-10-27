@@ -9,7 +9,7 @@ Deliverables: Offline translation (`translator.py`), dual-engine TTS (`tts_engin
 ## L1–L8 Verification Matrix & Engineering Learnings
 
 ### L1: Offline Model Weights Loading with Sockets Blocked
-- **Requirement**: `indictrans2-200M`, `Kokoro-82M` + voicepacks (`af_heart`, `af_bella`, `hf_alpha`, `hm_omega`), `mms-tts-kan` (plus bonus `tam`, `tel`) load with sockets monkeypatched/blocked.
+- **Requirement**: `indictrans2-200M`, `Kokoro-82M` + voicepacks (`af_heart`, `af_bella`, `hf_alpha`, `hm_omega`), `mms-tts-kan` (plus bonus `tam`, `ben`) load with sockets monkeypatched/blocked.
 - **Learning**: `HF_HOME` must point to the local cache directory (set BVT_HF_HOME (or HF_HOME) to your local cache). Setting `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` alongside `local_files_only=True` guarantees zero network socket requests. All voicepacks (`.pt`) and checkpoint tensors are resident on disk.
 - **Status**: PASS
 
@@ -44,6 +44,6 @@ Deliverables: Offline translation (`translator.py`), dual-engine TTS (`tts_engin
 - **Status**: PASS
 
 ### L8: Typography & Font Bundling
-- **Requirement**: Noto Sans, Noto Sans Devanagari, Noto Sans Kannada, Noto Sans Tamil, Noto Sans Telugu, and SIL Open Font License 1.1 (`OFL.txt`) bundled in `assets/fonts/` and `localization/assets/fonts/`. Zero external CDN calls.
+- **Requirement**: Noto Sans, Noto Sans Devanagari, Noto Sans Kannada, Noto Sans Tamil, Noto Sans Bengali, and SIL Open Font License 1.1 (`OFL.txt`) bundled in `assets/fonts/` and `localization/assets/fonts/`. Zero external CDN calls.
 - **Learning**: Local TTF files provide offline font rendering and complex text shaping (ligatures, virama) inside headless Chromium / Playwright.
 - **Status**: PASS
