@@ -12,7 +12,8 @@ from orchestrator.cache import load_plan, save_plan
 from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.mathcheck import MathCheckError, ensure_answer_spoken, verify_plan
 from orchestrator.numeric_guard import NumericPolicy, audit_fields, nfkc
-from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT, request
+from orchestrator.prompts import (CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT,
+                                  is_programming_topic, request)
 from orchestrator.schema import (NOT_SPOKEN, WORDS_MAX, WORDS_MIN, LessonPlan,
                                  scenes_for, word_budget)
 from orchestrator.spoken import shorten_narration, to_spoken
@@ -90,8 +91,56 @@ def classify_topic(concept: str, model: str = MODEL_NAME) -> NumericPolicy:
         return "none"  # making no numeric claims is the safe side
 
 
+# A request is not a topic: "teach me java script" must plan, title and cache as "JavaScript".
+_ASK = re.compile(r"^\s*(?:please\s+)?(?:(?:can|could) you\s+)?(?:teach me(?: about)?|explain(?: to me)?|tell me about|"
+                  r"what (?:is|are)|how (?:does|do|is|are)|i want to (?:learn|know)(?: about)?|"
+                  r"help me (?:understand|learn)|show me|(?:a )?lesson (?:on|about)|learn(?: about)?)\s+", re.I)
+_SPELLINGS = ((re.compile(r"\bjava\s+script\b", re.I), "JavaScript"), (re.compile(r"\btype\s+script\b", re.I), "TypeScript"))
+
+
+def clean_topic(concept: str) -> str:
+    topic = _ASK.sub("", concept.strip()).strip(" ?.!")
+    for pattern, spelling in _SPELLINGS:
+        topic = pattern.sub(spelling, topic)
+    return topic or concept.strip()
+
+
+def _repair_code_scenes(scenes: list) -> bool:
+    """Fix the code_walkthrough slips a small model makes instead of rejecting the whole plan for them:
+    0-based or out-of-range trace lines, code_walkthrough without code, code/trace on other scene types,
+    non-string variable values. Returns True if anything changed."""
+    changed = False
+    for scene in scenes:
+        visual = scene.get("visual")
+        params = visual.get("params") if isinstance(visual, dict) else None
+        if not isinstance(params, dict):
+            continue
+        if visual.get("type") != "code_walkthrough":
+            changed |= params.pop("code", None) is not None
+            changed |= params.pop("trace", None) is not None
+            continue
+        code = [line for line in params.get("code") or [] if isinstance(line, str)][:12]
+        if not code:  # chose the type but wrote no program: keep the scene as a plain step flow
+            visual["type"], changed = "flow", True
+            params.pop("code", None), params.pop("trace", None)
+            continue
+        steps = [s for s in params.get("trace") or [] if isinstance(s, dict) and isinstance(s.get("line"), int)]
+        if steps and min(s["line"] for s in steps) == 0:  # 0-based lines
+            for s in steps:
+                s["line"] += 1
+        steps = [s for s in steps if 1 <= s["line"] <= len(code)][:6]
+        if not steps:
+            steps = [{"line": i + 1, "vars": []} for i in range(min(len(code), 6))]
+        for s in steps:
+            s["vars"] = [{"name": str(v.get("name", ""))[:24], "value": str(v.get("value", ""))[:24]}
+                         for v in (s.get("vars") or []) if isinstance(v, dict)][:4]
+        changed |= params.get("code") != code or params.get("trace") != steps
+        params["code"], params["trace"] = code, steps
+    return changed
+
+
 def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool, level: str = "beginner",
-                target_sec: int = 60) -> tuple[LessonPlan, dict]:
+                target_sec: int = 60, programming: bool = False) -> tuple[LessonPlan, dict]:
     """parse -> verify math (digits still present) -> spoken words -> trim -> spoken answer -> audit -> schema.
 
     Returns (plan, info). Raises PlanRejected with every problem found, for the next rung of the ladder.
@@ -144,7 +193,10 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool, level:
         except MathCheckError as exc:
             problems.append(str(exc))
 
+    info["code_repaired"] = _repair_code_scenes(scenes)
     issues = audit_fields(data, policy, set(math.get("allowed", [])))
+    if programming:  # "count = 0" is lesson content in a programming topic, not a formula
+        issues = [i for i in issues if i["kind"] != "equals"]
     try:
         plan = LessonPlan.model_validate(data)
     except ValidationError as exc:
@@ -191,7 +243,8 @@ def _patch_fields(concept: str, rejected: PlanRejected, model: str, policy: Nume
         else:
             params[field + "s"][idx] = new
     try:
-        return _parse_plan(json.dumps(data, ensure_ascii=False), policy, repair_answer, level, target_sec)
+        return _parse_plan(json.dumps(data, ensure_ascii=False), policy, repair_answer, level, target_sec,
+                           programming=is_programming_topic(concept))
     except PlanRejected:
         return None
 
@@ -274,6 +327,7 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
 
     level and target_sec are the Stage 1 inputs from the request (CC-2); both are part of the plan cache key.
     """
+    concept = clean_topic(concept)
     model = model or MODEL_NAME
     escalation = ESCALATION_MODEL if escalation_model is None else escalation_model
     t0 = time.perf_counter()
@@ -322,7 +376,7 @@ def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
                          "num_predict": 850},
             )
             plan, info = _parse_plan(resp.message.content or "", stage_policy, repair_answer=stage != "plan",
-                                     level=level, target_sec=target_sec)
+                                     level=level, target_sec=target_sec, programming=is_programming_topic(concept))
             rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
                           "ok": True})
             telemetry = {

@@ -169,6 +169,8 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
     """Topic -> narrated MP4 in cache/artifacts/{slug}_{lang}/. tts/translator/export/plan_fn are injectable for tests."""
     report = progress_cb or (lambda stage, pct: None)
     level, target_sec = request_options(level, target_sec)
+    from orchestrator.planner import clean_topic
+    topic = clean_topic(topic)  # "teach me java script" plans, titles and caches as "JavaScript"
     hit = cached_artifact(topic, lang, level, target_sec)
     if hit:
         report("done", 100)

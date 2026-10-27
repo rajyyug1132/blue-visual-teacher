@@ -646,6 +646,29 @@ def test_a_short_real_lesson_is_kept_but_a_far_too_short_one_is_not():
         LessonPlan.model_validate({"title": "Voltage and current", "target_sec": 90, "scenes": _scenes([14] * 6)})
 
 
+def test_a_request_is_cleaned_down_to_its_topic():
+    assert planner.clean_topic("teach me java script") == "JavaScript"
+    assert planner.clean_topic("Can you explain recursion?") == "recursion"
+    assert planner.clean_topic("What is photosynthesis") == "photosynthesis"
+    assert planner.clean_topic("Ohm's Law") == "Ohm's Law"
+    assert planner.clean_topic("teach me") == "teach me"  # nothing left: keep what was typed
+
+
+def test_code_scene_slips_are_repaired_not_fatal():
+    scenes = [
+        {"visual": {"type": "code_walkthrough", "params": {"code": ["let s = 0", "for (x of xs) s += x", "log(s)"],
+                    "trace": [{"line": 0, "vars": [{"name": "s", "value": 0}]}, {"line": 9, "vars": []}]}}},
+        {"visual": {"type": "code_walkthrough", "params": {"labels": ["Loop"], "steps": ["Repeat"]}}},
+        {"visual": {"type": "bullets", "params": {"labels": ["Recap"], "code": ["x"], "trace": [{"line": 1}]}}},
+    ]
+    assert planner._repair_code_scenes(scenes) is True
+    first = scenes[0]["visual"]["params"]
+    assert [s["line"] for s in first["trace"]] == [1]  # 0-based shifted to 1-based; line 10 dropped
+    assert first["trace"][0]["vars"] == [{"name": "s", "value": "0"}]  # values become strings
+    assert scenes[1]["visual"]["type"] == "flow" and "code" not in scenes[1]["visual"]["params"]
+    assert "code" not in scenes[2]["visual"]["params"] and "trace" not in scenes[2]["visual"]["params"]
+
+
 def test_programming_topics_must_get_a_code_walkthrough():
     from orchestrator.prompts import is_programming_topic, request
 
