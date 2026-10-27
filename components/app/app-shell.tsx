@@ -2,9 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FlaskConical, Loader2, LogOut } from 'lucide-react'
+import { FlaskConical, Laptop, Loader2, LogOut } from 'lucide-react'
 import { Wordmark } from '@/components/site/wordmark'
+import { useShowcase } from '@/hooks/use-showcase'
 import { endDemoSession, useDemoSession, type DemoSession } from '@/lib/demo-session'
+import { REPO_URL } from '@/lib/showcase'
 import { cn } from '@/lib/utils'
 
 const NAV = [
@@ -16,6 +18,7 @@ export function AppShell({ children, next }: { children: (session: DemoSession) 
   const session = useDemoSession()
   const pathname = usePathname()
   const router = useRouter()
+  const showcase = useShowcase()
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -51,7 +54,17 @@ export function AppShell({ children, next }: { children: (session: DemoSession) 
             </nav>
           )}
         </div>
-        {session && !session.token && (
+        {showcase ? (
+          <div className="border-t border-ink/20 bg-brand-yellow/70">
+            <p className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-xs font-semibold md:px-6">
+              <Laptop className="size-3.5 shrink-0" aria-hidden="true" />
+              Live preview. Lessons generate offline on your own machine.
+              <a href={REPO_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                Run it locally
+              </a>
+            </p>
+          </div>
+        ) : session && !session.token && (
           <div className="border-t border-ink/20 bg-brand-yellow/70">
             <p className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-1.5 text-xs font-semibold md:px-6">
               <FlaskConical className="size-3.5 shrink-0" aria-hidden="true" />
@@ -67,7 +80,7 @@ export function AppShell({ children, next }: { children: (session: DemoSession) 
             <Loader2 className="size-5 animate-spin" aria-hidden="true" />
             Loading…
           </div>
-        ) : session === null && pathname === '/dashboard' ? (
+        ) : session === null && pathname === '/dashboard' && !showcase ? (
           <SignedOut next={next} />
         ) : (
           children(session ?? { id: 'guest', name: 'Learner', email: 'guest@accord.dev', token: '', createdAt: Date.now() })

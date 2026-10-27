@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowUpRight, History, Loader2 } from 'lucide-react'
 import type { DemoSession } from '@/lib/demo-session'
 import { useLessonHistory } from '@/hooks/use-api'
+import { useShowcase } from '@/hooks/use-showcase'
 import { BackendStatus } from './backend-status'
 import { LessonForm } from './lesson-form'
 
@@ -53,7 +54,22 @@ export function DashboardView({ session }: { session: DemoSession }) {
 const LANG_LABEL: Record<string, string> = { en: 'English', hi: 'Hindi', kn: 'Kannada' }
 
 function RecentLessons({ signedIn }: { signedIn: boolean }) {
-  const { data, error, isLoading } = useLessonHistory(signedIn)
+  const showcase = useShowcase()
+  const { data, error, isLoading } = useLessonHistory(signedIn && !showcase)
+
+  if (showcase) {
+    return (
+      <div className="mt-4 flex flex-col items-start gap-3">
+        <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-purple text-white">
+          <History className="size-5" aria-hidden="true" />
+        </span>
+        <p className="font-bold">Your lessons live on your machine.</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Run Blue Visual Teacher locally and every lesson you generate is listed here.
+        </p>
+      </div>
+    )
+  }
 
   if (!signedIn) {
     return (

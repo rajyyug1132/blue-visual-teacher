@@ -1,5 +1,6 @@
 import { DEFAULT_LANGUAGES, type Language } from './languages'
 import { getAuthToken } from './demo-session'
+import { isShowcase, SHOWCASE_MESSAGE } from './showcase'
 
 export const API_BASE_URL = typeof window !== 'undefined'
   ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/+$/, '')
@@ -47,7 +48,7 @@ export type AuthUser = {
 export class ApiError extends Error {
   constructor(
     message: string,
-    public kind: 'network' | 'timeout' | 'http' | 'malformed',
+    public kind: 'network' | 'timeout' | 'http' | 'malformed' | 'showcase',
     public status?: number,
   ) {
     super(message)
@@ -72,6 +73,8 @@ function pickString(obj: Json | undefined, keys: string[]): string | null {
 }
 
 async function request<T = unknown>(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+  // Public preview: there is no lesson server to reach, so fail at once instead of timing out against <host>:8000.
+  if (isShowcase()) throw new ApiError(SHOWCASE_MESSAGE, 'showcase')
   const { timeoutMs = 15000, ...rest } = init
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
