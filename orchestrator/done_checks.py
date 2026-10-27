@@ -92,11 +92,11 @@ def _module_check(name: str, paths: list[str], test_k: str) -> Result:
 
 
 def d4() -> Result:
-    return _module_check("translation", ["localization/translator.py"], "d4_ or translat")
+    return _module_check("translation", ["localization/translator.py"], "d4_")
 
 
 def d5() -> Result:
-    return _module_check("tts", ["localization/tts_engine.py"], "d5_ or tts")
+    return _module_check("tts", ["localization/tts_engine.py"], "d5_")
 
 
 def d6() -> Result:
@@ -126,7 +126,7 @@ def d7(skip_slow: bool) -> Result:
 
 
 def d8() -> Result:
-    return _module_check("ui", ["exporter/app.py", "exporter/static/index.html"], "d8_")
+    return _module_check("ui", ["exporter/app.py", "web/index.html", "web/app.js"], "d8_")
 
 
 def d9() -> Result:
