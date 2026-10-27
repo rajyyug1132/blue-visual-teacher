@@ -1,0 +1,4 @@
+D2 planner ladder, 20 topics :: FAIL :: 20-topic live run skipped (--skip-slow) (1.6s)
+
+unit: think=False / schema format / retry -> ladder -> fallback
+41 passed, 81 deselected in 1.05s

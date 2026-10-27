@@ -1,0 +1,4 @@
+D1 schema + golden fixture :: PASS :: words [22, 27, 24, 29, 21] (0.2s)
+
+fixture validates: 5 scenes
+words [22, 27, 24, 29, 21] (expected [22, 27, 24, 29, 21], sum 123)
