@@ -22,6 +22,10 @@ import wave
 from pathlib import Path
 from typing import Any, Sequence
 
+PROJ_REQ = Path(r"D:\git\project requirements")
+if PROJ_REQ.exists():
+    os.environ.setdefault("HF_HOME", str(PROJ_REQ / "hf_cache"))
+
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
@@ -501,7 +505,7 @@ class OfflineTTSEngine:
             # Peak normalize to -1 dBFS (0.89 amplitude)
             peak = float(np.max(np.abs(master)))
             if peak > 0:
-                master = master * (0.89 / peak)
+                master = master * (0.90 / peak)
             int16_data = (master * 32767).astype(np.int16).tobytes()
         else:
             # Fallback packing
