@@ -499,6 +499,16 @@ VOICE_ALIASES: dict[str, str] = {
     "en-f": "af_sarah",
     "sarah": "af_sarah",
     "female": "af_sarah",
+    # Indian-accented English voices (explicitly requested):
+    # Kokoro Hindi checkpoints (hm_omega / hf_alpha) routed through English phonetic pipeline
+    "eni": "hm_omega",          # default Indian English
+    "enim": "hm_omega",        # Indian English Male
+    "eni-m": "hm_omega",
+    "indian-male": "hm_omega",
+    "enif": "hf_alpha",        # Indian English Female
+    "eni-f": "hf_alpha",
+    "indian-female": "hf_alpha",
+    "indian": "hm_omega",
     # Alternative educator voices
     "bella": "af_bella",
     "adam": "am_adam",

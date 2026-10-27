@@ -121,7 +121,7 @@ def main():
     parser.add_argument(
         "--voice",
         default=None,
-        help="Voice option: 'enm' (Michael, Male Professor) or 'enf' (Sarah, Female Educator); or model ID ('am_michael', 'af_sarah')",
+        help="Voice option: 'enm' (Michael, US Male), 'enf' (Sarah, US Female), 'enim' (Indian Male), 'enif' (Indian Female), 'him' (Omega), 'hif' (Alpha)",
     )
     parser.add_argument(
         "--text",
