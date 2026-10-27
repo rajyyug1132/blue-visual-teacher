@@ -684,29 +684,46 @@ class OfflineTTSEngine:
             try:
                 # Call clean_for_mms before every MMS-TTS call
                 mms_input_text = clean_for_mms(clean_text, mms_lang)
-                # Strip commas and periods for MMS-TTS so it speaks fluently without stutter/awkward pauses
-                mms_input_text = re.sub(r"[,\.\?\!\:\;\|\-\—\–\u0964\u0965]", " ", mms_input_text)
-                mms_input_text = re.sub(r"\s+", " ", mms_input_text).strip()
                 tokenizer = self.mms_tokenizers[mms_lang]
                 model = self.mms_models[mms_lang]
-                inputs = tokenizer(mms_input_text, return_tensors="pt").to(self.device)
 
-                # Deterministic duration predictor fix (crucial for zero drift)
-                torch.manual_seed(42)
-                with torch.no_grad():
-                    out = model(**inputs).waveform.squeeze().cpu().numpy()
+                # Split by punctuation to create natural teacher phrasing and breath pauses
+                parts = re.split(r'([,\;:\.\?\!\u0964\u0965]+)', mms_input_text)
+                chunks = []
+                idx = 0
+                while idx < len(parts):
+                    clause = parts[idx].strip()
+                    delim = parts[idx + 1] if idx + 1 < len(parts) else ""
+                    idx += 2
+                    if not clause:
+                        continue
+                    clean_clause = re.sub(r'[,\.\?\!\:\;\|\-\—\–\u0964\u0965]', ' ', clause).strip()
+                    if not clean_clause:
+                        continue
+                    inputs = tokenizer(clean_clause, return_tensors="pt").to(self.device)
+                    torch.manual_seed(42)
+                    with torch.no_grad():
+                        out = model(**inputs).waveform.squeeze().cpu().numpy()
+                    if HAS_SCIPY:
+                        c_wav = resample_poly(out, up=3, down=2).astype(np.float32)
+                    else:
+                        old_len = len(out)
+                        new_len = int(old_len * 1.5)
+                        c_wav = np.interp(np.linspace(0, old_len, new_len), np.arange(old_len), out).astype(np.float32)
+                    c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=4.0, release_ms=4.0)
+                    chunks.append(c_wav)
+                    if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
+                        pause_sec = 0.40  # Sentence-end teacher pause
+                    elif any(p in delim for p in [",", ";", ":"]):
+                        pause_sec = 0.25  # Breath/clause pause
+                    else:
+                        pause_sec = 0.08
+                    chunks.append(np.zeros(int(pause_sec * TARGET_SR), dtype=np.float32))
 
-                # Resample 16,000 Hz -> 24,000 Hz (3:2 ratio)
-                if HAS_SCIPY:
-                    speech_wav = resample_poly(out, up=3, down=2).astype(np.float32)
+                if chunks:
+                    speech_wav = np.concatenate(chunks)
                 else:
-                    # Linear interpolation fallback
-                    old_len = len(out)
-                    new_len = int(old_len * 1.5)
-                    speech_wav = np.interp(
-                        np.linspace(0, old_len, new_len), np.arange(old_len), out
-                    ).astype(np.float32)
-
+                    speech_wav = np.zeros(TARGET_SR, dtype=np.float32)
                 try:
                     max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
                     if max_v > 1e-5:
