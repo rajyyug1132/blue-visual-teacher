@@ -81,7 +81,7 @@ def available_languages() -> list[str]:
     if getattr(tr, "model", None) is not None:
         if getattr(tts, "kokoro_hi", None) is not None or "hi" in getattr(tts, "mms_models", {}):
             langs.append("hi")
-        for code in ("kn", "ta", "te"):
+        for code in ("kn", "ta", "bn"):
             if code in getattr(tts, "mms_models", {}):
                 langs.append(code)
     return langs
