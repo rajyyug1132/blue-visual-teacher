@@ -265,3 +265,19 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
   `requirements*.txt`, `.python-version`, `*.py` and the pipeline/mock/test dirs, none of which the Next app imports (checked).
 - **Verified before pushing:** a clean export of v1 with every `.vercelignore` path removed (16 paths, 0 `.py` left) runs
   `next build` to exit 0.
+
+### Pass 5 (YYUG keeper session) · 2026-10-28 00:47
+
+- **Rebased** the deploy fix onto AYUSH's `e3890fd` (pushed 00:39 from the STEP 0-4 prompt: local fonts, Analytics removed from
+  code and deps, `ignoreBuildErrors: false`, player controls, level + target length, host cleanup). It built on `688ec8d`, so every
+  shop-window hook survived. That commit entered v1 without a keeper gate, so v1 was gated after it: `npm ci` on a clean export
+  (277 packages, lockfile in sync) · `next build` with TypeScript now really running ("Running TypeScript ... Finished") ·
+  `tests/test_ui.py` + `tests/test_e2e_offline.py` 10 passed, 3 skipped · renderer 18/18 · `test:units` pass.
+- **Vercel: deployed.** `63ca3cd` built in 32 s (status success). Push-to-v1 deploys are previews, and previews sit behind
+  Vercel Authentication (strangers get a login wall), so the Ready deployment was promoted to production with `vercel promote`.
+- **Live and public: https://blue-visual-teacher.vercel.app** -- `/`, `/create`, `/dashboard`, `/login`, `/signup` all 200 with no
+  login. Checked in a browser on the real host: preview mode switches on by itself, banner + "Preview mode" card + run-locally
+  panel on Generate, no red error, **0 requests to a lesson server and 0 requests to any other host** (no fonts CDN, no analytics).
+- **Keeper note for every later pass:** production is a *promoted snapshot*. The project's production branch is still `main`
+  (untouched, per the rules), so pushes to v1 update only the preview, never the public URL. After a green push, ship it with
+  `vercel promote <the new preview deployment URL> --yes`, or ask the owner to set the production branch to `v1`.
