@@ -272,3 +272,56 @@ def test_protect_advanced_stem_formulas():
         restored = restore_protected_spans(masked, prot)
         assert restored == sentence
         assert verify_spans_survived(restored, prot)
+
+
+# ---------------------------------------------------------------------------
+# 9. Approach 2A (Collocation Window) + 2B (Case Enforcement) Tests
+# ---------------------------------------------------------------------------
+def test_stem_disambiguation_approach_2a_and_2b():
+    """Verify that ambiguous STEM words (RAM, AC, DC, PI) are disambiguated via 2A & 2B."""
+    # 1. RAM in hardware context -> Expanded
+    t_hw1 = "The computer is equipped with 16 GB of RAM for fast processing."
+    assert "ರ್ಯಾಮ್" in expand_stem_acronyms(t_hw1, "kn")
+    assert "रैम" in expand_stem_acronyms(t_hw1, "hi")
+    assert "ரேம்" in expand_stem_acronyms(t_hw1, "ta")
+    assert "র‌্যাম" in expand_stem_acronyms(t_hw1, "bn")
+
+    # 2. Ram in title-case but with hardware context cues -> Expanded
+    t_hw2 = "The system requires 8 GB of Ram for cache memory storage."
+    assert "ರ್ಯಾಮ್" in expand_stem_acronyms(t_hw2, "kn")
+    assert "रैम" in expand_stem_acronyms(t_hw2, "hi")
+
+    # 3. Ram as historical/proper noun name -> Preserved, NOT expanded
+    t_hist1 = "King Ram ruled the ancient kingdom of Ayodhya with justice."
+    res_hist1 = expand_stem_acronyms(t_hist1, "kn")
+    assert "Ram" in res_hist1
+    assert "ರ್ಯಾಮ್" not in res_hist1
+
+    # 4. RAM in ALL-CAPS history title -> Preserved via non-STEM cues
+    t_hist2 = "KING RAM OF AYODHYA WAS HONORED BY ALL CITIZENS."
+    res_hist2 = expand_stem_acronyms(t_hist2, "hi")
+    assert "RAM" in res_hist2
+    assert "रैम" not in res_hist2
+
+    # 5. AC in electrical circuit context -> Expanded
+    t_ac_elec = "Alternating current or AC flows bidirectionally through circuits."
+    assert "ಎಸಿ" in expand_stem_acronyms(t_ac_elec, "kn")
+    assert "एसी" in expand_stem_acronyms(t_ac_elec, "hi")
+
+    # 6. AC in room cooling context -> Preserved, NOT expanded as alternating current
+    t_ac_cool = "Turn on the AC to cool the room during hot summer days."
+    res_ac_cool = expand_stem_acronyms(t_ac_cool, "kn")
+    assert "AC" in res_ac_cool
+    assert "ಎಸಿ" not in res_ac_cool
+
+    # 7. PI in math geometry context -> Expanded
+    t_pi_math = "Calculate the area of the circle as pi times radius squared."
+    assert "ಪೈ" in expand_stem_acronyms(t_pi_math, "kn")
+    assert "पाई" in expand_stem_acronyms(t_pi_math, "hi")
+
+    # 8. Unambiguous STEM terms expand reliably
+    t_unambig = "GPU and ATP molecules assist in biological and digital systems."
+    res_unambig = expand_stem_acronyms(t_unambig, "hi")
+    assert "जीपीयू" in res_unambig
+    assert "एटीपी" in res_unambig
+

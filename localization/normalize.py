@@ -410,32 +410,180 @@ def fix_residual_digits(text: str, lang: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# STEM Acronyms & Natural Prosody (Micro-Pauses)
+# STEM Acronyms & Context Disambiguation (2A: Collocation Window + 2B: Case)
 # ---------------------------------------------------------------------------
-STEM_ACRONYMS: dict[str, dict[str, str]] = {
+STEM_DISAMBIGUATION: dict[str, dict] = {
+    "RAM": {
+        "stem_cues": {
+            "memory", "ddr", "byte", "bytes", "kb", "mb", "gb", "tb", "processor",
+            "cpu", "chip", "chips", "storage", "hardware", "device", "speed",
+            "read", "write", "random", "access", "module", "motherboard", "computer",
+            "laptop", "phone", "rom", "cache", "capacity", "ram", "ddr4", "ddr5"
+        },
+        "non_stem_cues": {
+            "king", "lord", "shri", "raja", "ruled", "temple", "brother", "son",
+            "prince", "chariot", "ayodhya", "sita", "laxman", "ramayana", "dynasty",
+            "history", "story", "character", "saint", "person", "name", "god",
+            "avatar", "animal", "sheep", "goat", "horn", "battering"
+        },
+        "default_caps_stem": True,
+        "mapping": {"en": "RAM", "hi": "रैम", "kn": "ರ್ಯಾಮ್", "ta": "ரேம்", "bn": "র‌্যাম"},
+    },
+    "ROM": {
+        "stem_cues": {
+            "memory", "bios", "firmware", "chip", "chips", "storage", "boot",
+            "hardware", "byte", "bytes", "mb", "gb", "cpu", "ram", "eeprom", "prom"
+        },
+        "non_stem_cues": {
+            "rome", "ancient", "empire", "city", "gypsy", "people", "country", "italian"
+        },
+        "default_caps_stem": True,
+        "mapping": {"en": "ROM", "hi": "रॉम", "kn": "ರಾಮ್", "ta": "ரோம்", "bn": "রম"},
+    },
+    "AC": {
+        "stem_cues": {
+            "current", "voltage", "circuit", "circuits", "dc", "supply", "mains",
+            "frequency", "hz", "generator", "power", "alternating", "phase",
+            "transformer", "electricity", "inverter", "dynamo", "motor", "grid"
+        },
+        "non_stem_cues": {
+            "room", "cooling", "remote", "temperature", "conditioner", "filter",
+            "car", "summer", "split", "duct", "window", "compressor", "cool",
+            "degree", "celsius", "air"
+        },
+        "default_caps_stem": True,
+        "mapping": {"en": "A C", "hi": "एसी", "kn": "ಎಸಿ", "ta": "ஏசி", "bn": "এসি"},
+    },
+    "DC": {
+        "stem_cues": {
+            "current", "voltage", "circuit", "circuits", "ac", "supply", "battery",
+            "cell", "generator", "power", "direct", "polarity", "dynamo", "motor"
+        },
+        "non_stem_cues": {
+            "commissioner", "district", "comics", "batman", "superman", "washington",
+            "officer", "collector", "ias"
+        },
+        "default_caps_stem": True,
+        "mapping": {"en": "D C", "hi": "डीसी", "kn": "ಡಿಸಿ", "ta": "டிசி", "bn": "ডিসি"},
+    },
+    "PI": {
+        "stem_cues": {
+            "circle", "radius", "diameter", "circumference", "area", "formula",
+            "radians", "3.14", "22/7", "sphere", "cylinder", "perimeter", "angle",
+            "trigonometry", "ratio", "constant"
+        },
+        "non_stem_cues": {
+            "apple", "bake", "eat", "food", "dish", "recipe", "crust", "bakery",
+            "detective", "investigator", "private"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {"en": "pi", "hi": "पाई", "kn": "ಪೈ", "ta": "பை", "bn": "পাই"},
+    },
+    "LOG": {
+        "stem_cues": {
+            "base", "exponent", "math", "formula", "value", "table", "natural",
+            "ln", "antilog", "scale", "decibel", "ph", "algorithm", "logarithm"
+        },
+        "non_stem_cues": {
+            "wood", "tree", "fire", "timber", "forest", "cabin", "cut", "burning"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {"en": "log", "hi": "लॉग", "kn": "ಲಾಗ್", "ta": "லாக்", "bn": "লগ"},
+    },
+    "ATM": {
+        "stem_cues": {
+            "pressure", "gas", "bar", "pascal", "mercury", "760", "sea", "level", "atmospheric"
+        },
+        "non_stem_cues": {
+            "bank", "money", "cash", "withdraw", "card", "machine", "pin", "teller"
+        },
+        "default_caps_stem": False,
+        "allow_lowercase": True,
+        "mapping": {
+            "en": "atmospheres",
+            "hi": "वायुमंडल",
+            "kn": "ವಾತಾವರಣ ಒತ್ತಡ",
+            "ta": "வளிமண்டல அழுத்தம்",
+            "bn": "বায়ুমণ্ডলীয় চাপ",
+        },
+    },
+}
+
+UNAMBIGUOUS_STEM_ACRONYMS: dict[str, dict[str, str]] = {
     "LED": {"en": "L E D", "hi": "एलईडी", "kn": "ಎಲ್ಇಡಿ", "ta": "எல்இடி", "bn": "এলইডি"},
-    "AC": {"en": "A C", "hi": "एसी", "kn": "ಎಸಿ", "ta": "ஏசி", "bn": "এসি"},
-    "DC": {"en": "D C", "hi": "डीसी", "kn": "ಡಿಸಿ", "ta": "டிசி", "bn": "ডিসি"},
     "DNA": {"en": "D N A", "hi": "डीएनए", "kn": "ಡಿಎನ್‌ಎ", "ta": "டிஎன்ஏ", "bn": "ডিএনএ"},
     "RNA": {"en": "R N A", "hi": "आरएनए", "kn": "ಆರ್‌ಎನ್‌ಎ", "ta": "ஆர்என்ஏ", "bn": "আরএনএ"},
     "CPU": {"en": "C P U", "hi": "सीपीयू", "kn": "ಸಿಪಿಯು", "ta": "சிபியு", "bn": "সিপিইউ"},
-    "RAM": {"en": "RAM", "hi": "रैम", "kn": "ರ್ಯಾಮ್", "ta": "ரேம்", "bn": "র‌্যাম"},
+    "GPU": {"en": "G P U", "hi": "जीपीयू", "kn": "ಜಿಪಿಯು", "ta": "ஜிபியு", "bn": "জিপিইউ"},
+    "ATP": {"en": "A T P", "hi": "एटीपी", "kn": "ಎಟಿಪಿ", "ta": "ஏடிபி", "bn": "এটিপি"},
     "IIT": {"en": "I I T", "hi": "आईआईटी", "kn": "ಐಐಟಿ", "ta": "ஐಐடி", "bn": "আইআইটি"},
     "CBSE": {"en": "C B S E", "hi": "सीबीएसई", "kn": "ಸಿಬಿಎಸ್‌ಇ", "ta": "சிபிஎஸ்இ", "bn": "সিবিএসই"},
     "NCERT": {"en": "N C E R T", "hi": "एनसीईआरटी", "kn": "ಎನ್‌ಸಿಇಆರ್‌ಟಿ", "ta": "என்சிஇஆர்டி", "bn": "এনসিইআরটি"},
     "ISRO": {"en": "ISRO", "hi": "इसरो", "kn": "ಇಸ್ರೋ", "ta": "இஸ்ரோ", "bn": "ইসরো"},
+    "NASA": {"en": "NASA", "hi": "नासा", "kn": "ನಾಸಾ", "ta": "நாசா", "bn": "নাসা"},
+    "WHO": {"en": "W H O", "hi": "डब्ल्यूएचओ", "kn": "ಡಬ್ಲ್ಯುಎಚ್‌ಒ", "ta": "டபிள்யுஎச்ஓ", "bn": "ডব্লিউএইচও"},
     "AI": {"en": "A I", "hi": "एआई", "kn": "ಎಐ", "ta": "ஏஐ", "bn": "এআই"},
+    "USB": {"en": "U S B", "hi": "यूएसबी", "kn": "ಯುಎಸ್‌ಬಿ", "ta": "யுஎஸ்பி", "bn": "ইউএসবি"},
+    "GPS": {"en": "G P S", "hi": "जीपीएस", "kn": "ಜಿಪಿಎಸ್", "ta": "ஜிபிஎஸ்", "bn": "জিপিএস"},
+    "URL": {"en": "U R L", "hi": "यूआरएल", "kn": "ಯುಆರ್‌ಎಲ್", "ta": "யுஆர்எல்", "bn": "ইউআরএল"},
+    "HTML": {"en": "H T M L", "hi": "एचटीएमएल", "kn": "ಎಚ್‌ಟಿಎಮ್‌ಎಲ್", "ta": "ஹெச்டிஎம்எல்", "bn": "এইচটিএমএল"},
+    "EMF": {"en": "E M F", "hi": "ईएमएफ", "kn": "ಇಎಂಎಫ್", "ta": "இஎம்எஃப்", "bn": "ইএমএফ"},
+    "RMS": {"en": "R M S", "hi": "आरएमएस", "kn": "ಆರ್‌ಎಂಎಸ್", "ta": "ஆர்எம்எஸ்", "bn": "আরএমএস"},
 }
+
+# Unified mapping for backwards compatibility and static lookups
+STEM_ACRONYMS: dict[str, dict[str, str]] = {
+    term: cfg["mapping"] for term, cfg in STEM_DISAMBIGUATION.items()
+}
+STEM_ACRONYMS.update(UNAMBIGUOUS_STEM_ACRONYMS)
 
 
 def expand_stem_acronyms(text: str, lang: str) -> str:
-    """Expand STEM abbreviations (LED, DNA, AC, DC, CPU, etc.) to native phonetic words."""
+    """Expand STEM abbreviations to native phonetic words using 2A (context) + 2B (orthographic case)."""
     lang_key = lang.split("_")[0]
     out = text
-    for acronym, mapping in STEM_ACRONYMS.items():
+
+    # Phase 1: Disambiguate and expand ambiguous STEM terms with 2A & 2B checks
+    for term, cfg in STEM_DISAMBIGUATION.items():
+        pat = re.compile(rf"\b({term}|{term.capitalize()})\b", re.IGNORECASE if cfg.get("allow_lowercase") else 0)
+
+        def _replace_ambiguous(match: re.Match) -> str:
+            token = match.group(0)
+            start, end = match.start(), match.end()
+            # 2A: Collocation context window (80 chars before and after)
+            left_ctx = text[max(0, start - 80):start]
+            right_ctx = text[end:min(len(text), end + 80)]
+            context_window = f"{left_ctx} {right_ctx}"
+
+            clean_words = set(re.findall(r"[a-zA-Z0-9]+", context_window.lower()))
+            stem_hits = len(clean_words.intersection(cfg["stem_cues"]))
+            non_stem_hits = len(clean_words.intersection(cfg["non_stem_cues"]))
+
+            # 2B: Case analysis
+            is_all_caps = token.isupper() and len(token) > 1
+
+            # 2A: Scoring
+            if non_stem_hits > stem_hits:
+                return token  # Strong non-STEM context (e.g. King Ram, room AC)
+            if stem_hits > non_stem_hits:
+                return cfg["mapping"].get(lang_key, token)  # Strong STEM context (e.g. 16 GB Ram)
+
+            # Default to 2B case rule
+            if is_all_caps and cfg.get("default_caps_stem", True):
+                return cfg["mapping"].get(lang_key, token)
+
+            return token
+
+        out = pat.sub(_replace_ambiguous, out)
+
+    # Phase 2: Expand unambiguous STEM acronyms (strictly case-sensitive \bACRONYM\b)
+    for acronym, mapping in UNAMBIGUOUS_STEM_ACRONYMS.items():
         if lang_key in mapping:
             pat = r"\b" + re.escape(acronym) + r"\b"
             out = re.sub(pat, mapping[lang_key], out)
+
     return out
 
 
