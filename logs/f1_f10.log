@@ -2,7 +2,7 @@
  BLUE VISUAL TEACHER — ACCEPTANCE TEST SUITE (F1–F10)
 ================================================================
 
-✓ Local test server running on http://127.0.0.1:58844
+✓ Local test server running on http://127.0.0.1:50999
 ✓ Browser launched: Google Chrome (156.0.8078.48)
 
 --- CHECK F1: Golden Manifest Timings & Silent Playback ---
