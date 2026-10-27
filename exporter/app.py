@@ -258,7 +258,7 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
     if user_id:
         auth_db.record_lesson(job_id, user_id, topic, target_lang, status="queued", pct=0, stage="queued")
 
-    hit = pipeline.cached_artifact(topic, target_lang)
+    hit = pipeline.cached_artifact(topic, target_lang, req.level or "beginner", req.target_sec or 60)
     if hit:
         _urls(job, hit)
         job.update(stage="done", status="completed", pct=100, cached=True)

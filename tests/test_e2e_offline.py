@@ -161,6 +161,19 @@ def test_artifact_cache_hit_serves_mp4(api):
     assert client.get(second["mp4_url"]).status_code == 200
 
 
+def test_cache_hit_respects_level_and_length(api):
+    # A cached 60 s beginner video is not an answer to a 90 s request: that is how "asked 90, got 60" shipped.
+    client, topic = api
+    first = poll(client, client.post("/api/generate", json={"topic": topic, "lang": "en"}).json()["job_id"])
+    assert first["stage"] == "done"
+    try:
+        longer = poll(client, client.post("/api/generate",
+                                          json={"topic": topic, "lang": "en", "target_sec": 90}).json()["job_id"])
+        assert longer["stage"] == "done" and longer["cached"] is False and longer["mp4_url"] != first["mp4_url"]
+    finally:
+        shutil.rmtree(pipeline.artifact_dir(topic, "en", "beginner", 90), ignore_errors=True)
+
+
 def test_api_rejects_bad_input(api):
     client, _ = api
     assert client.post("/api/generate", json={"topic": "x", "lang": "en"}).status_code == 422
