@@ -24,6 +24,19 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Ensure local offline paths
+# Automatically use the project's torch-enabled venv if run from standard python
+try:
+    import torch
+except ImportError:
+    for candidate in [
+        Path(r"D:\git\project requirements\venv\Scripts\python.exe"),
+        Path(r"D:\git\unlox\.venv311\Scripts\python.exe"),
+    ]:
+        if candidate.is_file() and str(candidate).lower() != sys.executable.lower():
+            print(f"[test_voice] Switching to project ML environment ({candidate.name})...")
+            res = subprocess.run([str(candidate)] + sys.argv)
+            sys.exit(res.returncode)
+
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
