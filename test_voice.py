@@ -37,7 +37,7 @@ DEFAULT_TEXTS = {
 }
 
 
-def synthesize_and_save(lang: str, text: str, play: bool = False) -> Path:
+def synthesize_and_save(lang: str, text: str, target_dur: float | None = None, play: bool = False) -> Path:
     from localization.tts_engine import OfflineTTSEngine
 
     print(f"\n[TTS Engine] Initializing voice synthesizer for '{lang}'...")
@@ -53,10 +53,13 @@ def synthesize_and_save(lang: str, text: str, play: bool = False) -> Path:
 
     print(f"[Engine Model] {engine_desc}")
     print(f"[Input Text]   {text}")
+    if target_dur:
+        print(f"[Timing Sync]  Target duration locked to {target_dur:.3f}s (Time Expansion/Compression Active)")
 
-    wav, dur = tts.synthesize_scene(text, lang)
+    wav, dur = tts.synthesize_scene(text, lang, target_dur=target_dur)
 
-    out_path = Path("cache") / f"test_voice_{lang}.wav"
+    suffix = f"_{target_dur:.1f}s" if target_dur else ""
+    out_path = Path("cache") / f"test_voice_{lang}{suffix}.wav"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with wave.open(str(out_path), "wb") as w:
@@ -94,6 +97,12 @@ def main():
         help="Custom text to speak. If omitted, uses a standard STEM lesson sentence.",
     )
     parser.add_argument(
+        "--target-dur",
+        type=float,
+        default=None,
+        help="Target duration in seconds to lock the speech to using time expansion/compression.",
+    )
+    parser.add_argument(
         "--play",
         action="store_true",
         help="Automatically open and play the generated WAV file in default media player.",
@@ -101,7 +110,7 @@ def main():
 
     args = parser.parse_args()
     text = args.text or DEFAULT_TEXTS.get(args.lang, DEFAULT_TEXTS["en"])
-    synthesize_and_save(args.lang, text, play=args.play)
+    synthesize_and_save(args.lang, text, target_dur=args.target_dur, play=args.play)
 
 
 if __name__ == "__main__":
