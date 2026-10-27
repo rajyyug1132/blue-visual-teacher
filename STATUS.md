@@ -31,7 +31,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
 | FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
-| TARUN | localization/ | Done (L1–L8 verified + studio prosody compression: zero-latency 140ms lead-in, distinct Ohm pronunciation in KN/TA/BN, 75ms max intra-sentence pauses) | Studio prosody compressor (anti-void & anti-stutter), distinct Ohm mapping (KN: ಓಮ್ ನಿಯಮ, TA: ஓம் விதி, BN: ওহমের সূত্র), 47 localization tests green | All green |
+| TARUN | localization/ | Done (All 5 punch list items resolved: Native listen log, voice cache audit & hf_alpha rating, anti-silent-tone guard, speech rate benchmark, model licenses) | 183 unit tests green + 5 real neural tests green (D4/D5) | Ready for v1 merge |
 | AYUSH | exporter/ | — | — | — |
 
 ### Planner bench (5 topics, uncached, RTX 3050 6 GB)
@@ -62,6 +62,7 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - YYUG -> FARHAN · renderer · ignore the optional `check` key on scenes; never render it · it is planner metadata · blocking? n
 - YYUG -> TARUN · localization/tts_engine.py · run `orchestrator.spoken.speak_forms(text)` on every string right before TTS (NFKC + CO2 -> carbon dioxide, km² -> square kilometres) · safety net if IndicTrans2 reintroduces digits/formulas · blocking? n
 - YYUG -> AYUSH · README.md "Known limits" · add: "Descriptive topics (history, geography, processes) carry no numbers: the planner blocks digits, number words above ten, units and formulas there. Numeric worked examples are arithmetic-checked, but formulas outside a verified bank are not asserted as fact." · judges score honest limits over hidden bugs · blocking? n
+- TARUN -> YYUG, AYUSH, FARHAN · localization/tts_engine.py · Voice pack audit: Kokoro offline cache contains ONLY hf_alpha.pt (Indian female), hm_omega.pt (Indian male), and af_sarah.pt. am_michael, enim, and enif are NOT cached as standalone files. Defaulting to hf_alpha (Indian-accented female educator) runs 100% offline with zero synthetic tone fallback. Silent tone fallback removed; failures now raise RuntimeError and log loudly. · blocking? n
 
 ## CONTRACT CHANGE proposals
 

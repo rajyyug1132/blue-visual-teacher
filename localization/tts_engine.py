@@ -594,6 +594,12 @@ def time_scale_audio(
         return scaled_speech + [0.0] * tail_pad_samples
 
 
+# Voices verified present in offline Hugging Face cache (models--hexgrad--Kokoro-82M):
+# 1. hf_alpha.pt (Indian English / Hindi Female)
+# 2. hm_omega.pt (Indian English / Hindi Male)
+# 3. af_sarah.pt (American English Female)
+AVAILABLE_KOKORO_VOICES: set[str] = {"hf_alpha", "hm_omega", "af_sarah"}
+
 VOICE_ALIASES: dict[str, str] = {
     # English: Michael (Male Teacher/Professor) & Sarah (Female Narrator/Teacher)
     "enm": "am_michael",
@@ -604,6 +610,18 @@ VOICE_ALIASES: dict[str, str] = {
     "en-f": "af_sarah",
     "sarah": "af_sarah",
     "female": "af_sarah",
+    # Indian-accented English voices:
+    # Kokoro Hindi checkpoints (hm_omega / hf_alpha) routed through English phonetic pipeline
+    "eni": "hm_omega",          # default Indian English
+    "enim": "hm_omega",        # Indian English Male
+    "eni-m": "hm_omega",
+    "indian-male": "hm_omega",
+    "indian_male": "hm_omega",
+    "enif": "hf_alpha",        # Indian English Female
+    "eni-f": "hf_alpha",
+    "indian-female": "hf_alpha",
+    "indian_female": "hf_alpha",
+    "indian": "hm_omega",
     # Alternative educator voices
     "bella": "af_bella",
     "adam": "am_adam",
@@ -815,8 +833,15 @@ class OfflineTTSEngine:
                         full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
                     measured_dur = round(len(full_wav) / TARGET_SR, 3)
                     return full_wav, measured_dur
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"[TTS ERROR] Kokoro English synthesis failed for voice='{chosen_voice_en}': {e}",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"[TTS Engine Error] Kokoro English synthesis failed for voice='{chosen_voice_en}': {e}"
+                ) from e
 
         if lang == "hi" and self.kokoro_hi is not None and HAS_NUMPY:
             try:
@@ -841,8 +866,15 @@ class OfflineTTSEngine:
                         full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
                     measured_dur = round(len(full_wav) / TARGET_SR, 3)
                     return full_wav, measured_dur
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"[TTS ERROR] Kokoro Hindi synthesis failed for voice='{chosen_voice_hi}': {e}",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"[TTS Engine Error] Kokoro Hindi synthesis failed for voice='{chosen_voice_hi}': {e}"
+                ) from e
 
         # MMS-TTS path (Kannada, or Hindi fallback if espeak is missing)
         mms_lang = lang if lang in self.mms_models else ("hi" if lang == "hi" else None)
@@ -941,10 +973,22 @@ class OfflineTTSEngine:
 
                 measured_dur = round(len(full_wav) / TARGET_SR, 3)
                 return full_wav, measured_dur
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"[TTS ERROR] MMS-TTS synthesis failed for lang='{mms_lang}': {e}",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"[TTS Engine Error] MMS-TTS synthesis failed for lang='{mms_lang}': {e}"
+                ) from e
 
-        # Step 3: Fallback synthesis
+        # Step 3: Fallback synthesis (used only when neural models are uninstalled or in unit testing)
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[TTS WARNING] Neural model unavailable for lang='{lang}'. "
+            f"Generating synthetic verification tone for text: '{clean_text[:60]}...'"
+        )
         return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)
 
     def synthesize_all_scenes(
