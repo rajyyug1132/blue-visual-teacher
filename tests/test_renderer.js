@@ -239,7 +239,7 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   }, 2.0, 5.0, theme, 'en');
   const proseTexts = graphProseCtx.ops.filter(op => op.startsWith('fillText('));
   // Must render as conceptual framework, not a bar chart with numeric heights
-  assert(proseTexts.some(op => op.includes('CONCEPTUAL ANALYSIS')), 'Prose with numbers must render conceptual framework');
+  assert(proseTexts.some(op => op.includes('socket')), 'Prose with numbers must render as conceptual prose (the lesson text), not bars');
   assert(!proseTexts.some(op => op === 'fillText("230")' || op === 'fillText("230 V")'), 'Must not extract arbitrary prose numbers as standalone chart bar values');
   console.log('✓ Prose sentences with numbers correctly fall back to conceptual analysis without creating a spurious bar chart.');
 
@@ -253,7 +253,6 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   const conceptTexts = graphConceptCtx.ops.filter(op => op.startsWith('fillText('));
   assert(conceptTexts.some(op => op.includes('Pressure (P)')), 'Must render X parameter label');
   assert(conceptTexts.some(op => op.includes('Volume (V)')), 'Must render Y parameter label');
-  assert(conceptTexts.some(op => op.includes('CONCEPTUAL ANALYSIS')), 'Must display conceptual analysis badge');
   assert(conceptTexts.some(op => op.includes('inversely related')), 'Must render concept explanation from steps');
   // Check that no arbitrary curve was plotted (only axis lines, arrowheads, and gridlines use lineTo; no 40-step curve loop)
   const lineToOps = graphConceptCtx.ops.filter(op => op.startsWith('lineTo('));
@@ -420,9 +419,9 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
     steps: ['Every particle attracts every other particle with a gravitational force.']
   }, 1.5, 5.0, theme, 'en');
   const neutralTexts = titleNeutralCtx.ops.filter(op => op.startsWith('fillText('));
-  assert(neutralTexts.some(op => op.includes('COORDINATES') || op.includes('EMPIRICAL') || op.includes('ACTIVE DYNAMICS')), 'Neutral scientific composition must render telemetry badge');
-  assert(!neutralTexts.some(op => op.includes('RESISTOR')), 'Non-electrical topic must not render resistor');
-  assert(!neutralTexts.some(op => op.includes('Sea water')), 'Non-environmental topic must not render sea water');
+  assert.strictEqual(templates.lastIllustration, 'neutral', 'A generic topic must get the neutral composition');
+  assert.notStrictEqual(templates.lastIllustration, 'circuit', 'Non-electrical topic must not get the circuit illustration');
+  assert.notStrictEqual(templates.lastIllustration, 'water', 'Non-environmental topic must not get the water cycle illustration');
 
   // Verify Biology topic renders cellular structure
   const titleBioCtx = new MockCanvasContext();
@@ -431,7 +430,7 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
     steps: ['Plant cells contain specialized organelles for photosynthesis and structural support.']
   }, 1.5, 5.0, theme, 'en');
   const bioTexts = titleBioCtx.ops.filter(op => op.startsWith('fillText('));
-  assert(bioTexts.some(op => op.includes('CELLULAR BIOLOGY MODEL')), 'Biological topic must render cell biology model');
+  assert.strictEqual(templates.lastIllustration, 'cell', 'Biological topic must get the cell illustration');
   console.log('✓ Title template selects appropriate topic illustration and uses neutral scientific composition for generic topics.');
 
   // 26. Phase 2 Batch 2 Task 2.9: Equation-panel dynamic adaptation (1 to 5 variables, 1 to 4 steps)
@@ -552,35 +551,34 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   const collisionCtx1 = new MockCanvasContext();
   templates.title(collisionCtx1, { labels: ['Electrochemical Cell', 'CHEMISTRY'], steps: ['Galvanic reactions generate potential.'] }, 1.5, 5.0, theme, 'en');
   const coll1Texts = collisionCtx1.ops.filter(op => op.startsWith('fillText('));
-  assert(!coll1Texts.some(op => op.includes('RESISTOR')), 'Electrochemical Cell must not render circuit resistor');
-  assert(coll1Texts.some(op => op.includes('EMPIRICAL OBSERVATIONAL FRAMEWORK') || op.includes('COORDINATES')), 'Electrochemical Cell must route to neutral composition');
+  assert.notStrictEqual(templates.lastIllustration, 'circuit', 'Electrochemical Cell must not get the circuit illustration');
+  assert.strictEqual(templates.lastIllustration, 'neutral', 'Electrochemical Cell must route to neutral composition');
 
   const collisionCtx2 = new MockCanvasContext();
   templates.title(collisionCtx2, { labels: ['Organic Chemistry', 'CHEMISTRY'], steps: ['Structure and reactivity of carbon compounds.'] }, 1.5, 5.0, theme, 'en');
   const coll2Texts = collisionCtx2.ops.filter(op => op.startsWith('fillText('));
-  assert(!coll2Texts.some(op => op.includes('CELLULAR BIOLOGY MODEL')), 'Organic Chemistry must not render biological cell model');
-  assert(coll2Texts.some(op => op.includes('EMPIRICAL OBSERVATIONAL FRAMEWORK') || op.includes('COORDINATES')), 'Organic Chemistry must route to neutral composition');
+  assert.notStrictEqual(templates.lastIllustration, 'cell', 'Organic Chemistry must not get the cell illustration');
+  assert.strictEqual(templates.lastIllustration, 'neutral', 'Organic Chemistry must route to neutral composition');
 
   const collisionCtx3 = new MockCanvasContext();
   templates.title(collisionCtx3, { labels: ['Carnot Cycle', 'THERMODYNAMICS'], steps: ['Reversible thermodynamic heat engine cycle.'] }, 1.5, 5.0, theme, 'en');
   const coll3Texts = collisionCtx3.ops.filter(op => op.startsWith('fillText('));
-  assert(!coll3Texts.some(op => op.includes('Sea water') || op.includes('Evaporation')), 'Carnot Cycle must not render water cycle illustration');
-  assert(coll3Texts.some(op => op.includes('EMPIRICAL OBSERVATIONAL FRAMEWORK') || op.includes('COORDINATES')), 'Carnot Cycle must route to neutral composition');
+  assert.notStrictEqual(templates.lastIllustration, 'water', 'Carnot Cycle must not get the water cycle illustration');
+  assert.strictEqual(templates.lastIllustration, 'neutral', 'Carnot Cycle must route to neutral composition');
 
   const collisionCtx4 = new MockCanvasContext();
   templates.title(collisionCtx4, { labels: ['Krebs Cycle', 'BIOCHEMISTRY'], steps: ['Series of chemical reactions used by aerobic organisms.'] }, 1.5, 5.0, theme, 'en');
   const coll4Texts = collisionCtx4.ops.filter(op => op.startsWith('fillText('));
-  assert(!coll4Texts.some(op => op.includes('Sea water') || op.includes('Evaporation')), 'Krebs Cycle must not render water cycle illustration');
+  assert.notStrictEqual(templates.lastIllustration, 'water', 'Krebs Cycle must not get the water cycle illustration');
 
   // Verify positive recognized topics still work
   const posCircuitCtx = new MockCanvasContext();
   templates.title(posCircuitCtx, { labels: ['Electric Circuit', 'ELECTRONICS'], steps: ['Closed loop conductor path.'] }, 1.5, 5.0, theme, 'en');
-  assert(posCircuitCtx.ops.some(op => op.includes('CLOSED CIRCUIT LOOP')), 'Electric Circuit must render circuit illustration');
+  assert.strictEqual(templates.lastIllustration, 'circuit', 'Electric Circuit must get the circuit illustration');
 
   const posWaterCtx = new MockCanvasContext();
   templates.title(posWaterCtx, { labels: ['The Water Cycle', 'EARTH SCIENCE'], steps: ['Continuous evaporation and precipitation.'] }, 1.5, 5.0, theme, 'en');
-  assert(!posWaterCtx.ops.some(op => op.includes('RESISTOR')), 'Water cycle must not render resistor');
-  assert(!posWaterCtx.ops.some(op => op.includes('CELLULAR BIOLOGY MODEL')), 'Water cycle must not render cell');
+  assert.strictEqual(templates.lastIllustration, 'water', 'Water cycle must get the water cycle illustration');
   console.log('✓ Title topic classification correctly isolates collisions and routes ambiguous topics to neutral composition.');
 
   // 31. Task 4 Correction: Hindi and Kannada timeline text retention
@@ -681,11 +679,11 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
     ]
   }, 2.0, 5.0, theme, 'en');
   const eq5StepsTexts = eq5StepsCtx.ops.filter(op => op.startsWith('fillText('));
-  assert(eq5StepsTexts.some(op => op.includes('STEP 01')), 'Must render Step 1');
-  assert(eq5StepsTexts.some(op => op.includes('STEP 02')), 'Must render Step 2');
-  assert(eq5StepsTexts.some(op => op.includes('STEP 03')), 'Must render Step 3');
-  assert(eq5StepsTexts.some(op => op.includes('STEP 04')), 'Must render Step 4');
-  assert(eq5StepsTexts.some(op => op.includes('STEP 05')), 'Must render Step 5 (5th schema-valid step must not be dropped)');
+  assert(eq5StepsTexts.some(op => op.includes('Given')), 'Step text "Given" must be drawn (no step dropped)');
+  assert(eq5StepsTexts.some(op => op.includes('Formula')), 'Step text "Formula" must be drawn (no step dropped)');
+  assert(eq5StepsTexts.some(op => op.includes('Substitution')), 'Step text "Substitution" must be drawn (no step dropped)');
+  assert(eq5StepsTexts.some(op => op.includes('Computation')), 'Step text "Computation" must be drawn (no step dropped)');
+  assert(eq5StepsTexts.some(op => op.includes('Conclusion')), 'Step text "Conclusion" must be drawn (no step dropped)');
   assert(eq5StepsTexts.some(op => op.includes('Appliance consumes 2.3 kW')), 'Must render 5th step text');
   assert.strictEqual(theme.hasCapacityViolations(), false, '5 schema-valid steps must not trigger capacity violation');
   assert.strictEqual(theme.hasOverflows(), false, '5 steps must render with zero overflow errors');
@@ -743,8 +741,85 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   assert.strictEqual(theme.getOverflows().length, 0, 'theme.clearDiagnostics() resets diagnostic state completely');
   console.log('✓ Standard templates actively render overflow badge, deduplicate repeated scrubbing, and avoid false positives.');
 
+  // 35. code_walkthrough: Python for-loop trace, moving highlight, deterministic, inside the frame
+  console.log('\nTest 35: code_walkthrough Python loop trace');
+  const loopParams = {
+    labels: ['A for loop', 'Variables'],
+    code: ['total = 0', 'for i in range(3):', '    total = total + i', 'print(total)'],
+    trace: [
+      { line: 1, vars: [{ name: 'total', value: '0' }] },
+      { line: 2, vars: [{ name: 'i', value: '0' }, { name: 'total', value: '0' }] },
+      { line: 4, vars: [{ name: 'i', value: '2' }, { name: 'total', value: '3' }] }
+    ]
+  };
+  function highlightYs(ops) {
+    return ops.filter(op => op.startsWith('fillRect(')).map(op => op.split(',')[1]);
+  }
+  function insideFrame(ops) {
+    ops.forEach(op => {
+      const m = op.match(/^fillRect\(([-\d.]+),([-\d.]+),([-\d.]+),([-\d.]+)\)/);
+      if (!m) return;
+      const x = Number(m[1]);
+      const y = Number(m[2]);
+      const w = Number(m[3]);
+      const h = Number(m[4]);
+      assert(x >= 0 && y >= 0 && x + w <= 1280 && y + h <= 720, 'code highlight must stay inside 1280x720: ' + op);
+    });
+  }
+  theme.clearDiagnostics();
+  const loopEarly = new MockCanvasContext();
+  templates.code_walkthrough(loopEarly, loopParams, 0.5, 9, theme, 'en');
+  const loopMid = new MockCanvasContext();
+  templates.code_walkthrough(loopMid, loopParams, 4, 9, theme, 'en');
+  const loopLate = new MockCanvasContext();
+  templates.code_walkthrough(loopLate, loopParams, 8, 9, theme, 'en');
+  assert(loopEarly.ops.some(op => op.includes('fillText("total = 0"')), 'source line must be drawn as text');
+  assert(loopEarly.ops.some(op => op.includes('fillText("0"')), 'first step must show total = 0');
+  assert(loopLate.ops.some(op => op.includes('fillText("3"')), 'last step must show total = 3');
+  assert.notDeepStrictEqual(highlightYs(loopEarly.ops), highlightYs(loopMid.ops), 'highlight must move to the next traced line');
+  assert.notDeepStrictEqual(highlightYs(loopMid.ops), highlightYs(loopLate.ops), 'highlight must move again on the last step');
+  const loopAgain = new MockCanvasContext();
+  templates.code_walkthrough(loopAgain, loopParams, 4, 9, theme, 'en');
+  assert.deepStrictEqual(loopMid.ops, loopAgain.ops, 'the same t must draw an identical frame');
+  insideFrame(loopEarly.ops);
+  insideFrame(loopLate.ops);
+  ['en', 'hi', 'kn'].forEach(lang => {
+    const label = lang === 'hi' ? 'लूप' : lang === 'kn' ? 'ಲೂಪ್' : 'A for loop';
+    const ctxLang = new MockCanvasContext();
+    theme.clearDiagnostics();
+    templates.draw(ctxLang, 'code_walkthrough', {
+      labels: [label, 'Variables'],
+      code: loopParams.code,
+      trace: loopParams.trace
+    }, 4, 9, theme, lang);
+    insideFrame(ctxLang.ops);
+    assert.strictEqual(theme.hasOverflows(), false, lang + ' code_walkthrough must not overflow');
+  });
+  console.log('✓ code_walkthrough draws the loop, moves the highlight, repeats a frame, and stays inside the canvas.');
+
+  // 36. Templates draw only lesson text: an all-Hindi lesson must not show invented English (filler, chrome)
+  console.log('\nTest 36: no invented English text in an all-Hindi lesson');
+  const hiParams = {
+    labels: ['जल चक्र', 'वाष्पीकरण', 'संघनन', 'वर्षा', 'संग्रह'],
+    steps: ['सूरज पानी को गर्म करता है', 'भाप ऊपर उठती है', 'बादल बनते हैं', 'बारिश होती है'],
+    topic_en: 'The Water Cycle: Evaporation Condensation Precipitation',
+  };
+  const englishWord = /[A-Za-z]{3,}/;
+  const invented = {};
+  ['title', 'bullets', 'compare', 'flow', 'equation', 'labeled_diagram', 'timeline', 'graph'].forEach(type => {
+    [0.5, 2.5, 4.5].forEach(lt => {
+      const c = new MockCanvasContext();
+      templates.draw(c, type, hiParams, lt, 5.0, theme, 'hi');
+      c.ops.filter(op => op.startsWith('fillText(')).map(op => op.slice(10, op.lastIndexOf('",')))
+        .filter(txt => englishWord.test(txt)).forEach(txt => { (invented[type] = invented[type] || new Set()).add(txt); });
+    });
+  });
+  const report = Object.fromEntries(Object.entries(invented).map(([k, v]) => [k, [...v]]));
+  assert.deepStrictEqual(report, {}, 'templates drew text that is not in the lesson: ' + JSON.stringify(report, null, 1));
+  console.log('✓ every template draws only lesson text in an all-Hindi lesson (topic_en is never drawn).');
+
   console.log('\n=======================================');
-  console.log('ALL 34 RENDERER TESTS PASSED CLEANLY');
+  console.log('ALL 36 RENDERER TESTS PASSED CLEANLY');
   console.log('=======================================');
 }).catch(err => {
   console.error('\n❌ TEST RUN FAILED:', err);

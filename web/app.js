@@ -182,6 +182,10 @@
 
     // Player Controls
     playPauseBtn.addEventListener('click', togglePlayPause);
+    const replayBtn = document.getElementById('replay-btn');
+    const nextSceneBtn = document.getElementById('next-scene-btn');
+    if (replayBtn) replayBtn.addEventListener('click', replayLesson);
+    if (nextSceneBtn) nextSceneBtn.addEventListener('click', goToNextScene);
     scrubber.addEventListener('input', handleScrub);
 
     captionsBtn.addEventListener('click', () => {
@@ -571,6 +575,39 @@
   }
 
   // 6. Playback and Scrubber Logic
+  function seekTo(t) {
+    const total = window.totalDuration || 0;
+    const clamped = Math.max(0, Math.min(t, total));
+    scrubber.value = String(clamped);
+    if (typeof window.renderAtTime === 'function') window.renderAtTime(clamped);
+    updateTimeDisplay(clamped, total);
+    pauseOffset = clamped;
+    if (audio && audio.src) {
+      const limit = Number.isFinite(audio.duration) ? audio.duration : clamped;
+      try { audio.currentTime = Math.min(clamped, limit); } catch (err) { /* seek before metadata */ }
+    }
+    if (isPlaying) playStartTime = performance.now() - clamped * 1000;
+  }
+
+  function replayLesson() {
+    if (isPlaying) pausePlayback();
+    seekTo(0);
+    startPlayback();
+  }
+
+  function goToNextScene() {
+    const t = parseFloat(scrubber.value || 0);
+    const scenes = (currentManifest && currentManifest.scenes) || [];
+    let next = null;
+    for (let i = 0; i < scenes.length; i++) {
+      if (typeof scenes[i].start_sec === 'number' && scenes[i].start_sec > t + 0.05) {
+        next = scenes[i].start_sec;
+        break;
+      }
+    }
+    seekTo(next == null ? (window.totalDuration || t) : next);
+  }
+
   function togglePlayPause() {
     if (isPlaying) {
       pausePlayback();

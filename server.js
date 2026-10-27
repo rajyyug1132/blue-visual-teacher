@@ -41,7 +41,10 @@ const ALIASES = [
 function resolveFile(pathname) {
   for (const [prefix, folder] of ALIASES) {
     if (pathname.startsWith(prefix)) {
-      return path.join(folder, pathname.slice(prefix.length));
+      const aliased = path.join(folder, pathname.slice(prefix.length));
+      // assets/fonts has no Telugu file. Serve the copy under the URL path when the alias misses.
+      if (fs.existsSync(aliased)) return aliased;
+      break;
     }
   }
   return path.join(REPO_ROOT, pathname);

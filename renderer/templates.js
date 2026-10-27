@@ -137,7 +137,36 @@
     ctx.restore();
   }
 
-  const TEMPLATES = {
+  // Templates draw only the lesson's own words. Every string a template draws must be made of words that appear in
+// the scene's labels, steps or code; anything else is invented chrome or filler ("BUS-L", "PROPERTY SET A",
+// "[ SCIENTIFIC SCHEMATIC ]") and is dropped, in every language. topic_en is a hint for picking illustrations and is
+// never drawn. Numbers, symbols and words under three letters always pass.
+function lessonWords(params) {
+  const words = new Set();
+  const sources = [].concat(params.labels || [], params.steps || [], params.code || []);
+  (params.trace || []).forEach(step => (step.vars || []).forEach(v => sources.push(v.name, v.value)));
+  sources.forEach(text => (String(text).toLowerCase().match(/[a-z]{3,}/g) || []).forEach(w => words.add(w)));
+  return words;
+}
+
+function onlyLessonText(ctx, words) {
+  return new Proxy(ctx, {
+    get(target, prop) {
+      if (prop === 'fillText') {
+        return (text, x, y, maxWidth) => {
+          const used = String(text).toLowerCase().match(/[a-z]{3,}/g) || [];
+          if (used.some(w => !words.has(w))) return;
+          return maxWidth === undefined ? target.fillText(text, x, y) : target.fillText(text, x, y, maxWidth);
+        };
+      }
+      const value = target[prop];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, prop, value) { target[prop] = value; return true; }
+  });
+}
+
+const TEMPLATES = {
     // -------------------------------------------------------------------------
     // 1. TITLE TEMPLATE (Cover layout: Left editorial text & key takeaway, Right vector illustration)
     // -------------------------------------------------------------------------
@@ -232,7 +261,7 @@
       ctx.fillText('[ SCIENTIFIC SCHEMATIC ]', rightX + rightW / 2, rightY + 24);
 
       // Content-aware vector illustration selection (precise phrase matching; collision exclusions)
-      const topicStr = (mainTitle + ' ' + kicker + ' ' + explanation).toLowerCase();
+      const topicStr = ((params.topic_en || '') + ' ' + mainTitle + ' ' + kicker + ' ' + explanation).toLowerCase();
 
       // Explicit exclusions for known ambiguous collisions (route to neutral scientific composition)
       const isElectrochem = topicStr.includes('electrochemical') || topicStr.includes('galvanic') || topicStr.includes('electrolyte') || topicStr.includes('electrochemistry');
@@ -280,6 +309,7 @@
       );
 
       ctx.save();
+      this.lastIllustration = isCircuitTopic ? 'circuit' : isWaterOrCycleTopic ? 'water' : isBioTopic ? 'cell' : 'neutral';
       if (isCircuitTopic) {
         // Circuit Diagram Illustration
         const cLeft = rightX + 60;
@@ -953,7 +983,7 @@
           theme.drawCard(ctx, illusX, illusY, illusW, illusH, 12, isLeftCard ? '#F1F5F9' : '#FEF3C7', theme.colors.border, 1.5);
 
           // Topic-sensitive illustration selection
-          const compareContext = (heading + ' ' + kicker + ' ' + colLabels.join(' ') + ' ' + colSteps.join(' ')).toLowerCase();
+          const compareContext = ((params.topic_en || '') + ' ' + heading + ' ' + kicker + ' ' + colLabels.join(' ') + ' ' + colSteps.join(' ')).toLowerCase();
           const isDCAC = (compareContext.includes('direct current') || compareContext.includes('alternating current') ||
                          (compareContext.includes('dc') && compareContext.includes('ac')) ||
                          (colLabels[0].toLowerCase().includes('dc') && colLabels[1].toLowerCase().includes('ac')));
@@ -2108,11 +2138,7 @@
       if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
 
       // Central stage interface blocks connecting buses
-      const loopBoxes = [
-        { x: centerAreaX - 60, y: centerAreaY + 140, w: 75, h: 40, label: 'BUS-L' },
-        { x: centerAreaX + centerAreaW - 15, y: centerAreaY + 140, w: 75, h: 40, label: 'BUS-R' },
-        { x: nodeCenterX - 45, y: centerAreaY + 285, w: 90, h: 34, label: 'NEXUS' }
-      ];
+      const loopBoxes = [];  // the BUS-L / BUS-R / NEXUS schematic was invented chrome, not lesson content
       loopBoxes.forEach(b => {
         theme.drawCard(ctx, b.x, b.y, b.w, b.h, 8, '#FFFFFF', theme.colors.border, 1.5);
         ctx.font = `700 10px ${font}`;
@@ -2717,19 +2743,200 @@
       ctx.restore();
     },
 
+    // Code lines and the trace are data. Draw the strings; never eval them.
+    code_walkthrough(ctx, params, lt, dur, theme, lang) {
+      const rawCode = Array.isArray(params.code) ? params.code : [];
+      const rawTrace = Array.isArray(params.trace) ? params.trace : [];
+      if (rawCode.length > 12) theme.reportCapacityViolation('code_walkthrough', 'code_lines', rawCode.length, 12);
+      if (rawTrace.length > 6) theme.reportCapacityViolation('code_walkthrough', 'trace_steps', rawTrace.length, 6);
+
+      const code = rawCode.slice(0, 12).map(line => String(line).slice(0, 80));
+      const trace = rawTrace.slice(0, 6).map(step => ({
+        line: Number(step && step.line) || 0,
+        vars: (Array.isArray(step && step.vars) ? step.vars : []).slice(0, 4).map(pair => ({
+          name: String(pair && pair.name != null ? pair.name : '').slice(0, 24),
+          value: String(pair && pair.value != null ? pair.value : '').slice(0, 24)
+        }))
+      }));
+
+      const span = dur > 0 ? dur : 1;
+      const u = Math.max(0, Math.min(Number(lt) || 0, span)) / span;
+      const stepIdx = trace.length <= 1 ? 0 : Math.min(trace.length - 1, Math.floor(u * trace.length));
+      const step = trace[stepIdx] || { line: 0, vars: [] };
+      const labelFont = theme.getFont(lang);
+      const codeFont = '"Noto Sans", ui-monospace, Consolas, monospace';
+      const cardY = 68;
+      const cardH = 516;
+      const codeX = 64;
+      const codeW = 760;
+      const varX = 840;
+      const varW = 376;
+
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      theme.drawCard(ctx, codeX, cardY, codeW, cardH, 14);
+      theme.drawCard(ctx, varX, cardY, varW, cardH, 14);
+
+      const title = (params.labels && params.labels[0]) || 'Code';
+      const titleFit = theme.fitText(ctx, String(title), { width: codeW - 32, height: 28 }, 18, 14, 700, lang, { label: 'code_walkthrough.title' });
+      ctx.font = `700 ${titleFit.fontSize}px ${labelFont}`;
+      ctx.fillStyle = theme.colors.text;
+      theme.drawFittedLines(ctx, titleFit, codeX + 16, cardY + 14);
+
+      const lineH = 36;
+      const lineTop = cardY + 52;
+      const textX = codeX + 56;
+      const textW = codeW - 72;
+      code.forEach((line, i) => {
+        const rowY = lineTop + i * lineH;
+        const active = step.line === i + 1;
+        if (active) {
+          ctx.fillStyle = '#DBEAFE';
+          ctx.fillRect(codeX + 12, rowY - 6, codeW - 24, 32);
+        }
+        ctx.font = `700 16px ${codeFont}`;
+        ctx.fillStyle = active ? theme.colors.accent : theme.colors.muted;
+        ctx.fillText(String(i + 1), codeX + 20, rowY);
+        ctx.fillStyle = theme.colors.text;
+        ctx.font = `600 16px ${codeFont}`;
+        if (ctx.measureText(line).width > textW) {
+          const fit = theme.fitText(ctx, line, { width: textW, height: 22 }, 16, 12, 600, 'en', { label: 'code_walkthrough.line' });
+          ctx.font = `600 ${fit.fontSize}px ${codeFont}`;
+          theme.drawFittedLines(ctx, fit, textX, rowY);
+        } else {
+          ctx.fillText(line, textX, rowY);
+        }
+      });
+
+      const varTitle = (params.labels && params.labels[1]) || 'Variables';
+      const varFit = theme.fitText(ctx, String(varTitle), { width: varW - 32, height: 28 }, 18, 14, 700, lang, { label: 'code_walkthrough.vars' });
+      ctx.font = `700 ${varFit.fontSize}px ${labelFont}`;
+      ctx.fillStyle = theme.colors.text;
+      theme.drawFittedLines(ctx, varFit, varX + 16, cardY + 14);
+      ctx.font = `700 14px ${codeFont}`;
+      ctx.fillStyle = theme.colors.muted;
+      ctx.fillText(trace.length ? (stepIdx + 1) + '/' + trace.length : '0/0', varX + 16, cardY + 48);
+
+      step.vars.forEach((pair, i) => {
+        const y = cardY + 84 + i * 48;
+        ctx.font = `700 16px ${codeFont}`;
+        ctx.fillStyle = theme.colors.accent;
+        ctx.fillText(pair.name, varX + 16, y);
+        ctx.font = `600 16px ${codeFont}`;
+        ctx.fillStyle = theme.colors.text;
+        ctx.fillText(pair.value, varX + 16, y + 22);
+      });
+      ctx.restore();
+    },
+
+    quizBoxes() {
+      const gap = 16;
+      const cardW = (1152 - gap) / 2;
+      const cardH = 156;
+      const top = 200;
+      const left = 64;
+      const boxes = [];
+      for (let i = 0; i < 4; i++) {
+        boxes.push({
+          x: left + (i % 2) * (cardW + gap),
+          y: top + Math.floor(i / 2) * (cardH + gap),
+          w: cardW,
+          h: cardH
+        });
+      }
+      return boxes;
+    },
+
+    // Question and options are strings. The correct index is data, never executed.
+    quiz(ctx, params, lt, dur, theme, lang) {
+      const labels = Array.isArray(params.labels) ? params.labels : [];
+      const steps = Array.isArray(params.steps) ? params.steps : [];
+      const question = labels[0] != null ? String(labels[0]) : '';
+      const options = steps.slice(0, 4).map(step => String(step));
+      let correctIdx = parseInt(labels[1] != null && labels[1] !== '' ? labels[1] : '0', 10);
+      if (!Number.isFinite(correctIdx)) correctIdx = 0;
+      if (options.length) correctIdx = Math.max(0, Math.min(options.length - 1, correctIdx));
+      const p = dur > 0 ? Math.min(1, Math.max(0, (Number(lt) || 0) / dur)) : 1;
+      const tapped = Number.isInteger(params.selectedQuizOption) ? params.selectedQuizOption : null;
+      const reveal = tapped == null && p >= 0.65;
+      const font = theme.getFont(lang);
+      const boxes = this.quizBoxes();
+
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+
+      if (tapped == null && p < 0.65) {
+        const barW = 1152;
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(64, 64, barW, 8);
+        ctx.fillStyle = '#38BDF8';
+        ctx.fillRect(64, 64, barW * (p / 0.65), 8);
+      }
+
+      theme.drawCard(ctx, 64, 80, 1152, 104, 14, '#0F172A', '#334155', 2);
+      const qFit = theme.fitText(ctx, question, { width: 1100, height: 72 }, 28, 16, 700, lang, { label: 'quiz.question' });
+      ctx.font = `700 ${qFit.fontSize}px ${font}`;
+      ctx.fillStyle = '#F8FAFC';
+      theme.drawFittedLines(ctx, qFit, 84, 96);
+
+      options.forEach((text, i) => {
+        const box = boxes[i];
+        const showCorrect = (tapped != null && i === correctIdx) || (reveal && i === correctIdx);
+        const showWrong = tapped != null && tapped === i && i !== correctIdx;
+        const dim = (reveal || tapped != null) && !showCorrect && !showWrong;
+        ctx.save();
+        if (dim) ctx.globalAlpha = 0.45;
+        let fill = '#1E293B';
+        let stroke = '#334155';
+        if (showCorrect) {
+          fill = '#064E3B';
+          stroke = '#34D399';
+        }
+        if (showWrong) {
+          fill = '#450A0A';
+          stroke = '#F87171';
+        }
+        theme.drawCard(ctx, box.x, box.y, box.w, box.h, 14, fill, stroke, showCorrect || showWrong ? 3 : 1.5);
+        ctx.fillStyle = '#F8FAFC';
+        ctx.font = `800 18px ${font}`;
+        ctx.fillText(String.fromCharCode(65 + i), box.x + 18, box.y + 16);
+        if (showCorrect) ctx.fillText('✓', box.x + box.w - 36, box.y + 16);
+        if (showWrong) ctx.fillText('✗', box.x + box.w - 36, box.y + 16);
+        const fit = theme.fitText(ctx, text, { width: box.w - 36, height: 72 }, 22, 14, 600, lang, { label: 'quiz.option' });
+        ctx.font = `600 ${fit.fontSize}px ${font}`;
+        ctx.fillStyle = '#F8FAFC';
+        theme.drawFittedLines(ctx, fit, box.x + 18, box.y + 48);
+        if (showCorrect) {
+          ctx.font = `700 14px ${font}`;
+          ctx.fillStyle = '#6EE7B7';
+          ctx.fillText('✓ Correct Answer', box.x + 18, box.y + box.h - 28);
+        }
+        ctx.restore();
+      });
+      ctx.restore();
+    },
+
     // -------------------------------------------------------------------------
     // Universal Dispatcher with Graceful Fallback to Bullets
     // -------------------------------------------------------------------------
     draw(ctx, type, params, lt, dur, theme, lang) {
+      const source = params || {};
+      const deduped = type === 'quiz' ? source : Object.assign({}, source, {
+        labels: Array.isArray(source.labels) ? [...new Set(source.labels)] : source.labels,
+        steps: Array.isArray(source.steps) ? [...new Set(source.steps)] : source.steps
+      });
+      const lessonCtx = onlyLessonText(ctx, lessonWords(deduped));
       if (typeof this[type] === 'function') {
         try {
-          this[type](ctx, params, lt, dur, theme, lang);
+          this[type](lessonCtx, deduped, lt, dur, theme, lang);
           return;
         } catch (err) {
           console.warn(`[Templates] Exception in template "${type}", falling back to bullets:`, err);
         }
       }
-      this.bullets(ctx, params, lt, dur, theme, lang);
+      this.bullets(lessonCtx, deduped, lt, dur, theme, lang);
     }
   };
 

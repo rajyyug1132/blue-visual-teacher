@@ -309,8 +309,12 @@
       return lines;
     },
 
-    // Fit text inside a bounding box by scaling font size from maxPx down to minPx
-    // Returns full layout geometry: { fontSize, lines, lineHeight, totalHeight, fits, truncated, count, grew, overflowError }
+    autoFitText(ctx, text, maxWidth, initialFontSize, minFontSize) {
+      const maxPx = initialFontSize || 24;
+      const minPx = minFontSize || 12;
+      return this.fitText(ctx, String(text || ''), { width: maxWidth, height: Math.ceil(maxPx * 4) }, maxPx, minPx);
+    },
+
     fitText(ctx, text, box, maxPx, minPx, weight = 600, lang = 'en', options = {}) {
       const family = this.getFont(lang);
       const isIndic = lang === 'hi' || lang === 'kn' || lang === 'ta' || lang === 'te';
