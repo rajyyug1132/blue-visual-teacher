@@ -51,7 +51,7 @@ except ImportError:
     HAS_KOKORO = False
 
 try:
-    from scipy.signal import resample_poly
+    from scipy.signal import resample_poly, lfilter
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -434,6 +434,34 @@ def apply_soft_envelope(
 # ---------------------------------------------------------------------------
 # Audio Time Scaling (Expansion & Compression)
 # ---------------------------------------------------------------------------
+def apply_vocal_presence_filter(
+    wav: Any,
+    sr: int = TARGET_SR,
+    freq: float = 3500.0,
+    gain_db: float = 2.0,
+    q: float = 0.8,
+) -> Any:
+    """Apply gentle broadcast vocal presence filter to restore consonant brilliance in resampled audio."""
+    if not (HAS_SCIPY and HAS_NUMPY and isinstance(wav, np.ndarray) and len(wav) > 0):
+        return wav
+    try:
+        A = 10.0 ** (gain_db / 40.0)
+        w0 = 2 * np.pi * freq / sr
+        alpha = np.sin(w0) / (2 * q)
+        b0, b1, b2 = 1 + alpha * A, -2 * np.cos(w0), 1 - alpha * A
+        a0, a1, a2 = 1 + alpha / A, -2 * np.cos(w0), 1 - alpha / A
+        b = np.array([b0, b1, b2], dtype=np.float32) / a0
+        a = np.array([a0, a1, a2], dtype=np.float32) / a0
+        out = lfilter(b, a, wav).astype(np.float32)
+        max_val = float(np.max(np.abs(out)))
+        orig_max = float(np.max(np.abs(wav)))
+        if max_val > 1e-5 and max_val > orig_max:
+            out = (out / max_val) * orig_max
+        return out
+    except Exception:
+        return wav
+
+
 def time_scale_audio(
     wav: Any,
     target_samples: int,
@@ -535,7 +563,7 @@ class OfflineTTSEngine:
         speed_en: float = 1.0,
         voice_hi: str = "hf_alpha",
         speed_hi: float = 1.0,
-        mms_speaking_rate: float = 1.0,
+        mms_speaking_rate: float = 1.15,
     ):
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
         self.voice_en = resolve_voice(voice_en, "am_michael")
@@ -610,6 +638,7 @@ class OfflineTTSEngine:
                     )
                     if hasattr(model, "config") and hasattr(model.config, "speaking_rate"):
                         model.config.speaking_rate = self.mms_speaking_rate
+                    model.speaking_rate = self.mms_speaking_rate
                     self.mms_models[code] = model
                 except Exception:
                     pass
@@ -748,7 +777,7 @@ class OfflineTTSEngine:
                 model = self.mms_models[mms_lang]
 
                 # Split by punctuation to create natural teacher phrasing and breath pauses
-                parts = re.split(r'([,\;:\.\?\!\u0964\u0965]+)', mms_input_text)
+                parts = re.split(r'([\.\?\!\u0964\u0965]+)', mms_input_text)
                 raw_segments = []
                 pause_durs = []
                 idx = 0
@@ -758,10 +787,11 @@ class OfflineTTSEngine:
                     idx += 2
                     if not clause:
                         continue
-                    clean_clause = re.sub(r'[,\.\?\!\:\;\|\-\—\–\u0964\u0965]', ' ', clause).strip()
+                    clean_clause = re.sub(r'[\.\?\!\:\;\|\-\—\–\u0964\u0965]', ' ', clause).strip()
                     if not clean_clause:
                         continue
                     inputs = tokenizer(clean_clause, return_tensors="pt").to(self.device)
+                    model.speaking_rate = self.mms_speaking_rate
                     torch.manual_seed(42)
                     with torch.no_grad():
                         out = model(**inputs).waveform.squeeze().cpu().numpy()
@@ -771,6 +801,7 @@ class OfflineTTSEngine:
                         old_len = len(out)
                         new_len = int(old_len * 1.5)
                         c_wav = np.interp(np.linspace(0, old_len, new_len), np.arange(old_len), out).astype(np.float32)
+                    c_wav = apply_vocal_presence_filter(c_wav, TARGET_SR)
                     c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=4.0, release_ms=4.0)
                     raw_segments.append(c_wav)
 
