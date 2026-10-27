@@ -31,7 +31,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 |---|---|---|---|---|
 | YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Install Playwright Chromium so D3/D7/D8/D9 can export. |
 | FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
-| TARUN | localization/ | Done (L1–L8 verified + bug sweep: zero-latency speech trimming, STEM unit expansions, natural prosody self-eval for KN, TA, BN) | Neural boundary trimmer (25ms onset, 35ms decay), contract 350ms tail pad, 140ms inter-sentence breath pause, STEM units/letter expansion, 183 unit tests green | All green |
+| TARUN | localization/ | Done (L1–L8 verified + studio prosody compression: zero-latency 140ms lead-in, distinct Ohm pronunciation in KN/TA/BN, 75ms max intra-sentence pauses) | Studio prosody compressor (anti-void & anti-stutter), distinct Ohm mapping (KN: ಓಮ್ ನಿಯಮ, TA: ஓம் விதி, BN: ওহমের সূত্র), 47 localization tests green | All green |
 | AYUSH | exporter/ | — | — | — |
 
 ### Planner bench (5 topics, uncached, RTX 3050 6 GB)

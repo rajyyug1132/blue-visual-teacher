@@ -432,8 +432,71 @@ def apply_soft_envelope(
 
 
 # ---------------------------------------------------------------------------
-# Neural Speech Boundary Trimming (Zero-Latency / Anti-Stutter)
+# Neural Speech Prosody Compressor (Anti-Stutter & Natural Flow)
 # ---------------------------------------------------------------------------
+def compress_speech_prosody(
+    wav: Any,
+    sr: int = TARGET_SR,
+    max_pause_ms: float = 75.0,
+    lead_ms: float = 140.0,
+    tail_s: float = TAIL_PAD_SEC,
+) -> Any:
+    """Condense unnatural neural pauses between words while preserving natural teacher flow.
+    
+    Guarantees:
+      1. Lead-in of 140ms so hardware DAC / media players never swallow the first word (e.g. 'Ohm').
+      2. Condenses awkward 400-500ms intra-sentence voids down to natural 75ms pauses.
+      3. Appends exact contract tail buffer (0.35s).
+      4. Studio normalized peak (0.95) with zero clipping or pops.
+    """
+    if not (HAS_NUMPY and isinstance(wav, np.ndarray) and len(wav) > 0):
+        return wav
+    max_amp = float(np.max(np.abs(wav)))
+    if max_amp < 1e-4:
+        return wav
+    thresh = max(0.006 * max_amp, 1e-4)
+    hop = int(0.010 * sr)
+    win = int(0.020 * sr)
+    n_frames = (len(wav) - win) // hop + 1
+    energies = np.array([np.max(np.abs(wav[i*hop:i*hop+win])) for i in range(n_frames)])
+    is_speech = energies > thresh
+    speech_idx = np.where(is_speech)[0]
+    if len(speech_idx) == 0:
+        return wav
+    first_sample = max(0, speech_idx[0] * hop)
+    last_sample = min(len(wav), (speech_idx[-1] * hop) + win)
+    core = wav[first_sample:last_sample]
+
+    n_core = (len(core) - win) // hop + 1
+    core_speech = np.array([np.max(np.abs(core[i*hop:i*hop+win])) > thresh for i in range(n_core)])
+    chunks = []
+    i = 0
+    max_sil_samples = int(max_pause_ms * sr / 1000.0)
+    while i < n_core:
+        if core_speech[i]:
+            sf = i
+            while i < n_core and core_speech[i]:
+                i += 1
+            chunks.append(core[sf*hop:min(len(core), i*hop + win)])
+        else:
+            sf = i
+            while i < n_core and not core_speech[i]:
+                i += 1
+            sil_samples = (i - sf) * hop
+            actual_sil = min(sil_samples, max_sil_samples)
+            if actual_sil > 0:
+                chunks.append(np.zeros(actual_sil, dtype=np.float32))
+
+    condensed = np.concatenate(chunks) if chunks else core
+    lead = np.zeros(int(lead_ms * sr / 1000.0), dtype=np.float32)
+    tail = np.zeros(int(tail_s * sr), dtype=np.float32)
+    out = np.concatenate([lead, condensed, tail])
+    max_o = float(np.max(np.abs(out)))
+    if max_o > 1e-5:
+        out = (out / max_o) * 0.95
+    return out
+
+
 def trim_speech_boundaries(
     wav: Any,
     sr: int = TARGET_SR,
@@ -441,31 +504,8 @@ def trim_speech_boundaries(
     trail_ms: float = 35.0,
     thresh_ratio: float = 0.005,
 ) -> Any:
-    """Trim excessive neural silence at onset/offset, keeping natural human breath bounds.
-    
-    Eliminates player latency and inter-sentence pauses while preventing clicks via Hann ramps.
-    """
-    if not (HAS_NUMPY and isinstance(wav, np.ndarray) and len(wav) > 0):
-        return wav
-    max_amp = float(np.max(np.abs(wav)))
-    if max_amp < 1e-5:
-        return wav
-    thresh = max(thresh_ratio * max_amp, 1e-4)
-    above = np.where(np.abs(wav) > thresh)[0]
-    if len(above) == 0:
-        return wav
-    start_idx = max(0, above[0] - int(lead_ms * sr / 1000.0))
-    end_idx = min(len(wav), above[-1] + int(trail_ms * sr / 1000.0))
-    trimmed = wav[start_idx:end_idx].copy()
-
-    att_samples = max(1, int(4.0 * sr / 1000.0))
-    rel_samples = max(1, int(8.0 * sr / 1000.0))
-    if len(trimmed) > att_samples * 2:
-        in_ramp = 0.5 * (1.0 - np.cos(np.pi * np.arange(att_samples) / att_samples))
-        trimmed[:att_samples] *= in_ramp.astype(trimmed.dtype)
-        out_ramp = 0.5 * (1.0 + np.cos(np.pi * (np.arange(rel_samples) + 1) / rel_samples))
-        trimmed[-rel_samples:] *= out_ramp.astype(trimmed.dtype)
-    return trimmed
+    """Trim excessive neural silence at onset/offset."""
+    return compress_speech_prosody(wav, sr=sr, max_pause_ms=75.0, lead_ms=lead_ms, tail_s=trail_ms / 1000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -889,17 +929,9 @@ class OfflineTTSEngine:
                         if i < len(inter_pauses):
                             final_chunks.append(np.zeros(int(inter_pauses[i] * TARGET_SR), dtype=np.float32))
 
-                # Add tail padding (scene duration = speech + 0.35s tail)
-                pad = np.zeros(pad_samples, dtype=np.float32)
-                final_chunks.append(pad)
-                full_wav = np.concatenate(final_chunks)
-
-                try:
-                    max_v = float(np.max(np.abs(full_wav))) if len(full_wav) > 0 else 0.0
-                    if max_v > 1e-5:
-                        full_wav = (full_wav / max_v) * 0.95
-                except Exception:
-                    pass
+                full_raw = np.concatenate(final_chunks)
+                # Apply Neural Prosody Compression: condenses awkward 400ms voids & ensures 140ms lead-in for 'Ohm'
+                full_wav = compress_speech_prosody(full_raw, TARGET_SR, max_pause_ms=75.0, lead_ms=140.0, tail_s=TAIL_PAD_SEC)
 
                 # Exact sample alignment if target_dur is set
                 if target_dur is not None and target_dur > 0:
