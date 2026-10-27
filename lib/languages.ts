@@ -12,6 +12,8 @@ export const DEFAULT_LANGUAGES: Language[] = [
   { code: 'en', name: 'English', nativeName: 'English' },
   { code: 'hi', name: 'Hindi', nativeName: 'हिंदी' },
   { code: 'kn', name: 'Kannada', nativeName: 'ಕನ್ನಡ' },
+  { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
+  { code: 'bn', name: 'Bengali', nativeName: 'বাংলা' },
 ]
 
 export function languageLabel(code: string | null | undefined, list: Language[] = DEFAULT_LANGUAGES) {
