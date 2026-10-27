@@ -97,6 +97,7 @@ def bench(model: str, topics: list[str]) -> dict:
         "math_ok": sum(r.get("math", {}).get("status") == "ok" for r in rows),
         "math_fixed": sum(r.get("math", {}).get("status") == "fixed" for r in rows),
         "unspoken": sum(r["said"] == "n" for r in rows),
+        "hooks": sum(bool(r.get("hook_extended")) for r in rows),
         "p50": statistics.median(secs), "p90": sorted(secs)[max(0, int(len(secs) * 0.9) - 1)], "max": max(secs),
         "n": len(rows),
     }
@@ -105,7 +106,7 @@ def bench(model: str, topics: list[str]) -> dict:
           f"{s['escalated']}, qualitative {s['qualitative']}, template {s['templates']}) | "
           f"violations raised {s['raised']} | final-plan failures {s['final_fail']} | "
           f"math ok {s['math_ok']} fixed {s['math_fixed']} | unspoken answers {s['unspoken']} | "
-          f"plan sec P50 {s['p50']:.1f} P90 {s['p90']:.1f} max {s['max']:.1f}")
+          f"short hooks extended {s['hooks']} | plan sec P50 {s['p50']:.1f} P90 {s['p90']:.1f} max {s['max']:.1f}")
     accept = s["valid"] >= s["n"] - max(1, s["n"] // 20) and s["final_fail"] == 0
     print(f"acceptance: {'PASS' if accept else 'FAIL'}")
     return summary

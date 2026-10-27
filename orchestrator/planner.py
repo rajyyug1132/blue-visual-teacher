@@ -12,7 +12,7 @@ from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.mathcheck import MathCheckError, ensure_answer_spoken, verify_plan
 from orchestrator.numeric_guard import NumericPolicy, audit_numbers, nfkc
 from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT, request
-from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, LessonPlan
+from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, WORDS_MIN, LessonPlan
 from orchestrator.spoken import shorten_narration, to_spoken
 
 # Primary planner: fast and resident. OLLAMA_MODEL is the older name, still honoured.
@@ -104,6 +104,7 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
             narration = shorten_narration(narration) or narration
         info["repaired"] |= narration != scene["narration"]
         scene["narration"] = narration
+    info["hook_extended"] = _extend_short_hook(data)
 
     math = info["math"]
     if math.get("result") is not None and not problems:
@@ -121,6 +122,32 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
     if problems:
         raise PlanRejected(problems)
     return plan, info
+
+
+def _extend_short_hook(data: dict) -> bool:
+    """Scene 1 under WORDS_MIN words (common with 3B models) is extended from the title instead of costing a retry.
+
+    "Why does your fan slow down in summer?" + title "Ohm's Law: Voltage and Resistance" ->
+    "... in summer? Today we explore Ohm's Law, voltage and resistance." The result still goes through the
+    numeric audit and schema validation, so a title with digits cannot sneak numbers in.
+    """
+    hook = next((s for s in data["scenes"] if s.get("id") == 1), None)
+    title = data.get("title")
+    if not hook or not isinstance(hook.get("narration"), str) or not isinstance(title, str):
+        return False
+    narration = hook["narration"].strip()
+    if not narration or len(narration.split()) >= WORDS_MIN:
+        return False
+    topic = to_spoken(title)
+    full, short = topic.replace(":", ","), topic.split(":")[0]
+    for subject in (full, short):
+        extended = f"{narration.rstrip()} Today we explore {subject.strip().rstrip('.')}."
+        if len(extended.split()) < WORDS_MIN:
+            extended += " Let's find out how it works."
+        if len(extended.split()) <= WORDS_MAX:
+            hook["narration"] = extended
+            return True
+    return False
 
 
 def _validation_feedback(exc: ValidationError) -> list[str]:

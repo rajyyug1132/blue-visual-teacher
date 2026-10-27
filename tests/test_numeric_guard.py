@@ -234,3 +234,35 @@ def test_check_copied_from_another_topic_is_rejected():
                                  "steps": ["Add base slowly", "Stop at colour change"]}
     with pytest.raises(MathCheckError, match="uses 230, 46, which this scene never shows"):
         verify_plan(plan)
+
+
+# --- short scene 1 is extended from the title, not retried --------------------------------------------------------
+
+def test_short_hook_is_extended_from_the_title_without_a_retry(fake):
+    plan = json.loads(DESCRIPTIVE_JSON)
+    plan["scenes"][0]["narration"] = "How does a clerk find one booking among sorted records?"  # 10 words
+    client = fake(json.dumps(plan), has_formula=False)
+    result, tel = planner.plan_lesson("Binary Search")
+    assert len(client.calls) == 1 and tel["stage"] == "plan" and tel["hook_extended"] is True
+    assert result.scenes[0].narration == ("How does a clerk find one booking among sorted records? "
+                                          "Today we explore Binary Search, Halving the Search Space.")
+
+
+def test_very_short_hook_gets_a_second_filler_sentence(fake):
+    plan = json.loads(DESCRIPTIVE_JSON)
+    plan["title"] = "Binary Search"
+    plan["scenes"][0]["narration"] = "Ever searched a phone book?"  # 5 words
+    fake(json.dumps(plan), has_formula=False)
+    result, tel = planner.plan_lesson("Binary Search")
+    narration = result.scenes[0].narration
+    assert tel["hook_extended"] is True and len(narration.split()) >= 14
+    assert narration == "Ever searched a phone book? Today we explore Binary Search. Let's find out how it works."
+
+
+def test_hook_extension_cannot_smuggle_numbers_from_the_title(fake):
+    plan = json.loads(DESCRIPTIVE_JSON)
+    plan["title"] = "GST: The 18% Tax on Goods"
+    plan["scenes"][0]["narration"] = "Why does your grocery bill show an extra tax line?"  # 10 words
+    client = fake(json.dumps(plan), has_formula=False)  # retry and later rungs fail -> template
+    _, tel = planner.plan_lesson("GST")
+    assert "Remove the numbers (18) from scene 1 narration" in client.calls[1]["messages"][-1]["content"]
