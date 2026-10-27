@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blue Visual Teacher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Blue Visual Teacher</div>
+  <div id="offline" class="badge" title="All models run on this machine"><span class="dot"></span><span id="offline-text">Offline-ready</span></div>
+</header>
+
+<main>
+  <section class="ask">
+    <label for="topic" class="sr">Topic</label>
+    <input id="topic" type="text" maxlength="120" autocomplete="off" placeholder="What do you want to learn? e.g. Photosynthesis">
+    <div id="langs" class="chips" role="radiogroup" aria-label="Language"></div>
+    <button id="go" class="primary" type="button">Generate</button>
+    <div id="hint" class="hint" aria-live="polite"></div>
+  </section>
+
+  <section class="examples">
+    <div class="muted">Try:</div>
+    <div id="examples" class="chips"></div>
+  </section>
+
+  <section id="progress" class="progress" hidden>
+    <ol id="stepper" class="stepper">
+      <li data-stage="plan">Plan</li><li data-stage="translate">Translate</li><li data-stage="tts">Voice</li>
+      <li data-stage="render">Render</li><li data-stage="encode">Export</li>
+    </ol>
+    <div class="bar"><div id="bar-fill" class="fill"></div></div>
+    <div id="progress-text" class="muted" aria-live="polite"></div>
+  </section>
+
+  <section id="player" class="player" hidden>
+    <canvas id="stage" width="1280" height="720" aria-label="Lesson video"></canvas>
+    <audio id="audio" preload="auto"></audio>
+    <div class="controls">
+      <button id="play" type="button" aria-label="Play or pause">Play</button>
+      <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Seek">
+      <span id="time" class="muted">0:00</span>
+      <a id="download" class="primary" href="#" download>Download MP4</a>
+      <button id="timings-btn" type="button" aria-expanded="false">Show timings</button>
+    </div>
+    <pre id="timings" class="timings" hidden></pre>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="alert" hidden>
+  <span id="toast-text"></span>
+  <button id="retry" type="button">Retry</button>
+</div>
+
+<footer class="muted">Runs offline: Ollama planner · IndicTrans2 · Kokoro / MMS-TTS · Canvas renderer · FFmpeg</footer>
+
+<script src="../renderer/theme.js"></script>
+<script src="../renderer/templates.js"></script>
+<script src="../renderer/engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

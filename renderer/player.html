@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Blue Visual Teacher Player</title>
+<style>
+  /* Fonts are local files only (no network). If a file is absent the next family in the stack is used. */
+  @font-face { font-family: "Noto Sans"; src: url("assets/fonts/NotoSans-Regular.ttf") format("truetype"), local("Noto Sans"); font-weight: 400 600; }
+  @font-face { font-family: "Noto Sans"; src: url("assets/fonts/NotoSans-Bold.ttf") format("truetype"), local("Noto Sans Bold"); font-weight: 700 900; }
+  @font-face { font-family: "Noto Sans Devanagari"; src: url("assets/fonts/NotoSansDevanagari-Regular.ttf") format("truetype"), local("Noto Sans Devanagari"); }
+  @font-face { font-family: "Noto Sans Kannada"; src: url("assets/fonts/NotoSansKannada-Regular.ttf") format("truetype"), local("Noto Sans Kannada"); }
+  @font-face { font-family: "Noto Sans Tamil"; src: url("assets/fonts/NotoSansTamil-Regular.ttf") format("truetype"), local("Noto Sans Tamil"); }
+  @font-face { font-family: "Noto Sans Telugu"; src: url("assets/fonts/NotoSansTelugu-Regular.ttf") format("truetype"), local("Noto Sans Telugu"); }
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+  #debug { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px; background: rgba(0,0,0,.7); color: #fff;
+           font: 14px sans-serif; display: none; }
+  #debug input { width: 80%; }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1280" height="720"></canvas>
+<div id="debug"><input id="scrub" type="range" min="0" max="1000" value="0"> <span id="tlabel">0.00 s</span></div>
+<audio id="audio" preload="auto" hidden></audio>
+<script src="theme.js"></script>
+<script src="templates.js"></script>
+<script src="engine.js"></script>
+<script>
+// Standalone playback only: player.html?manifest=<url>[&lang=kn][&debug=1]. The exporter never uses this path;
+// it calls initLesson/renderAtTime itself. The playback clock lives here, never inside renderAtTime.
+(async function () {
+  const q = new URLSearchParams(location.search);
+  const url = q.get("manifest");
+  if (!url) return;
+  const manifest = await (await fetch(url)).json();
+  await window.initLesson(manifest.title, manifest.scenes, q.get("lang") || manifest.lang);
+  if (q.get("debug") === "1") {
+    const bar = document.getElementById("debug"), scrub = document.getElementById("scrub"), label = document.getElementById("tlabel");
+    bar.style.display = "block";
+    scrub.oninput = () => { const t = scrub.value / 1000 * window.totalDuration; label.textContent = t.toFixed(2) + " s"; window.renderAtTime(t); };
+    return;
+  }
+  const audio = document.getElementById("audio");
+  if (manifest.audio) audio.src = new URL(manifest.audio, new URL(url, location.href)).href;
+  let t0 = null;
+  function frame(now) {
+    let t;
+    if (manifest.audio && !audio.error) t = audio.currentTime;
+    else { if (t0 === null) t0 = now; t = (now - t0) / 1000; }
+    window.renderAtTime(t);
+    if (t < window.totalDuration) requestAnimationFrame(frame);
+  }
+  if (manifest.audio) audio.play().catch(() => {});
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
