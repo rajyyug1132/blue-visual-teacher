@@ -49,7 +49,7 @@ Checks: `python -m pytest tests/` (includes `tests/test_e2e_offline.py`, which b
 | Indic translation | ai4bharat/indictrans2-en-indic-dist-200M + IndicTransToolkit | English to Hindi, Kannada (Tamil, Telugu) | MIT | One batched call per language; formulas protected from translation |
 | EN and HI speech | hexgrad/Kokoro-82M + misaki + espeak-ng | 24 kHz speech synthesis | Apache 2.0 (espeak-ng: GPL-3.0, invoked as a separate program) | Voices af_heart (EN), hf_alpha (HI) |
 | KN speech | facebook/mms-tts-kan (VITS) | 16 kHz speech, resampled to 24 kHz | CC-BY-NC 4.0 | Non-commercial; fine for the hackathon, swap for ai4bharat/indic-parler-tts (Apache 2.0) commercially |
-| Indic typography | Noto Sans, Noto Sans Devanagari, Noto Sans Kannada (+ Tamil, Telugu) | Script shaping on the canvas | SIL Open Font License 1.1 | Loaded from renderer/assets/fonts (local files, zero CDN calls). Not bundled yet: until the .ttf files are added, Windows falls back to Nirmala UI |
+| Indic typography | Noto Sans, Noto Sans Devanagari, Noto Sans Kannada (+ Tamil, Bengali) | Script shaping on the canvas | SIL Open Font License 1.1 | Bundled in assets/fonts (OFL.txt included); the app serves them at /renderer/assets/fonts, zero CDN calls |
 | Video and web stack | Playwright (Chromium), FFmpeg (libx264), FastAPI, Pydantic | Frame capture, MP4 muxing, API, schema validation | Apache 2.0 / LGPL-GPLv2+ (libx264 GPL) / MIT / MIT | Invoked locally; libx264 via the FFmpeg binary |
 
 ## Design decisions
