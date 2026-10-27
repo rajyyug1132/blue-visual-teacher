@@ -366,6 +366,62 @@ def _has_espeakng_loader() -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Audio Time Scaling (Expansion & Compression)
+# ---------------------------------------------------------------------------
+def time_scale_audio(
+    wav: Any,
+    target_samples: int,
+    sr: int = TARGET_SR,
+    tail_pad_samples: int = 8400,
+) -> Any:
+    """Scale audio waveform to exact target_samples using expansion or compression.
+    
+    Preserves 0.35s tail silence padding so speech does not clip before scene cuts.
+    Works seamlessly across NumPy arrays and pure Python lists of floats.
+    """
+    total_len = len(wav)
+    if total_len == target_samples:
+        return wav
+
+    # Extract speech portion and tail pad
+    if total_len > tail_pad_samples:
+        speech = wav[:-tail_pad_samples]
+    else:
+        speech = wav
+        tail_pad_samples = 0
+
+    target_speech_samples = target_samples - tail_pad_samples
+    if target_speech_samples <= 0:
+        target_speech_samples = target_samples
+        tail_pad_samples = 0
+
+    speech_len = len(speech)
+    if speech_len == 0:
+        if HAS_NUMPY and isinstance(wav, np.ndarray):
+            return np.zeros(target_samples, dtype=np.float32)
+        return [0.0] * target_samples
+
+    if HAS_NUMPY and isinstance(wav, np.ndarray):
+        # High performance NumPy linear interpolation resampling
+        old_indices = np.linspace(0, speech_len - 1, target_speech_samples)
+        scaled_speech = np.interp(old_indices, np.arange(speech_len), speech).astype(np.float32)
+        pad = np.zeros(tail_pad_samples, dtype=np.float32)
+        return np.concatenate([scaled_speech, pad])
+    else:
+        # Pure Python linear interpolation fallback
+        scaled_speech = []
+        step = (speech_len - 1) / max(1, target_speech_samples - 1) if target_speech_samples > 1 else 0.0
+        for i in range(target_speech_samples):
+            pos = i * step
+            idx = int(pos)
+            frac = pos - idx
+            s0 = speech[idx]
+            s1 = speech[idx + 1] if idx + 1 < speech_len else s0
+            scaled_speech.append(s0 * (1.0 - frac) + s1 * frac)
+        return scaled_speech + [0.0] * tail_pad_samples
+
+
 class OfflineTTSEngine:
     """Dual-engine TTS generating synchronized scene audio and timing manifests.
     
@@ -403,6 +459,7 @@ class OfflineTTSEngine:
                 ("kn", "facebook/mms-tts-kan"),
                 ("hi", "facebook/mms-tts-hin"),
                 ("ta", "facebook/mms-tts-tam"),
+                ("bn", "facebook/mms-tts-ben"),
             ]:
                 try:
                     self.mms_tokenizers[code] = AutoTokenizer.from_pretrained(
@@ -416,13 +473,21 @@ class OfflineTTSEngine:
                 except Exception:
                     pass
 
-    def _synthesize_synthetic(self, text: str, lang: str) -> tuple[Any, float]:
+    def _synthesize_synthetic(self, text: str, lang: str, target_dur: float | None = None) -> tuple[Any, float]:
         """Synthetic fallback generating accurate duration audio when neural models are absent."""
-        words = text.split()
-        dur = round(max(2.0, len(words) / WORDS_PER_SEC), 3)
-        n_samples = int(dur * TARGET_SR)
-        pad_samples = int(TAIL_PAD_SEC * TARGET_SR)
-        total_samples = n_samples + pad_samples
+        if target_dur is not None and target_dur > 0:
+            total_dur = round(target_dur, 3)
+            pad_samples = int(round(TAIL_PAD_SEC * TARGET_SR))
+            total_samples = int(round(total_dur * TARGET_SR))
+            n_samples = max(0, total_samples - pad_samples)
+            dur = max(0.1, n_samples / TARGET_SR)
+        else:
+            words = text.split()
+            dur = round(max(2.0, len(words) / WORDS_PER_SEC), 3)
+            n_samples = int(dur * TARGET_SR)
+            pad_samples = int(TAIL_PAD_SEC * TARGET_SR)
+            total_samples = n_samples + pad_samples
+            total_dur = round(total_samples / TARGET_SR, 3)
 
         if HAS_NUMPY:
             t = np.linspace(0, dur, n_samples, endpoint=False)
@@ -444,7 +509,7 @@ class OfflineTTSEngine:
         total_dur = round(total_samples / TARGET_SR, 3)
         return wav, total_dur
 
-    def synthesize_scene(self, text: str, lang: str) -> tuple[Any, float]:
+    def synthesize_scene(self, text: str, lang: str, target_dur: float | None = None) -> tuple[Any, float]:
         """Synthesize scene audio waveform with numbers expanded and tail pad attached.
         
         Returns:
@@ -468,6 +533,9 @@ class OfflineTTSEngine:
                     speech_wav = np.concatenate(chunks).astype(np.float32)
                     pad = np.zeros(pad_samples, dtype=np.float32)
                     full_wav = np.concatenate([speech_wav, pad])
+                    if target_dur is not None and target_dur > 0:
+                        target_samples = int(round(target_dur * TARGET_SR))
+                        full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
                     measured_dur = round(len(full_wav) / TARGET_SR, 3)
                     return full_wav, measured_dur
             except Exception:
@@ -484,6 +552,9 @@ class OfflineTTSEngine:
                     speech_wav = np.concatenate(chunks).astype(np.float32)
                     pad = np.zeros(pad_samples, dtype=np.float32)
                     full_wav = np.concatenate([speech_wav, pad])
+                    if target_dur is not None and target_dur > 0:
+                        target_samples = int(round(target_dur * TARGET_SR))
+                        full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
                     measured_dur = round(len(full_wav) / TARGET_SR, 3)
                     return full_wav, measured_dur
             except Exception:
@@ -517,19 +588,23 @@ class OfflineTTSEngine:
 
                 pad = np.zeros(pad_samples, dtype=np.float32)
                 full_wav = np.concatenate([speech_wav, pad])
+                if target_dur is not None and target_dur > 0:
+                    target_samples = int(round(target_dur * TARGET_SR))
+                    full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
                 measured_dur = round(len(full_wav) / TARGET_SR, 3)
                 return full_wav, measured_dur
             except Exception:
                 pass
 
         # Step 3: Fallback synthesis
-        return self._synthesize_synthetic(clean_text, lang)
+        return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)
 
     def synthesize_all_scenes(
         self,
         scenes: Sequence[Any],
         lang: str,
         out_wav_path: str | Path,
+        target_durations: Sequence[float] | Sequence[dict] | None = None,
     ) -> list[dict]:
         """Synthesize audio for all scenes and output timing manifest and master WAV.
         
@@ -545,20 +620,25 @@ class OfflineTTSEngine:
         cursor_sec = 0.0
         all_waveforms = []
 
-        for s in scenes:
+        for idx, s in enumerate(scenes):
             text = getattr(s, "narration", None) or (s.get("narration") if isinstance(s, dict) else s["narration"])
             sid = getattr(s, "id", None) or (s.get("id") if isinstance(s, dict) else s["id"])
             vis = getattr(s, "visual", None) if hasattr(s, "visual") else (s.get("visual") if isinstance(s, dict) else s["visual"])
             visual = vis.model_dump() if hasattr(vis, "model_dump") else (vis if isinstance(vis, dict) else dict(vis))
 
-            wav, duration_sec = self.synthesize_scene(text, lang)
+            target_dur = None
+            if target_durations is not None and idx < len(target_durations):
+                item = target_durations[idx]
+                target_dur = float(item["duration_sec"]) if isinstance(item, dict) else float(item)
+
+            wav, duration_sec = self.synthesize_scene(text, lang, target_dur=target_dur)
             all_waveforms.append(wav)
 
             timing_manifest.append({
                 "id": sid,
                 "start_sec": round(cursor_sec, 3),
                 "end_sec": round(cursor_sec + duration_sec, 3),
-                "duration_sec": duration_sec,
+                "duration_sec": round(duration_sec, 3),
                 "narration": text,
                 "visual": visual,
             })
@@ -568,6 +648,45 @@ class OfflineTTSEngine:
         self._write_master_wav(all_waveforms, out_wav_path)
 
         return timing_manifest
+
+    def synthesize_multilingual_all_scenes(
+        self,
+        plans: dict[str, Any],
+        out_base_dir: str | Path,
+        reference_lang: str = "en",
+    ) -> dict[str, list[dict]]:
+        """Synthesize all scenes across multiple localized plans with synchronized timing.
+        
+        The reference_lang (default 'en') establishes the master timing manifest.
+        All other languages apply audio time expansion and compression to match
+        the exact scene durations and total length of the reference language.
+        """
+        out_base_dir = Path(out_base_dir)
+        manifests: dict[str, list[dict]] = {}
+
+        # 1. Synthesize reference language first to establish master timing
+        ref_plan = plans[reference_lang]
+        ref_scenes = getattr(ref_plan, "scenes", ref_plan)
+        ref_dir = out_base_dir / f"{reference_lang}"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+        ref_wav = ref_dir / "lesson_audio.wav"
+        ref_manifest = self.synthesize_all_scenes(ref_scenes, reference_lang, ref_wav)
+        manifests[reference_lang] = ref_manifest
+        target_durations = [s["duration_sec"] for s in ref_manifest]
+
+        # 2. Synthesize other languages synchronized to reference scene durations
+        for lang, plan in plans.items():
+            if lang == reference_lang:
+                continue
+            scenes = getattr(plan, "scenes", plan)
+            lang_dir = out_base_dir / f"{lang}"
+            lang_dir.mkdir(parents=True, exist_ok=True)
+            lang_wav = lang_dir / "lesson_audio.wav"
+            manifests[lang] = self.synthesize_all_scenes(
+                scenes, lang, lang_wav, target_durations=target_durations
+            )
+
+        return manifests
 
     def _write_master_wav(self, waveforms: list[Any], out_path: Path) -> None:
         """Write 24,000 Hz, 16-bit mono master WAV with peak normalization."""

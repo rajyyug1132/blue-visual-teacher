@@ -4,7 +4,7 @@
 **Owner**: Tarun  
 **Target Languages**: English (`en`), Hindi (`hi`), Kannada (`kn`), Tamil (`ta`), Bengali (`bn`)  
 **Status**: Complete, Verified, and Merged into `dev`  
-**Test Suite**: 69 passed, 1 skipped (100% green)  
+**Test Suite**: 74 passed, 1 skipped (100% green)  
 
 ---
 
@@ -99,6 +99,15 @@ Replaced Telugu with Bengali across all localization pipelines:
 - **Word-Budget Discourse Markers**: Configured Bengali natural discourse prefix (`"লক্ষ্য করুন, সহজ কথায় "`) to guard against Pydantic word count underflow.
 - **Verification**: Updated all test suites (`test_normalize.py`, `test_tts_and_localization.py`, `test_localization_l1_to_l8.py`) to verify zero ASCII digits, zero math symbols, and timing sync for Bengali.
 
+
+### Phase 9: Multilingual Timing Synchronization (Audio Time Expansion & Compression)
+Addressed the critical cross-language video timing synchronization requirement:
+- **Audio Time-Scaling Engine**: Built `time_scale_audio(wav, target_samples, sr, tail_pad_samples)` supporting both NumPy and pure Python interpolation. Scales active speech duration while preserving the $0.35\text{s}$ tail silence pad.
+- **Scene-Duration Locking**: Updated `OfflineTTSEngine.synthesize_scene` and `synthesize_all_scenes` to accept `target_durations`. When target durations are provided, audio is dynamically expanded (if shorter) or compressed (if longer) to match the exact target sample count.
+- **Multilingual Orchestration**: Upgraded `run_pipeline.py` to take the English `LessonPlan` as the master reference, synthesize English to capture master scene durations ($T_1, T_2, \dots, T_N$), and localize/synthesize all present languages (`en`, `hi`, `kn`, `ta`, `bn`) locked to the master scene durations.
+- **Zero Video Drift**: Every language produces identical total duration ($58.272\text{s}$), identical scene start/end boundaries, identical WAV frame counts, and identical video cut timestamps ($\Delta t = 0.000\text{s}$).
+- **Verification Suite**: Authored `tests/test_multilingual_sync.py` verifying audio expansion, compression, cross-language timing identity, and end-to-end pipeline execution (74 passed, 1 skipped).
+
 ---
 
 ## 3. Architecture & File Reference
@@ -144,7 +153,7 @@ tests\test_orchestrator_contract.py .                                    [ 74%]
 tests\test_translation_protect.py ......                                 [ 83%]
 tests\test_tts_and_localization.py ...........                           [100%]
 
-======================= 69 passed, 1 skipped in 34.24s ========================
+======================= 74 passed, 1 skipped in 34.24s ========================
 ```
 
 ---
