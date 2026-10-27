@@ -239,6 +239,7 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
     if lang == "kn":
         symbol_map = [
             (r"\b(\d+)\s*(?:Ω|Ohms?|ಓಮ್)\b", r"\1 ಓಮ್"),
+            (r"\bOhm'?s?\b", "ಓಮ್"),
             (r"\b(\d+)\s*(?:V|Volts?|ವೋಲ್ಟ್)\b", r"\1 ವೋಲ್ಟ್"),
             (r"\b(\d+)\s*(?:A|Amperes?|ಆಂಪಿಯರ್)\b", r"\1 ಆಂಪಿಯರ್"),
             (r"\b(\d+)\s*(?:W|Watts?|ವ್ಯಾಟ್)\b", r"\1 ವ್ಯಾಟ್"),
@@ -265,6 +266,7 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
     elif lang == "hi":
         symbol_map = [
             (r"\b(\d+)\s*(?:Ω|Ohms?|ओम)\b", r"\1 ओम"),
+            (r"\bOhm'?s?\b", "ओम"),
             (r"\b(\d+)\s*(?:V|Volts?|वोल्ट)\b", r"\1 वोल्ट"),
             (r"\b(\d+)\s*(?:A|Amperes?|एम्पीयर)\b", r"\1 एम्पीयर"),
             (r"\b(\d+)\s*(?:W|Watts?|वाट)\b", r"\1 वाट"),
@@ -290,6 +292,7 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
     elif lang in ("ta", "tam_Taml"):
         symbol_map = [
             (r"\b(\d+)\s*(?:Ω|Ohms?|ஓம்)\b", r"\1 ஓம்"),
+            (r"\bOhm'?s?\b", "ஓம்"),
             (r"\b(\d+)\s*(?:V|Volts?|வோல்ட்)\b", r"\1 வோல்ட்"),
             (r"\b(\d+)\s*(?:A|Amperes?|ஆம்பியர்)\b", r"\1 ஆம்பியர்"),
             (r"\b(\d+)\s*(?:W|Watts?|வாட்)\b", r"\1 வாட்"),
@@ -315,6 +318,7 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
     elif lang in ("bn", "ben_Beng"):
         symbol_map = [
             (r"\b(\d+)\s*(?:Ω|Ohms?|ওহম)\b", r"\1 ওহম"),
+            (r"\bOhm'?s?\b", "ওহম"),
             (r"\b(\d+)\s*(?:V|Volts?|ভোল্ট)\b", r"\1 ভোল্ট"),
             (r"\b(\d+)\s*(?:A|Amperes?|অ্যাম্পিয়ার)\b", r"\1 অ্যাম্পিয়ার"),
             (r"\b(\d+)\s*(?:W|Watts?|ওয়াট)\b", r"\1 ওয়াট"),

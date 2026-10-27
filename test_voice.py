@@ -71,7 +71,9 @@ def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_d
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(24000)
-        samples = [max(-32768, min(32767, int(s * 32767.0))) for s in wav]
+                # 0.35s head padding prevents DAC / media player latency from swallowing the first word
+        head_pad = [0] * int(0.35 * 24000)
+        samples = head_pad + [max(-32768, min(32767, int(s * 32767.0))) for s in wav]
         w.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
     print(f"[Output Saved] {out_path.resolve()} ({dur:.2f}s, {len(wav)} samples @ 24,000 Hz)")
