@@ -105,9 +105,10 @@ def d6() -> Result:
         return res
     bad = []
     for js in (ROOT / "renderer").glob("*.js"):
-        text = js.read_text(encoding="utf-8")
+        # Code only: comments may name the banned calls ("No Date.now, no setInterval" in engine.js).
+        code = "\n".join(line.split("//")[0] for line in js.read_text(encoding="utf-8").splitlines())
         for pat in ("setInterval", "Math.random", "Date.now"):
-            if pat in text:
+            if pat in code:
                 bad.append(f"{js.name}: {pat}")
     res.log.append(f"grep setInterval / Math.random / Date.now: {bad or 'none'}")
     if bad:

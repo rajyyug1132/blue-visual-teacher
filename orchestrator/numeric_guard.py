@@ -47,6 +47,11 @@ def year_spans(text: str) -> list[tuple[float, int, int]]:
     ("nineteen forty-seven", "twenty twenty-four", "the nineteen sixties"). "One thousand nine hundred" is not."""
     spans = [(float(m.group(0)), m.start(), m.end()) for m in re.finditer(r"(?<![\d,.])\d{4}(?![\d,.]\d)", text)
              if YEAR_MIN <= int(m.group(0)) <= YEAR_MAX]
+    # Era-marked dates of any length: "321-185 BCE", "563 BC", "AD 1206", "78 CE" (ancient history needs them).
+    for m in re.finditer(r"(?<![\d,.])(\d{1,4})(?:\s*[-–]\s*(\d{1,4}))?\s*(?:BCE|BC|CE|AD)\b|\bAD\s*(\d{1,4})\b", text):
+        for g in (1, 2, 3):
+            if m.group(g):
+                spans.append((float(m.group(g)), m.start(g), m.end(g)))
     spans += [(v, s, e) for v, s, e in spoken_number_spans(text)
               if YEAR_MIN <= v <= YEAR_MAX and v == int(v) and not re.search(r"hundred|thousand", text[s:e], re.I)]
     return spans

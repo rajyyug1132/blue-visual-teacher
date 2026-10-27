@@ -38,7 +38,7 @@ def safe_eval(expr: str) -> float:
     sides = []
     for part in expr.split("="):
         try:
-            sides.append((bool(re.search(r"[-+*/×÷^√²³]", part.strip().lstrip("-"))), _eval_side(part, expr)))
+            sides.append((bool(re.search(r"[-+*/×÷^√²³]|\bsqrt\b", part.strip().lstrip("-"))), _eval_side(part, expr)))
         except MathCheckError:
             if not VARIABLE_SIDE.fullmatch(part):  # only a bare symbol like "c²" or "A" may be skipped
                 raise
@@ -53,6 +53,7 @@ def safe_eval(expr: str) -> float:
 def _eval_side(part: str, expr: str) -> float:
     # Powers written as superscripts must become ** before anything else: NFKC would turn 6² into "62".
     text = re.sub(r"([⁰¹²³⁴⁵⁶⁷⁸⁹]+)", lambda m: "**" + m.group(1).translate(SUPERSCRIPT), part)
+    text = re.sub(r"\bsqrt\s*\(", "√(", text)  # models write sqrt(9 + 16) as often as √(9 + 16)
     text = re.sub(r"√\s*(\d+(?:\.\d+)?|\([^()]*\))", r"(\1)**0.5", text)  # √100, √(36 + 64)
     text = text.replace("×", "*").replace("÷", "/").replace("^", "**").strip()
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)  # 10,000 -> 10000

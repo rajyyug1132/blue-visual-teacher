@@ -183,13 +183,16 @@ def test_years_are_allowed_in_descriptive_topics():
     plan["scenes"][0]["visual"]["params"]["labels"] = ["Indian Independence", "1930-1947", "Freedom Struggle"]
     plan["scenes"][1]["narration"] = ("In the nineteen sixties new seeds and canals changed farming across Punjab, "
                                       "and harvests grew year after year.")
+    plan["scenes"][2]["narration"] = ("Ashoka ruled from 268 BCE, and Chandragupta Maurya from 321 BCE, long before "
+                                      "the Gupta age of AD 320.")
+    plan["scenes"][2]["visual"]["params"]["labels"] = ["321-185 BCE", "563 BC", "78 CE"]
     assert audit_numbers(plan, "none") == []
     assert spoken_numbers("the nineteen sixties") == [1960] and spoken_numbers("nineteen sixty") == [1960]
 
 
 @pytest.mark.parametrize("text, bad", [
     ("Over 1,500 soldiers marched to Delhi with the emperor.", "1500"),
-    ("The empire lasted from 321 BCE onwards under strong rulers.", "321"),  # only 4-digit years are dates
+    ("The army had 321 soldiers under a strong commander.", "321"),  # unmarked count, not a date
     ("Nearly two thousand villages joined the movement within weeks.", "2000"),  # a count, not a year
 ])
 def test_non_year_numbers_are_still_banned(text, bad):

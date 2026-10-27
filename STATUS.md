@@ -27,7 +27,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 
 | Owner | Module | State | Last check | Next |
 |---|---|---|---|---|
-| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. `run_pipeline.py` runs fixture -> stub TTS -> stub exporter -> 55.23 s MP4. | 2026-10-27 · pytest green · bench qwen2.5:3b 4/5 valid, llama3.2:3b 5/5, qwen2.5:7b 5/5 (see below) · **default planner: qwen2.5:7b on GPU; TTS/IndicTrans2 on CPU (DEVICE=cpu)** | Team vote on the CONTRACT CHANGE below; then commit. Measure full-lesson latency once TTS lands. |
+| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none; test updated. | 2026-10-27 · tests/test_numeric_guard.py + tests/test_orchestrator.py 127 passed · **default planner: qwen2.5:7b on GPU; TTS/IndicTrans2 on CPU (DEVICE=cpu)** | Rerun D1–D10; D2 live 20-topic can sit around 19/20. |
 | FARHAN | renderer/ | — | — | — |
 | TARUN | localization/ | On origin/dev: translator.py (protected spans, zero-Devanagari, batched), tts_engine.py (Kokoro EN/HI, MMS KN seed, no double pad), captions.py, normalize.py, warmup.py, golden_manifest_en.json | 14:00 per his board | Merge dev into main |
 | AYUSH | exporter/ | — | — | — |
