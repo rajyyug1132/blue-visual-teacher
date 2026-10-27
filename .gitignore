@@ -12,3 +12,8 @@ cache/
 models/
 node_modules/
 reports/
+
+.next/
+artifacts/
+exporter/data/
+next-env.d.ts
