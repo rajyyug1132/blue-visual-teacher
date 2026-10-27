@@ -5,6 +5,7 @@
 #   LessonPlan validator         -> lesson word total and estimated audio length
 #   pipeline.duration_gate       -> real measured audio length after TTS
 #   mathcheck.verify_plan        -> worked-example arithmetic (check.expr vs check.result), before to_spoken
+#   VisualSpec validator         -> code_walkthrough carries code + trace, every other type carries neither
 import re
 import unicodedata
 from math import ceil, floor
@@ -57,11 +58,22 @@ def word_band(target_sec: int, scenes: int) -> tuple[int, int]:
 def estimated_sec(words: int, scenes: int) -> float:
     return words / SPEECH_WPS + TAIL * scenes
 
+CODE_MAX_LINES, CODE_LINE_CHARS, TRACE_MAX_STEPS = 12, 80, 6
 
 VisualType = Literal[
     "flow", "bullets", "equation", "labeled_diagram",
-    "graph", "timeline", "compare", "title"
+    "graph", "timeline", "compare", "title", "code_walkthrough"
 ]
+
+class VarState(BaseModel):
+    name: str = Field(..., min_length=1, max_length=24, description="Variable name, e.g. i")
+    value: str = Field(..., min_length=1, max_length=24, description="Its value after this line runs, e.g. 0")
+
+class CodeStep(BaseModel):
+    line: int = Field(..., ge=1, le=CODE_MAX_LINES,
+                      description="1-based index into params.code: the line highlighted at this step.")
+    vars: List[VarState] = Field(default_factory=list, max_length=4,
+                                 description="The variable state table at this step.")
 
 class VisualParams(BaseModel):
     labels: List[str] = Field(
@@ -76,10 +88,46 @@ class VisualParams(BaseModel):
         max_length=5,
         description="1 to 5 ordered steps, bullet points, comparison rows, or equation breakdown lines."
     )
+    # code_walkthrough only. code and vars are DATA: the renderer draws them as text and nothing here is
+    # ever eval'd, exec'd, compiled or run in a subprocess. The planner writes this, so it is untrusted
+    # input, the same stance mathcheck.py takes when it evaluates check.expr through an AST whitelist.
+    code: List[str] = Field(
+        default_factory=list,
+        max_length=CODE_MAX_LINES,
+        description="code_walkthrough only: source lines, drawn verbatim. Never executed."
+    )
+    trace: List[CodeStep] = Field(
+        default_factory=list,
+        max_length=TRACE_MAX_STEPS,
+        description="code_walkthrough only: ordered steps; each highlights one line and shows the variables."
+    )
+
+    @field_validator("code")
+    @classmethod
+    def check_code_lines(cls, v: List[str]) -> List[str]:
+        for i, line in enumerate(v, 1):
+            if len(line) > CODE_LINE_CHARS:
+                raise ValueError(f"code line {i} is {len(line)} chars, max {CODE_LINE_CHARS}")
+        return v
 
 class VisualSpec(BaseModel):
     type: VisualType
     params: VisualParams
+
+    @model_validator(mode="after")
+    def check_code_walkthrough(self) -> "VisualSpec":
+        if self.type == "code_walkthrough":
+            if not self.params.code:
+                raise ValueError(f"code_walkthrough needs visual.params.code: 1 to {CODE_MAX_LINES} source lines")
+            if not self.params.trace:
+                raise ValueError(f"code_walkthrough needs visual.params.trace: 1 to {TRACE_MAX_STEPS} steps")
+            n = len(self.params.code)
+            for st in self.params.trace:
+                if st.line > n:
+                    raise ValueError(f"trace line {st.line} is past the end of code ({n} lines)")
+        elif self.params.code or self.params.trace:
+            raise ValueError(f"code and trace belong to code_walkthrough only, not {self.type!r}")
+        return self
 
 class Check(BaseModel):
     expr: str = Field(..., max_length=60, description="Arithmetic only: numbers, + - * / ** and parentheses. E.g. 230 / 46")

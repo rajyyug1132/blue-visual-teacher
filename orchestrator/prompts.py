@@ -10,7 +10,7 @@ MANDATORY PEDAGOGICAL STRUCTURE (the request states how many scenes your lesson 
 - Scene 1 (Hook): A relatable everyday Indian question or phenomenon (18-26 words). Visual type: "title".
 - Scene 2 (Intuition / Analogy): A concrete physical analogy from daily life in India—water tanks, cricket, IRCTC trains, UPI, traffic, or kitchen cooking (20-28 words). Visual type: "compare" or "labeled_diagram".
 - Scene 3 (Core Principle / Mechanism): State the exact scientific, mathematical, or conceptual rule clearly (20-28 words). Visual type: "equation", "flow", or "timeline".
-- Scene 4 (Worked Example): Walk through ONE concrete numerical or step-by-step example from start to finish (22-30 words). Visual type: "flow" or "graph".
+- Scene 4 (Worked Example): Walk through ONE concrete numerical or step-by-step example from start to finish (22-30 words). Visual type: "flow" or "graph", or "code_walkthrough" for a programming topic.
 - Scene 5 (Recap): Summarize the 3 essential takeaways so the student remembers the rule (18-25 words). Visual type: "bullets".
 
 STRICT RULES:
@@ -23,6 +23,9 @@ STRICT RULES:
 6. NUMBER POLICY. Every request states one.
    - "checked" (topic with a standard formula): scene 4 uses one or two arithmetic steps with whole numbers below 10,000 and adds "check": {"expr": "<numbers and + - * / ** ( ) only>", "result": "<the answer>"}, e.g. {"expr": "230 / 46", "result": "5"}. Every number anywhere in the lesson must come from that calculation; small counts up to ten are fine. Scene 4's narration must say the final answer in words.
    - "none" (descriptive topic): no quantities at all. No digits, no number words above ten, no units of measurement and no "=" in narration, labels or steps. Describe what happens and why, not how much. Years are dates, not quantities, so they are allowed: four digits in labels, spoken as words in narration ("nineteen forty-seven"). Scene 4 walks through the steps in words. Omit "check".
+7. CODE WALKTHROUGH. For a programming topic (loops, recursion, sorting, data structures), scene 4 may use visual type "code_walkthrough". It is the only type that may carry "code" and "trace". "code" is 2-12 short source lines, drawn exactly as written. "trace" is 2-6 ordered steps, each {"line": <1-based line number into code>, "vars": [{"name": "i", "value": "0"}]}, giving the variable values after that line runs. Shape:
+{"type":"code_walkthrough","params":{"labels":["Python for loop"],"steps":["i takes each value in turn"],"code":["for i in range(3):","    print(i)"],"trace":[{"line":1,"vars":[{"name":"i","value":"0"}]},{"line":2,"vars":[{"name":"i","value":"0"}]},{"line":1,"vars":[{"name":"i","value":"1"}]}]}}
+Rule 3 still holds for narration: digits live in "code" and "vars", never in narration. Say "i becomes zero, then one, then two" in words.
 """
 
 CLASSIFY_PROMPT = (
