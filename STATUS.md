@@ -228,3 +228,22 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
   `127.0.0.1:8000` in `app/lesson/[id]/page.tsx:28` and `components/app/lesson-view.tsx:24-25`, next-scene/replay, level +
   length inputs) · FARHAN (code_walkthrough template, `web/` next/replay) · TARUN (Indian-English voice default, device hardcode).
 
+### Pass 3 (YYUG keeper session) · 2026-10-28 01:05
+
+- **Decision (user):** the Vercel URL serves the Next UI as a shop window, with a clear "run locally to generate" state.
+- **Merged:** `yyug/vercel-showcase` (`055c77f`, merge `9956aa3`), 8 files, frontend only. On a public host with no
+  `NEXT_PUBLIC_API_BASE_URL`, `lib/api.ts` `request()` now fails at once with `ApiError('showcase')` instead of hanging 15 s
+  against `<host>:8000`; the form, status card, app-shell banner and dashboard explain how to run it locally. A local install
+  whose server is down gets a "start run_demo" panel instead of a red error. `?showcase=1` forces the mode locally for testing.
+  Verified in a browser against a production build in all three modes (preview, server down, normal); preview made 0 requests
+  to :8000. Normal generation unchanged (Ohm's Law -> `/lesson/34e9269a444e`, ready).
+- **Gate on the merge:** `tsc --noEmit` exit 0 · `next build` OK · `tests/test_ui.py` + `tests/test_e2e_offline.py` 10 passed,
+  3 skipped · renderer + `test:units` pass.
+- **Vercel failure, narrowed but not solved:** a clean `git archive` of `origin/v1` + `npm ci` + `next build` succeeds, and
+  `vercel build` with framework auto-detection gets through detection, build and function creation (it only stops on a
+  Windows-local symlink EPERM that Linux builders do not have). All 70 local imports match tracked files with exact case, so a
+  Windows-only case mismatch is ruled out. The remaining suspect is the Vercel project's own settings (Root Directory,
+  Framework Preset, build/install command overrides). Logs need an account: `npx vercel inspect <deployment> --logs`.
+- **Owner note (AYUSH):** this pass edited your `lib/api.ts`, `lesson-form.tsx`, `backend-status.tsx`, `app-shell.tsx` and
+  `dashboard-view.tsx` with small hooks; the logic lives in three new files. If your STEP 3 work on `lesson-form.tsx` conflicts,
+  your side wins -- keep the `submitError.offline` branch and the `!showcase` guard on the language warning.
