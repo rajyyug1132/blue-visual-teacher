@@ -489,6 +489,39 @@ def time_scale_audio(
         return scaled_speech + [0.0] * tail_pad_samples
 
 
+VOICE_ALIASES: dict[str, str] = {
+    # English: Michael (Male Teacher/Professor) & Sarah (Female Narrator/Teacher)
+    "enm": "am_michael",
+    "en-m": "am_michael",
+    "michael": "am_michael",
+    "male": "am_michael",
+    "enf": "af_sarah",
+    "en-f": "af_sarah",
+    "sarah": "af_sarah",
+    "female": "af_sarah",
+    # Alternative educator voices
+    "bella": "af_bella",
+    "adam": "am_adam",
+    "george": "bm_george",
+    "emma": "bf_emma",
+    # Hindi: Omega (Male) & Alpha (Female)
+    "him": "hm_omega",
+    "hi-m": "hm_omega",
+    "omega": "hm_omega",
+    "hif": "hf_alpha",
+    "hi-f": "hf_alpha",
+    "alpha": "hf_alpha",
+}
+
+
+def resolve_voice(voice_id: str | None, default: str) -> str:
+    """Resolve friendly voice identifiers (enm, enf, him, hif) to model checkpoint IDs."""
+    if not voice_id:
+        return default
+    v_clean = str(voice_id).strip().lower()
+    return VOICE_ALIASES.get(v_clean, voice_id)
+
+
 class OfflineTTSEngine:
     """Dual-engine TTS generating synchronized scene audio and timing manifests.
     
@@ -498,16 +531,16 @@ class OfflineTTSEngine:
 
     def __init__(
         self,
-        voice_en: str = "af_bella",
+        voice_en: str = "enm",  # 'enm' (am_michael) or 'enf' (af_sarah)
         speed_en: float = 1.0,
         voice_hi: str = "hf_alpha",
         speed_hi: float = 1.0,
         mms_speaking_rate: float = 1.0,
     ):
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
-        self.voice_en = voice_en
+        self.voice_en = resolve_voice(voice_en, "am_michael")
         self.speed_en = speed_en
-        self.voice_hi = voice_hi
+        self.voice_hi = resolve_voice(voice_hi, "hf_alpha")
         self.speed_hi = speed_hi
         self.mms_speaking_rate = mms_speaking_rate
         self.kokoro_en = None
@@ -637,7 +670,7 @@ class OfflineTTSEngine:
         total_dur = round(total_samples / TARGET_SR, 3)
         return wav, total_dur
 
-    def synthesize_scene(self, text: str, lang: str, target_dur: float | None = None, ref_ratios: Sequence[float] | None = None) -> tuple[Any, float]:
+    def synthesize_scene(self, text: str, lang: str, target_dur: float | None = None, ref_ratios: Sequence[float] | None = None, voice: str | None = None) -> tuple[Any, float]:
         """Synthesize scene audio waveform with numbers expanded and tail pad attached.
         
         Returns:
@@ -650,11 +683,14 @@ class OfflineTTSEngine:
         # Step 2: Try neural synthesis
         pad_samples = int(TAIL_PAD_SEC * TARGET_SR)
 
+        chosen_voice_en = resolve_voice(voice, self.voice_en) if voice else self.voice_en
+        chosen_voice_hi = resolve_voice(voice, self.voice_hi) if voice else self.voice_hi
+
         if lang == "en" and self.kokoro_en is not None and HAS_NUMPY:
             try:
                 chunks = [
                     audio
-                    for _, _, audio in self.kokoro_en(clean_text, voice=self.voice_en, speed=self.speed_en)
+                    for _, _, audio in self.kokoro_en(clean_text, voice=chosen_voice_en, speed=self.speed_en)
                     if audio is not None
                 ]
                 if chunks:
@@ -680,7 +716,7 @@ class OfflineTTSEngine:
             try:
                 chunks = [
                     audio
-                    for _, _, audio in self.kokoro_hi(clean_text, voice=self.voice_hi, speed=self.speed_hi)
+                    for _, _, audio in self.kokoro_hi(clean_text, voice=chosen_voice_hi, speed=self.speed_hi)
                     if audio is not None
                 ]
                 if chunks:
@@ -812,6 +848,7 @@ class OfflineTTSEngine:
         lang: str,
         out_wav_path: str | Path,
         target_durations: Sequence[float] | Sequence[dict] | None = None,
+        voice: str | None = None,
     ) -> list[dict]:
         """Synthesize audio for all scenes and output timing manifest and master WAV.
         
@@ -843,7 +880,7 @@ class OfflineTTSEngine:
                 else:
                     target_dur = float(item)
 
-            wav, duration_sec = self.synthesize_scene(text, lang, target_dur=target_dur, ref_ratios=ref_ratios)
+            wav, duration_sec = self.synthesize_scene(text, lang, target_dur=target_dur, ref_ratios=ref_ratios, voice=voice)
             all_waveforms.append(wav)
 
             scene_ratios = self.extract_segment_ratios(text, lang)
@@ -869,6 +906,7 @@ class OfflineTTSEngine:
         plans: dict[str, Any],
         out_base_dir: str | Path,
         reference_lang: str = "en",
+        voice: str | None = None,
     ) -> dict[str, list[dict]]:
         """Synthesize all scenes across multiple localized plans with synchronized timing.
         
@@ -885,7 +923,7 @@ class OfflineTTSEngine:
         ref_dir = out_base_dir / f"{reference_lang}"
         ref_dir.mkdir(parents=True, exist_ok=True)
         ref_wav = ref_dir / "lesson_audio.wav"
-        ref_manifest = self.synthesize_all_scenes(ref_scenes, reference_lang, ref_wav)
+        ref_manifest = self.synthesize_all_scenes(ref_scenes, reference_lang, ref_wav, voice=voice)
         manifests[reference_lang] = ref_manifest
         target_durations = [{"duration_sec": s["duration_sec"], "ratios": s.get("ratios")} for s in ref_manifest]
 

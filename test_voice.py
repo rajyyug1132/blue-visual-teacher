@@ -82,8 +82,9 @@ def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_d
 
     wav, dur = tts.synthesize_scene(text, lang, target_dur=target_dur, ref_ratios=ref_ratios)
 
-    suffix = f"_{target_dur:.1f}s" if target_dur else ""
-    out_path = Path("cache") / f"test_voice_{lang}{suffix}.wav"
+    voice_tag = f"_{voice}" if voice else ""
+    dur_tag = f"_{target_dur:.1f}s" if target_dur else ""
+    out_path = Path("cache") / f"test_voice_{lang}{voice_tag}{dur_tag}.wav"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with wave.open(str(out_path), "wb") as w:
@@ -120,7 +121,7 @@ def main():
     parser.add_argument(
         "--voice",
         default=None,
-        help="Custom voice ID (e.g. 'am_michael', 'af_bella', 'bm_george' for English; 'hf_alpha', 'hm_omega' for Hindi)",
+        help="Voice option: 'enm' (Michael, Male Professor) or 'enf' (Sarah, Female Educator); or model ID ('am_michael', 'af_sarah')",
     )
     parser.add_argument(
         "--text",
