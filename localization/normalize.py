@@ -825,8 +825,11 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
       6. Injects clause-boundary micro-pauses for human-like breath rhythm.
       7. Strips unsupported symbols and brackets ([] {} () <> _ ^ ` ~).
     """
+    # Strip invisible zero-width characters (ZWNJ, ZWJ, etc.) that confuse MMS tokenizer
+    sanitized = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
+
     # 0. Expand STEM acronyms first so characters don't get garbled or dropped
-    out = expand_stem_acronyms(text, lang)
+    out = expand_stem_acronyms(sanitized, lang)
 
     # Normalize hyphenated compound words (e.g. fast-charging -> fast charging, forty-six -> forty six)
     out = re.sub(r"(?<=[^\s\d\(\)\[\]\{\}\<\>])-(?=[^\s\d\(\)\[\]\{\}\<\>])", " ", out)
@@ -836,6 +839,8 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"°\s*C", " ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್ ", out)
         out = re.sub(r"°\s*F", " ಡಿಗ್ರಿ ಫ್ಯಾರನ್‌ಹೀಟ್ ", out)
         out = re.sub(r"Ω", " ಓಮ್ ", out)
+        out = re.sub(r"\bOhm'?s?\s+Law\b", "ಓಮ್ ನಿಯಮ", out, flags=re.IGNORECASE)
+        out = re.sub(r"ಓಮ್‌ನ\s+ನಿಯಮ", "ಓಮ್ ನಿಯಮ", out)
         out = re.sub(r"\bOhm'?s?\b", "ಓಮ್", out, flags=re.IGNORECASE)
         out = re.sub(r"\bVolts?\b", "ವೋಲ್ಟ್", out, flags=re.IGNORECASE)
         out = re.sub(r"\bAmperes?\b|\bAmps?\b", "ಆಂಪಿಯರ್", out, flags=re.IGNORECASE)
@@ -898,6 +903,7 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"°\s*C", " டிகிரி செல்சியஸ் ", out)
         out = re.sub(r"°\s*F", " டிகிரி பாரன்ஹீட் ", out)
         out = re.sub(r"Ω", " ஓம் ", out)
+        out = re.sub(r"\bOhm'?s?\s+Law\b", "ஓம் விதி", out, flags=re.IGNORECASE)
         out = re.sub(r"\bOhm'?s?\b", "ஓம்", out, flags=re.IGNORECASE)
         out = re.sub(r"\bVolts?\b", "வோல்ட்", out, flags=re.IGNORECASE)
         out = re.sub(r"\bAmperes?\b|\bAmps?\b", "ஆம்பியர்", out, flags=re.IGNORECASE)
@@ -929,6 +935,7 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"°\s*C", " ডিগ্রি সেলসিয়াস ", out)
         out = re.sub(r"°\s*F", " ডিগ্রি ফারেনহাইট ", out)
         out = re.sub(r"Ω", " ওহম ", out)
+        out = re.sub(r"\bOhm'?s?\s+Law\b", "ওহমের সূত্র", out, flags=re.IGNORECASE)
         out = re.sub(r"\bOhm'?s?\b", "ওহম", out, flags=re.IGNORECASE)
         out = re.sub(r"\bVolts?\b", "ভোল্ট", out, flags=re.IGNORECASE)
         out = re.sub(r"\bAmperes?\b|\bAmps?\b", "অ্যাম্পিয়ার", out, flags=re.IGNORECASE)

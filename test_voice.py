@@ -46,8 +46,8 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 DEFAULT_TEXTS = {
     "en": "Welcome to our physics lesson on Ohm's Law. Voltage across a resistor equals current times resistance.",
     "hi": "ओम के नियम के अनुसार, एक चालक में बहने वाली विद्युत धारा उसके सिरों के विभवांतर के समानुपाती होती है।",
-    "kn": "ಓಮ್‌ನ ನಿಯಮದ ಪ್ರಕಾರ, ವಾಹಕದಲ್ಲಿ ಹರಿಯುವ ವಿದ್ಯುತ್ ಪ್ರವಾಹವು ಅದರ ತುದಿಗಳ ನಡುವಿನ ವೋಲ್ಟೇಜ್‌ಗೆ ನೇರ ಅನುಪಾತದಲ್ಲಿರುತ್ತದೆ.",
-    "ta": "ஓம் விதிப்படி, ஒரு கடத்தியின் வழியே பாயும் மின்னோட்டம் அதன் முனைகளுக்கு இடைப்பட்ட மின்னழுத்த வேறுபாட்டிற்கு நேர்விகிதத்தில் இருக்கும்.",
+    "kn": "ಓಮ್ ನಿಯಮದ ಪ್ರಕಾರ, ವಾಹಕದಲ್ಲಿ ಹರಿಯುವ ವಿದ್ಯುತ್ ಪ್ರವಾಹವು ಅದರ ತುದಿಗಳ ನಡುವಿನ ವೋಲ್ಟೇಜ್‌ಗೆ ನೇರ ಅನುಪಾತದಲ್ಲಿರುತ್ತದೆ.",
+    "ta": "ஓம் விதியின்படி, ஒரு கடத்தியின் வழியே பாயும் மின்னோட்டம் அதன் முனைகளுக்கு இடைப்பட்ட மின்னழுத்த வேறுபாட்டிற்கு நேர்விகிதத்தில் இருக்கும்.",
     "bn": "ওহমের সূত্র অনুসারে, একটি পরিবাহীর মধ্য দিয়ে প্রবাহিত তড়িৎ প্রবাহ তার দুই প্রান্তের বিভব পার্থক্যের সমানুপাতিক।",
 }
 
@@ -92,7 +92,7 @@ def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_d
         w.setsampwidth(2)
         w.setframerate(24000)
                 # 0.35s head padding prevents DAC / media player latency from swallowing the first word
-        head_pad = [0] * int(0.04 * 24000)
+        head_pad = [0] * int(0.02 * 24000)
         samples = head_pad + [max(-32768, min(32767, int(s * 32767.0))) for s in wav]
         w.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
