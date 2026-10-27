@@ -72,6 +72,7 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - YYUG -> FARHAN · renderer/templates.js, web/index.html · two gaps against the problem statement, both yours: (a) a `code_walkthrough` template -- code lines with a moving line highlight plus a variable-state table (i = 0 -> 1 -> 2), driven entirely by `visual.params` data, never executing anything; (b) player controls `next scene` and `replay` -- `web/index.html:140-162` has play/pause, seek, captions and mute, but neither of those two · `code_walkthrough` is a REQUIRED scene type and the judges' sample lesson is Python loops, so today their own test case has no template; next/replay are named under Stage 3 "done when" · see CC-2 for the data shape I will emit · blocking? y before 06:00
 - YYUG -> TARUN · localization/tts_engine.py · default English narration to an Indian-accented voice: `voice_en` is currently `"enm"` -> `am_michael` (American). The statement asks for Indian-accented English explicitly; use `hf_alpha` or `hm_omega` on English text · your `VOICE_ALIASES` work in bd1058e already makes this close to a one-line default change, but it needs a listen-test before the freeze: Kokoro's `h*` voices on English text are the intended trick, not a bug · also note `cache/artifacts/ohm-s-law_hi` predates your `normalize.py:610` current -> vidyut dhaara fix, so the running demo still shows the wrong word until it is regenerated · blocking? y before 06:00
 - YYUG -> TARUN · localization/tts_engine.py:540, localization/translator.py:355 · both hardcode `self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"`, ignoring `orchestrator.device.get_device()` and the `DEVICE` env var · this is the ENFORCE rule at AGENTS.md:50 ("never hardcode cuda") and re-states a handoff from earlier today that was not picked up · NOT currently breaking anything here: the installed torch is `2.14.1+cpu`, so `cuda.is_available()` is False and both land on cpu anyway -- which is also why requirement 5's CPU path holds for translate/TTS/render today · it matters on any machine with a CUDA torch build, where localization would seize the 6 GB card that AGENTS.md reserves for the planner (qwen2.5:7b alone is 5.2 GB) and `DEVICE=cpu` would not stop it; `translator.py:376` also picks fp16 on cuda where the rule says fp32 · blocking? n before the freeze on this laptop, y if the demo ever runs on a CUDA torch build
+- YYUG -> AYUSH · components/app/app-shell.tsx:58, components/app/dashboard-view.tsx:48 · delete both fallback banners and wire the real endpoints: the dashboard currently tells the user "Authentication is not connected yet" and "The lesson server doesn't expose a history endpoint", and BOTH are false on v1 · verified against the running backend at 00:00 on 2026-10-28: `POST /api/auth/signup` returns a real user and token, `GET /api/auth/me` with the session cookie returns 200, and `GET /api/lessons/history` returns 200 with `[]` (401 only when unauthenticated, which is correct) · `exporter/app.py:181-233` implements signup/login/logout/me/history and `lib/api.ts:185-239` already calls every one of them, so the copy is the only thing missing -- the UI undersells working features to a judge reading the screen · blocking? y before 06:00
 
 ## CONTRACT CHANGE proposals
 
@@ -168,3 +169,35 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
   - PR #2, PR #4, PR #5: Subsumed/merged into `v1`.
 - **Blockers:** None.
 
+### Pass 1 (YYUG keeper session) · ended 2026-10-28 00:04
+
+- **Merged:** nothing.
+- **Skipped:** `origin/ayush/frontend` (4 commits, owner AYUSH) -- stale, not new. Merge base `a74c1d4`; merging would overwrite
+  `exporter/app.py` with a pre-auth version (drops the SQLite users/sessions/history docstring) and revert the explicit-origin
+  CORS already in v1 from `459ac93`. Owner should rebase it onto v1 or delete it.
+- **Already in v1 (0 commits ahead):** `farhan/ui`, `tarun/localization`, `dev`, `yyug/integration`.
+- **Open PRs:** #6 (v1 -> main, left alone), #2 / #4 / #5 all contained in v1.
+- **Gate:** full `pytest tests/` on v1 @ `96cd58c`, started 23:55:46, finished: **204 passed, 3 skipped, 0 failed in 20:53**.
+  Up from D9's 192 because Tarun's new tests are included. Only STATUS.md changed during the run, so the result stands for v1's code.
+- **Vercel:** not deployed. `https://blue-visual-teacher.vercel.app/` returns `X-Vercel-Error: NOT_FOUND` on every path tried
+  (`/`, `/web/index.html`, `/index.html`, `/dashboard`, `/api/health`), so the project name is reserved but no deployment exists
+  behind it. CLI 65.4.0 available but `vercel whoami` reports logged out, and the keeper may not authenticate.
+  Also `web/` alone is not deployable: it loads `../renderer/{engine,templates,theme}.js`, `/renderer/assets/fonts/*.ttf` (4 Noto
+  faces) and `/fixtures/golden_manifest_en.json`. A 1.6 MB static bundle of `web/ + renderer/ + assets/fonts/ + fixtures/` with a
+  `/` -> `/web/index.html` rewrite was assembled and verified locally at `?mock=1`: renders, no console errors, fonts local so the
+  offline rule survives deployment.
+- **Note:** test accounts `keeper.test@example.com` and `keeper.ui.1793126398729@example.com` (one Ohm's Law history row) were
+  created in `exporter/data/bvt.db` while proving the auth and history endpoints. Delete the DB to reset.
+- **Waiting on owners:** AYUSH (stale branch, dashboard banners), FARHAN (code_walkthrough template, next/replay), TARUN (Indian
+  English voice default, device hardcode).
+
+**Two keeper sessions ran Pass 1 independently** (AYUSH's at 00:10, YYUG's ending 00:04). Where they differ, the evidence:
+
+- `ayush/*` "already incorporated": content yes, commits no. `git cherry v1 origin/ayush/frontend` lists all 4 commits as not in v1,
+  and merging the branch would regress `exporter/app.py`. Outcome is the same either way: it must not be merged.
+- "Gate: Green (D1-D10 10/10)": that table is the 2026-10-27 19:22-20:20 rerun. The first fresh full run on current v1 is the
+  204-passed result above, so green holds -- now with a current timestamp behind it.
+- "Blockers: None": open items are in Handoffs -- dashboard banners (fixed on `yyug/dashboard-banners`, see Pass 2), the
+  `app/layout.tsx` offline violations, and nothing deployed at the Vercel URL.
+
+**From Pass 2 on, one keeper pushes to v1** -- two agents merging and pushing the same branch is the race this role exists to prevent.
