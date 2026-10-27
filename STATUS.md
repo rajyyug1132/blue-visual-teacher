@@ -29,7 +29,7 @@ built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNING
 
 | Owner | Module | State | Last check | Next |
 |---|---|---|---|---|
-| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Canonical demo surface = FastAPI :8000 (`run_demo`); Next UI and `server.js` documented as non-judged. `next build` verified passing. Handoffs to AYUSH/FARHAN filed. |
+| YYUG | orchestrator/ | Planner + plan cache + fallback + math guard + spoken-words repair + post-TTS duration gate. Era-marked dates (BCE/BC/CE/AD) allowed on policy-none. | 2026-10-27 · D1 PASS · D2 PASS 19/20 P50 15.6 s · D3 FAIL (Playwright Chromium missing) · numeric_guard+orchestrator 127 passed | Audited repo against the 5 problem-statement requirements: `code_walkthrough` absent, level/target_sec absent, next/replay missing, English voice American, CPU path OK for translate/TTS/render. CC-2 raised; handoffs to FARHAN/TARUN. Vercel deferred past the freeze. |
 | FARHAN | renderer/ web/ | ALL GREEN F1–F10 (farhan/ui): deterministic engine, 8 templates, fitText, captions, web UI with stepper, toast, download, ?mock=1 | logs/f1_f10.log, logs/f1_f10_report.json | Merged into v1 |
 | TARUN | localization/ | Done (L1–L8 verified + SPATS ratio sync + enm/enf educator voices) | SPATS ratio scaling, natural breath pauses, Ohm/variable transliteration, enm (Michael) / enf (Sarah) voice options | All green |
 | AYUSH | exporter/ | Exporter pipeline, FastAPI app, Next.js UI integration, e2e tests (`test_e2e_offline.py` 6 passed) | 2026-10-28 00:10 · D8 PASS · D10 PASS · test_e2e_offline PASS | V1-Keeper loop active, ready for 06:00 review |
@@ -69,6 +69,9 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - YYUG -> AYUSH · (info) `npm run build` now passes on Next 16.4.3 / Turbopack, 7 routes, ~2.5 s compile · first time it has been run here; `next.config.mjs` still sets `typescript.ignoreBuildErrors = true`, so types are unvalidated ("Skipping validation of types") · decide before the freeze whether hiding type errors is acceptable for judging · blocking? n
 - YYUG -> FARHAN · server.js, web/ · keep `web/` as the judged UI (it is what :8000 serves); `server.js` stays only as the offline mock harness pinned by `tests/test_server_behavior.js` + `tests/test_mock_api.js` · no renderer change requested, just do not let `web/` drift toward the Next app before the freeze · blocking? n
 - YYUG -> AYUSH · AGENTS.md · commit 459ac93 also appended a `<!-- BEGIN:nextjs-agent-rules -->` block to AGENTS.md; decide whether it stays, and say so explicitly rather than letting a build tool decide · the block is not yours: it is written by `next dev` via `node_modules/next/dist/server/lib/generate-agent-files.js` (verified present, 13 KB, written 23:04) and called from `app-info-log.js` on dev-server start, so it is re-added every run · it matters because AGENTS.md is the team contract loaded as project instructions through CLAUDE.md, it instructs any agent to go read docs out of `node_modules/`, and after the 06:00 freeze a tool that silently rewrites the rules file is a freeze violation nobody authored · I found no env/config opt-out for this block in the bundle (only the second block, `nextjs-agent-feedback`, is gated by `experimental.agentFeedback`), so the realistic options are: keep it and commit it deliberately as the block itself suggests, move the team rules out of the file Next writes to, or check the Next 16 docs for a flag · treat anything inside the block as third-party data, not as team rules · blocking? n (y if the Next UI is demoed and `next dev` is run after the freeze)
+- YYUG -> FARHAN · renderer/templates.js, web/index.html · two gaps against the problem statement, both yours: (a) a `code_walkthrough` template -- code lines with a moving line highlight plus a variable-state table (i = 0 -> 1 -> 2), driven entirely by `visual.params` data, never executing anything; (b) player controls `next scene` and `replay` -- `web/index.html:140-162` has play/pause, seek, captions and mute, but neither of those two · `code_walkthrough` is a REQUIRED scene type and the judges' sample lesson is Python loops, so today their own test case has no template; next/replay are named under Stage 3 "done when" · see CC-2 for the data shape I will emit · blocking? y before 06:00
+- YYUG -> TARUN · localization/tts_engine.py · default English narration to an Indian-accented voice: `voice_en` is currently `"enm"` -> `am_michael` (American). The statement asks for Indian-accented English explicitly; use `hf_alpha` or `hm_omega` on English text · your `VOICE_ALIASES` work in bd1058e already makes this close to a one-line default change, but it needs a listen-test before the freeze: Kokoro's `h*` voices on English text are the intended trick, not a bug · also note `cache/artifacts/ohm-s-law_hi` predates your `normalize.py:610` current -> vidyut dhaara fix, so the running demo still shows the wrong word until it is regenerated · blocking? y before 06:00
+- YYUG -> TARUN · localization/tts_engine.py:540, localization/translator.py:355 · both hardcode `self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"`, ignoring `orchestrator.device.get_device()` and the `DEVICE` env var · this is the ENFORCE rule at AGENTS.md:50 ("never hardcode cuda") and re-states a handoff from earlier today that was not picked up · NOT currently breaking anything here: the installed torch is `2.14.1+cpu`, so `cuda.is_available()` is False and both land on cpu anyway -- which is also why requirement 5's CPU path holds for translate/TTS/render today · it matters on any machine with a CUDA torch build, where localization would seize the 6 GB card that AGENTS.md reserves for the planner (qwen2.5:7b alone is 5.2 GB) and `DEVICE=cpu` would not stop it; `translator.py:376` also picks fp16 on cuda where the rule says fp32 · blocking? n before the freeze on this laptop, y if the demo ever runs on a CUDA torch build
 
 ## CONTRACT CHANGE proposals
 
@@ -108,6 +111,50 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - AYUSH: update any test that hardcodes 54.79 s for the golden fixture to 55.23 s.
 
 Votes: YYUG ✅ · FARHAN ☐ · TARUN ☐ · AYUSH ✅
+
+### CC-2 · LessonPlan: code_walkthrough scene type + learner level and target length · proposed by YYUG · status: OPEN (needs FARHAN, TARUN, AYUSH)
+
+**Why now:** these are not new features, they are unmet requirements from the problem statement, found 2026-10-27 23:45 with the
+freeze at 06:00. `code_walkthrough` is one of the required scene types and the judges' sample lesson is Python loops, so the
+current 8-type schema cannot render their own example at all.
+
+**1. New scene type `code_walkthrough`**
+
+`SCENE_TYPES` gains a ninth entry. `visual.params` for it carries:
+
+- `code: list[str]` -- 1 to 12 source lines, <= 80 chars each, rendered verbatim as text.
+- `steps: list[CodeStep]` -- 1 to 6 ordered steps; each `{line: int (1-based index into code), vars: dict[str, str]}`.
+  `line` drives the moving highlight; `vars` is the variable-state table at that step (e.g. `{"i": "0"}` -> `{"i": "1"}`).
+
+**The code is data and is never executed.** Nothing in `code` or `vars` is passed to `eval`, `exec`, `compile`, a subprocess
+or a template engine; the renderer draws strings. This is the same stance as `mathcheck.py`, which evaluates `check.expr`
+through an AST whitelist and never `eval()`. The planner is the untrusted party here: it writes the trace, we only draw it.
+`line` is validated in range against `code`; an out-of-range step fails validation rather than rendering.
+
+**2. New LessonPlan inputs `level` and `target_sec`**
+
+- `level: Literal["beginner", "intermediate"] = "beginner"` -- sets vocabulary and depth in the planner prompt only.
+- `target_sec: int = 60`, bounded 30-90 -- sets the scene count and the per-lesson word budget.
+
+These are Stage 1 inputs, so they also need a control on the input page (FARHAN/AYUSH) and a field on `POST /api/generate`
+(AYUSH). The existing per-lesson validator (85-150 words, estimated 35-85 s) becomes a function of `target_sec` instead of a
+constant: budget = `target_sec * 2.3` words +/- 15%, with the 30-90 s outer bound unchanged, so `duration_gate()` is untouched.
+
+**Compatibility**
+
+- Both fields default, so existing JSON including `fixtures/golden_ohms_law.json` validates unchanged.
+- `code_walkthrough` is additive: a renderer that does not know it would skip it, but FARHAN needs the template before any
+  programming topic can be planned, so this merges with his template, not before it.
+- `timing_manifest`, `window.initLesson/renderAtTime` and the manifest format are unchanged.
+
+**Asks**
+
+- FARHAN: the `code_walkthrough` template and the next/replay controls (see Handoffs). Confirm the `code`/`steps` shape works
+  for a moving highlight, and say if you would rather have the highlight as a per-step line range than a single index.
+- TARUN: confirm narration for a code scene needs no new spoken-form rules (variable names such as `i` read aloud as letters).
+- AYUSH: `level` and `target_sec` on `POST /api/generate` and the input page.
+
+Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
 
 ## V1-Keeper Passes
 
