@@ -12,6 +12,9 @@
   let _scenes = [];
   let _lang = 'en';
   let _totalDuration = 0;
+  let _lastT = 0;
+  let _simplifiedSceneId = null;
+  let _quizBound = false;
   let _theme = null;
   let _templates = null;
 
@@ -45,7 +48,7 @@
   }
 
   // Draw header bar matching approved reference designs
-  function drawHeader(ctx, title, sceneIndex, totalScenes, theme, lang, visualType = '') {
+  function drawHeader(ctx, title, sceneIndex, totalScenes, theme, lang, visualType = '', showSimplified = false) {
     const font = theme.getFont(lang);
     ctx.save();
 
@@ -90,6 +93,22 @@
       font,
       bracketed: true
     });
+
+    if (showSimplified) {
+      const simple = 'Simplified Explanation';
+      const simpleW = ctx.measureText(`[ ${simple} ]`).width + 24;
+      theme.drawPill(ctx, simple, langX - simpleW - 12, 15, {
+        bg: '#FEF3C7',
+        color: theme.colors.text,
+        border: theme.colors.border,
+        lineWidth: 1.5,
+        height: 26,
+        fontSize: 11,
+        weight: 700,
+        font,
+        bracketed: true
+      });
+    }
 
     // 3. Crisp horizontal separator rule at y = 52
     ctx.strokeStyle = theme.colors.border;
@@ -274,6 +293,7 @@
       if (_canvas) {
         _ctx = _canvas.getContext('2d');
       }
+      bindQuizPointer();
 
       try {
         if (document.fonts) {
@@ -311,6 +331,7 @@
     const numericT = Number(t_sec);
     const validT = isNaN(numericT) ? 0 : numericT;
     const t = Math.max(0, Math.min(_totalDuration, validT));
+    _lastT = t;
     const scene = getActiveScene(_scenes, t);
     if (!scene) return false;
 
@@ -338,12 +359,18 @@
 
     // 3. Draw Header
     const visual = scene.visual || { type: 'bullets', params: { labels: [], steps: [] } };
-    drawHeader(_ctx, _title, sceneIdx, _scenes.length, theme, _lang, visual.type);
+    const showSimplified = _simplifiedSceneId != null && scene.id === _simplifiedSceneId;
+    drawHeader(_ctx, _title, sceneIdx, _scenes.length, theme, _lang, visual.type, showSimplified);
+
+    let drawParams = visual.params || {};
+    if (visual.type === 'quiz' && Number.isInteger(scene.selectedQuizOption)) {
+      drawParams = Object.assign({}, drawParams, { selectedQuizOption: scene.selectedQuizOption });
+    }
 
     // 4. Draw Scene Template with fade
     _ctx.save();
     _ctx.globalAlpha = fadeAlpha * Math.max(entrance, 0.2);
-    templates.draw(_ctx, visual.type, visual.params, lt, dur, theme, _lang);
+    templates.draw(_ctx, visual.type, drawParams, lt, dur, theme, _lang);
     _ctx.restore();
 
     // 4. Draw Captions
@@ -355,9 +382,60 @@
     return true;
   }
 
+  function bindQuizPointer() {
+    if (_quizBound || !_canvas || typeof _canvas.addEventListener !== 'function') return;
+    _quizBound = true;
+    _canvas.addEventListener('pointerdown', onQuizPointer);
+  }
+
+  function onQuizPointer(ev) {
+    const templates = getTemplates();
+    if (!_canvas || !_scenes || !templates || typeof templates.quizBoxes !== 'function') return;
+    const rect = _canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (_canvas.width / (rect.width || _canvas.width));
+    const y = (ev.clientY - rect.top) * (_canvas.height / (rect.height || _canvas.height));
+    const scene = getActiveScene(_scenes, _lastT);
+    if (!scene || !scene.visual || scene.visual.type !== 'quiz') return;
+    const hit = templates.quizBoxes().findIndex(box =>
+      x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
+    );
+    if (hit < 0) return;
+    scene.selectedQuizOption = hit;
+    renderAtTime(_lastT);
+  }
+
+  function updateSingleScene(sceneId, updatedScene, newFullManifest, newAudioUrl) {
+    const incoming = newFullManifest && Array.isArray(newFullManifest.scenes)
+      ? newFullManifest.scenes
+      : (Array.isArray(newFullManifest) ? newFullManifest : null);
+    if (!incoming || !updatedScene) return false;
+    _scenes = incoming.map(scene => (scene && scene.id === sceneId ? updatedScene : scene));
+    if (newFullManifest && newFullManifest.title) _title = newFullManifest.title;
+    if (newFullManifest && newFullManifest.lang) _lang = newFullManifest.lang;
+    _totalDuration = _scenes.length ? (_scenes[_scenes.length - 1].end_sec || 0) : 0;
+    root.totalDuration = _totalDuration;
+    _simplifiedSceneId = sceneId;
+    const start = Number(updatedScene.start_sec) || 0;
+    if (typeof document !== 'undefined') {
+      const audio = document.getElementById('audio-player');
+      if (audio) {
+        const seek = () => { try { audio.currentTime = start; } catch (err) { /* metadata not ready */ } };
+        if (newAudioUrl) {
+          audio.src = newAudioUrl;
+          audio.addEventListener('loadedmetadata', seek, { once: true });
+          if (typeof audio.load === 'function') audio.load();
+        } else {
+          seek();
+        }
+      }
+    }
+    return renderAtTime(start);
+  }
+
   // Expose frozen API to root/window
   root.initLesson = initLesson;
   root.renderAtTime = renderAtTime;
+  root.updateSingleScene = updateSingleScene;
   root.totalDuration = 0;
   root.ready = false;
 
@@ -366,6 +444,7 @@
     module.exports = {
       initLesson,
       renderAtTime,
+      updateSingleScene,
       getActiveScene,
       drawHeader,
       drawCaptions,
@@ -373,6 +452,7 @@
       setCanvas(canvas, ctx) {
         _canvas = canvas;
         _ctx = ctx;
+        bindQuizPointer();
       }
     };
   }

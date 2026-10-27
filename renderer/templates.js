@@ -2804,12 +2804,100 @@
       ctx.restore();
     },
 
+    quizBoxes() {
+      const gap = 16;
+      const cardW = (1152 - gap) / 2;
+      const cardH = 156;
+      const top = 200;
+      const left = 64;
+      const boxes = [];
+      for (let i = 0; i < 4; i++) {
+        boxes.push({
+          x: left + (i % 2) * (cardW + gap),
+          y: top + Math.floor(i / 2) * (cardH + gap),
+          w: cardW,
+          h: cardH
+        });
+      }
+      return boxes;
+    },
+
+    // Question and options are strings. The correct index is data, never executed.
+    quiz(ctx, params, lt, dur, theme, lang) {
+      const labels = Array.isArray(params.labels) ? params.labels : [];
+      const steps = Array.isArray(params.steps) ? params.steps : [];
+      const question = labels[0] != null ? String(labels[0]) : '';
+      const options = steps.slice(0, 4).map(step => String(step));
+      let correctIdx = parseInt(labels[1] != null && labels[1] !== '' ? labels[1] : '0', 10);
+      if (!Number.isFinite(correctIdx)) correctIdx = 0;
+      if (options.length) correctIdx = Math.max(0, Math.min(options.length - 1, correctIdx));
+      const p = dur > 0 ? Math.min(1, Math.max(0, (Number(lt) || 0) / dur)) : 1;
+      const tapped = Number.isInteger(params.selectedQuizOption) ? params.selectedQuizOption : null;
+      const reveal = tapped == null && p >= 0.65;
+      const font = theme.getFont(lang);
+      const boxes = this.quizBoxes();
+
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+
+      if (tapped == null && p < 0.65) {
+        const barW = 1152;
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(64, 64, barW, 8);
+        ctx.fillStyle = '#38BDF8';
+        ctx.fillRect(64, 64, barW * (p / 0.65), 8);
+      }
+
+      theme.drawCard(ctx, 64, 80, 1152, 104, 14, '#0F172A', '#334155', 2);
+      const qFit = theme.fitText(ctx, question, { width: 1100, height: 72 }, 28, 16, 700, lang, { label: 'quiz.question' });
+      ctx.font = `700 ${qFit.fontSize}px ${font}`;
+      ctx.fillStyle = '#F8FAFC';
+      theme.drawFittedLines(ctx, qFit, 84, 96);
+
+      options.forEach((text, i) => {
+        const box = boxes[i];
+        const showCorrect = (tapped != null && i === correctIdx) || (reveal && i === correctIdx);
+        const showWrong = tapped != null && tapped === i && i !== correctIdx;
+        const dim = (reveal || tapped != null) && !showCorrect && !showWrong;
+        ctx.save();
+        if (dim) ctx.globalAlpha = 0.45;
+        let fill = '#1E293B';
+        let stroke = '#334155';
+        if (showCorrect) {
+          fill = '#064E3B';
+          stroke = '#34D399';
+        }
+        if (showWrong) {
+          fill = '#450A0A';
+          stroke = '#F87171';
+        }
+        theme.drawCard(ctx, box.x, box.y, box.w, box.h, 14, fill, stroke, showCorrect || showWrong ? 3 : 1.5);
+        ctx.fillStyle = '#F8FAFC';
+        ctx.font = `800 18px ${font}`;
+        ctx.fillText(String.fromCharCode(65 + i), box.x + 18, box.y + 16);
+        if (showCorrect) ctx.fillText('✓', box.x + box.w - 36, box.y + 16);
+        if (showWrong) ctx.fillText('✗', box.x + box.w - 36, box.y + 16);
+        const fit = theme.fitText(ctx, text, { width: box.w - 36, height: 72 }, 22, 14, 600, lang, { label: 'quiz.option' });
+        ctx.font = `600 ${fit.fontSize}px ${font}`;
+        ctx.fillStyle = '#F8FAFC';
+        theme.drawFittedLines(ctx, fit, box.x + 18, box.y + 48);
+        if (showCorrect) {
+          ctx.font = `700 14px ${font}`;
+          ctx.fillStyle = '#6EE7B7';
+          ctx.fillText('✓ Correct Answer', box.x + 18, box.y + box.h - 28);
+        }
+        ctx.restore();
+      });
+      ctx.restore();
+    },
+
     // -------------------------------------------------------------------------
     // Universal Dispatcher with Graceful Fallback to Bullets
     // -------------------------------------------------------------------------
     draw(ctx, type, params, lt, dur, theme, lang) {
       const source = params || {};
-      const deduped = Object.assign({}, source, {
+      const deduped = type === 'quiz' ? source : Object.assign({}, source, {
         labels: Array.isArray(source.labels) ? [...new Set(source.labels)] : source.labels,
         steps: Array.isArray(source.steps) ? [...new Set(source.steps)] : source.steps
       });
