@@ -53,7 +53,13 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-from localization.normalize import clean_for_mms, tamil_number_to_words, bengali_number_to_words
+from localization.normalize import (
+    clean_for_mms,
+    expand_stem_acronyms,
+    insert_breath_pauses,
+    tamil_number_to_words,
+    bengali_number_to_words,
+)
 
 TARGET_SR = 24000
 TAIL_PAD_SEC = 0.35
@@ -197,7 +203,7 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
     
     This is essential for MMS-TTS (Kannada) which silently drops ASCII digits (0-9) and math symbols.
     """
-    out = text
+    out = expand_stem_acronyms(text, lang)
 
     # Expand decimals e.g. 0.35, 9.8
     def _replace_decimal(match: re.Match) -> str:
@@ -367,6 +373,58 @@ def _has_espeakng_loader() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Studio-Grade Soft Envelope (Anti-Pop / Anti-Click Filtering)
+# ---------------------------------------------------------------------------
+def apply_soft_envelope(
+    wav: Any,
+    sr: int = TARGET_SR,
+    attack_ms: float = 5.0,
+    release_ms: float = 10.0,
+) -> Any:
+    """Apply raised-cosine (Hann) fade-in and fade-out to eliminate audio boundary clicks.
+    
+    Provides studio-grade smoothness at scene transitions and cuts.
+    Works seamlessly with NumPy ndarray and Python float lists.
+    """
+    try:
+        n_total = len(wav)
+        if n_total == 0:
+            return wav
+
+        attack_samples = int(round(attack_ms * sr / 1000.0))
+        release_samples = int(round(release_ms * sr / 1000.0))
+
+        attack_samples = max(1, min(attack_samples, n_total // 2))
+        release_samples = max(1, min(release_samples, n_total // 2))
+
+        # Check for real NumPy ndarray
+        if HAS_NUMPY and type(wav).__name__ == "ndarray" and hasattr(wav, "dtype") and hasattr(wav, "copy") and hasattr(np, "cos"):
+            out = wav.copy()
+            if attack_samples > 0:
+                in_ramp = 0.5 * (1.0 - np.cos(np.pi * np.arange(attack_samples) / attack_samples))
+                out[:attack_samples] *= in_ramp.astype(out.dtype)
+            if release_samples > 0:
+                out_ramp = 0.5 * (1.0 + np.cos(np.pi * (np.arange(release_samples) + 1) / release_samples))
+                out[-release_samples:] *= out_ramp.astype(out.dtype)
+            return out
+        elif isinstance(wav, list):
+            out = list(wav)
+            if attack_samples > 0:
+                for i in range(attack_samples):
+                    ramp = 0.5 * (1.0 - math.cos(math.pi * i / attack_samples))
+                    out[i] *= ramp
+            if release_samples > 0:
+                for j in range(release_samples):
+                    idx = n_total - release_samples + j
+                    ramp = 0.5 * (1.0 + math.cos(math.pi * (j + 1) / release_samples))
+                    out[idx] *= ramp
+            return type(wav)(out)
+        return wav
+    except Exception:
+        return wav
+
+
+# ---------------------------------------------------------------------------
 # Audio Time Scaling (Expansion & Compression)
 # ---------------------------------------------------------------------------
 def time_scale_audio(
@@ -406,6 +464,7 @@ def time_scale_audio(
         # High performance NumPy linear interpolation resampling
         old_indices = np.linspace(0, speech_len - 1, target_speech_samples)
         scaled_speech = np.interp(old_indices, np.arange(speech_len), speech).astype(np.float32)
+        scaled_speech = apply_soft_envelope(scaled_speech, sr=sr)
         pad = np.zeros(tail_pad_samples, dtype=np.float32)
         return np.concatenate([scaled_speech, pad])
     else:
@@ -419,6 +478,7 @@ def time_scale_audio(
             s0 = speech[idx]
             s1 = speech[idx + 1] if idx + 1 < speech_len else s0
             scaled_speech.append(s0 * (1.0 - frac) + s1 * frac)
+        scaled_speech = apply_soft_envelope(scaled_speech, sr=sr)
         return scaled_speech + [0.0] * tail_pad_samples
 
 
@@ -429,8 +489,20 @@ class OfflineTTSEngine:
     Standardizes all output to 24 kHz mono with 0.35s tail padding per scene.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        voice_en: str = "af_heart",
+        speed_en: float = 0.98,
+        voice_hi: str = "hf_alpha",
+        speed_hi: float = 0.98,
+        mms_speaking_rate: float = 0.95,
+    ):
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
+        self.voice_en = voice_en
+        self.speed_en = speed_en
+        self.voice_hi = voice_hi
+        self.speed_hi = speed_hi
+        self.mms_speaking_rate = mms_speaking_rate
         self.kokoro_en = None
         self.kokoro_hi = None
         self.mms_models: dict[str, Any] = {}
@@ -465,11 +537,14 @@ class OfflineTTSEngine:
                     self.mms_tokenizers[code] = AutoTokenizer.from_pretrained(
                         repo, local_files_only=True
                     )
-                    self.mms_models[code] = (
+                    model = (
                         VitsModel.from_pretrained(repo, local_files_only=True)
                         .to(self.device)
                         .eval()
                     )
+                    if hasattr(model, "config") and hasattr(model.config, "speaking_rate"):
+                        model.config.speaking_rate = self.mms_speaking_rate
+                    self.mms_models[code] = model
                 except Exception:
                     pass
 
@@ -526,11 +601,12 @@ class OfflineTTSEngine:
             try:
                 chunks = [
                     audio
-                    for _, _, audio in self.kokoro_en(clean_text, voice="af_heart", speed=1.0)
+                    for _, _, audio in self.kokoro_en(clean_text, voice=self.voice_en, speed=self.speed_en)
                     if audio is not None
                 ]
                 if chunks:
                     speech_wav = np.concatenate(chunks).astype(np.float32)
+                    speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
                     pad = np.zeros(pad_samples, dtype=np.float32)
                     full_wav = np.concatenate([speech_wav, pad])
                     if target_dur is not None and target_dur > 0:
@@ -545,11 +621,12 @@ class OfflineTTSEngine:
             try:
                 chunks = [
                     audio
-                    for _, _, audio in self.kokoro_hi(clean_text, voice="hf_alpha", speed=1.0)
+                    for _, _, audio in self.kokoro_hi(clean_text, voice=self.voice_hi, speed=self.speed_hi)
                     if audio is not None
                 ]
                 if chunks:
                     speech_wav = np.concatenate(chunks).astype(np.float32)
+                    speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
                     pad = np.zeros(pad_samples, dtype=np.float32)
                     full_wav = np.concatenate([speech_wav, pad])
                     if target_dur is not None and target_dur > 0:
@@ -586,6 +663,7 @@ class OfflineTTSEngine:
                         np.linspace(0, old_len, new_len), np.arange(old_len), out
                     ).astype(np.float32)
 
+                speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
                 pad = np.zeros(pad_samples, dtype=np.float32)
                 full_wav = np.concatenate([speech_wav, pad])
                 if target_dur is not None and target_dur > 0:

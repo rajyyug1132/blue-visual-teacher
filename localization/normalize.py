@@ -410,20 +410,95 @@ def fix_residual_digits(text: str, lang: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# STEM Acronyms & Natural Prosody (Micro-Pauses)
+# ---------------------------------------------------------------------------
+STEM_ACRONYMS: dict[str, dict[str, str]] = {
+    "LED": {"en": "L E D", "hi": "एलईडी", "kn": "ಎಲ್ಇಡಿ", "ta": "எல்இடி", "bn": "এলইডি"},
+    "AC": {"en": "A C", "hi": "एसी", "kn": "ಎಸಿ", "ta": "ஏசி", "bn": "এসি"},
+    "DC": {"en": "D C", "hi": "डीसी", "kn": "ಡಿಸಿ", "ta": "டிசி", "bn": "ডিসি"},
+    "DNA": {"en": "D N A", "hi": "डीएनए", "kn": "ಡಿಎನ್‌ಎ", "ta": "டிஎன்ஏ", "bn": "ডিএনএ"},
+    "RNA": {"en": "R N A", "hi": "आरएनए", "kn": "ಆರ್‌ಎನ್‌ಎ", "ta": "ஆர்என்ஏ", "bn": "আরএনএ"},
+    "CPU": {"en": "C P U", "hi": "सीपीयू", "kn": "ಸಿಪಿಯು", "ta": "சிபியு", "bn": "সিপিইউ"},
+    "RAM": {"en": "RAM", "hi": "रैम", "kn": "ರ್ಯಾಮ್", "ta": "ரேம்", "bn": "র‌্যাম"},
+    "IIT": {"en": "I I T", "hi": "आईआईटी", "kn": "ಐಐಟಿ", "ta": "ஐಐடி", "bn": "আইআইটি"},
+    "CBSE": {"en": "C B S E", "hi": "सीबीएसई", "kn": "ಸಿಬಿಎಸ್‌ಇ", "ta": "சிபிஎஸ்இ", "bn": "সিবিএসই"},
+    "NCERT": {"en": "N C E R T", "hi": "एनसीईआरटी", "kn": "ಎನ್‌ಸಿಇಆರ್‌ಟಿ", "ta": "என்சிஇஆர்டி", "bn": "এনসিইআরটি"},
+    "ISRO": {"en": "ISRO", "hi": "इसरो", "kn": "ಇಸ್ರೋ", "ta": "இஸ்ரோ", "bn": "ইসরো"},
+    "AI": {"en": "A I", "hi": "एआई", "kn": "ಎಐ", "ta": "ஏஐ", "bn": "এআই"},
+}
+
+
+def expand_stem_acronyms(text: str, lang: str) -> str:
+    """Expand STEM abbreviations (LED, DNA, AC, DC, CPU, etc.) to native phonetic words."""
+    lang_key = lang.split("_")[0]
+    out = text
+    for acronym, mapping in STEM_ACRONYMS.items():
+        if lang_key in mapping:
+            pat = r"\b" + re.escape(acronym) + r"\b"
+            out = re.sub(pat, mapping[lang_key], out)
+    return out
+
+
+DISCOURSE_MARKERS: dict[str, list[str]] = {
+    "hi": [
+        "लेकिन", "किन्तु", "परन्तु", "क्योंकि", "इसलिए", "अतः", "अर्थात",
+        "ध्यान दें कि", "ध्यान दें", "उदाहरण के लिए", "इसके अलावा", "वास्तव में", "याद रखें"
+    ],
+    "kn": [
+        "ಆದರೆ", "ಏಕೆಂದರೆ", "ಆದ್ದರಿಂದ", "ಅಂದರೆ", "ಗಮನಿಸಿ",
+        "ಉದಾಹರಣೆಗೆ", "ಹಾಗೆಯೇ", "ಮತ್ತೊಂದೆಡೆ", "ನೆನಪಿಡಿ"
+    ],
+    "ta": [
+        "ஆனால்", "ஏனெனில்", "எனவே", "அதாவது", "கவனியுங்கள்",
+        "உதாரணமாக", "மேலும்", "மட்டுமல்லாமல்", "நினைவில் கொள்க"
+    ],
+    "bn": [
+        "কিন্তু", "কারণ", "সুতরাং", "অর্থাৎ", "লক্ষ্য করুন",
+        "উদাহরণস্বরূপ", "তাছাড়া", "মনে রাখবেন", "বস্তুত"
+    ],
+}
+
+
+def insert_breath_pauses(text: str, lang: str) -> str:
+    """Insert natural breath pause commas after clause conjunctions and discourse markers.
+    
+    In TTS models (Kokoro, Meta MMS-TTS/VITS), clause-boundary commas create realistic
+    micro-pauses (~100ms) and natural pitch drops, giving synthetic speech a human touch.
+    """
+    lang_key = lang.split("_")[0]
+    markers = DISCOURSE_MARKERS.get(lang_key, [])
+    if not markers:
+        return text
+
+    out = text
+    for marker in sorted(markers, key=len, reverse=True):
+        pat = re.escape(marker) + r"(?!\s*[,.!?;:|\u0964\u0965])"
+        out = re.sub(pat, marker + ",", out)
+    out = re.sub(r",\s*,+", ",", out)
+    out = re.sub(r"\s*,", ", ", out)
+    out = re.sub(r",\s*", ", ", out)
+    return re.sub(r"\s+", " ", out).strip()
+
+
+# ---------------------------------------------------------------------------
 # 3. clean_for_mms(text, lang) — Pre-TTS MMS sanitation
 # ---------------------------------------------------------------------------
 def clean_for_mms(text: str, lang: str = "kn") -> str:
     """Clean and sanitize text before passing to Meta's MMS-TTS model.
     
     Guarantees:
-      1. Zero ASCII digits (0-9) remain in the string.
-      2. No raw math operators (=, +, -, *, /, Ω, %) that MMS drops.
-      3. Expands standalone units (V, A, W, Ω, %, °C) to native words.
-      4. Punctuation is normalized to natural pause markers (commas, periods).
-      5. Strips unsupported symbols and brackets ([] {} () <> _ ^ ` ~).
+      1. Expands STEM acronyms (LED -> ಎಲ್ಇಡಿ / এলইডি) for native phonetics.
+      2. Zero ASCII digits (0-9) remain in the string.
+      3. No raw math operators (=, +, -, *, /, Ω, %) that MMS drops.
+      4. Expands standalone units (V, A, W, Ω, %, °C) to native words.
+      5. Punctuation is normalized to natural pause markers (commas, periods).
+      6. Injects clause-boundary micro-pauses for human-like breath rhythm.
+      7. Strips unsupported symbols and brackets ([] {} () <> _ ^ ` ~).
     """
+    # 0. Expand STEM acronyms first so characters don't get garbled or dropped
+    out = expand_stem_acronyms(text, lang)
+
     # 1. Expand units and symbols to native script words first
-    out = text
     if lang in ("kn", "kan_Knda"):
         out = re.sub(r"°\s*C", " ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್ ", out)
         out = re.sub(r"°\s*F", " ಡಿಗ್ರಿ ಫ್ಯಾರನ್‌ಹೀಟ್ ", out)
@@ -515,12 +590,15 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         else:
             out = re.sub(r"\b\d+\b", lambda m: english_number_to_words(int(m.group(0))), out)
 
-    # 4. Normalize punctuation to pauses
+    # 4. Ingest breath pause micro-commas for natural speech cadence
+    out = insert_breath_pauses(out, lang)
+
+    # 5. Normalize punctuation to pauses
     out = re.sub(r"[\:;\|\/]+", ", ", out)
     out = re.sub(r"[\(\)\[\]\{\}\<\>\"\'`~_]+", " ", out)
     out = re.sub(r"\s*-\s*", " ", out)
 
-    # 5. Collapse spaces & trim
+    # 6. Collapse spaces & trim
     out = re.sub(r"\s+", " ", out).strip()
     out = re.sub(r",\s*,+", ",", out)
     return out.strip(" ,-")
@@ -538,7 +616,7 @@ def has_ascii_digits(text: str) -> bool:
 
 def expand_numbers_and_symbols(text: str, lang: str) -> str:
     """Expand numbers, scientific units, and mathematical symbols into spoken words."""
-    out = text
+    out = expand_stem_acronyms(text, lang)
     if lang in ("kn", "kan_Knda"):
         # Math operators
         out = re.sub(r"\s*=\s*", " ಸಮಾನ ", out)
@@ -572,6 +650,36 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
         out = re.sub(r"°\s*F", "डिग्री फ़ारेनहाइट", out)
         out = re.sub(r"%", "प्रतिशत", out)
         out = fix_residual_digits(out, "hi")
+    elif lang in ("ta", "tam_Taml"):
+        out = re.sub(r"\s*=\s*", " சமம் ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " பெருக்கல் ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " வகுத்தல் ", out)
+        out = re.sub(r"\s*\+\s*", " கூட்டல் ", out)
+        out = re.sub(r"\s*-\s*", " கழித்தல் ", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:V|Volts?)\b", r"\1 வோல்ட்", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Ω|Ohms?)\b", r"\1 ஓம்", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:A|Amperes?|Amps?)\b", r"\1 ஆம்பியர்", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:W|Watts?)\b", r"\1 வாட்", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Hz|Hertz)\b", r"\1 ஹெர்ட்ஸ்", out)
+        out = re.sub(r"°\s*C", "டிகிரி செல்சியஸ்", out)
+        out = re.sub(r"°\s*F", "டிகிரி பாரன்ஹீட்", out)
+        out = re.sub(r"%", "சதவீதம்", out)
+        out = fix_residual_digits(out, "ta")
+    elif lang in ("bn", "ben_Beng"):
+        out = re.sub(r"\s*=\s*", " সমান ", out)
+        out = re.sub(r"\s*(?:×|\*)\s*", " গুণ ", out)
+        out = re.sub(r"\s*(?:÷|\/)\s*", " ভাগ ", out)
+        out = re.sub(r"\s*\+\s*", " প্লাস ", out)
+        out = re.sub(r"\s*-\s*", " মাইনাস ", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:V|Volts?)\b", r"\1 ভোল্ট", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Ω|Ohms?)\b", r"\1 ওহম", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:A|Amperes?|Amps?)\b", r"\1 অ্যাম্পিয়ার", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:W|Watts?)\b", r"\1 ওয়াট", out)
+        out = re.sub(r"\b(\d+(?:\.\d+)?)\s*(?:Hz|Hertz)\b", r"\1 হার্টজ", out)
+        out = re.sub(r"°\s*C", "ডিগ্রি সেলসিয়াস", out)
+        out = re.sub(r"°\s*F", "ডিগ্রি ফারেনহাইট", out)
+        out = re.sub(r"%", "শতাংশ", out)
+        out = fix_residual_digits(out, "bn")
     else:
         out = speak_en(text)
         out = fix_residual_digits(out, "en")

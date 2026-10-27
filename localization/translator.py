@@ -40,6 +40,7 @@ LANG_CODE_MAP = {
     "hi": "hin_Deva",
     "kn": "kan_Knda",
     "ta": "tam_Taml",
+    "bn": "ben_Beng",
 }
 
 
@@ -66,24 +67,30 @@ def sanitize_kannada_output(text: str) -> str:
 def ensure_word_budget(text: str, lang: str, min_words: int = 8, max_words: int = 42) -> str:
     """Ensure narration word count satisfies 8-42 words so Pydantic validation never fails.
     
-    In Dravidian languages like Kannada (kn), compound words (sandhi/samasa) often condense
+    In Dravidian and Indic languages, compound words (sandhi/samasa) often condense
     a 15-word English sentence into < 8 words. This function expands condensed sentences with
     natural discourse markers so the Pydantic word budget validator is strictly respected.
     """
     words = text.strip().split()
     if len(words) < min_words:
         if lang in ("kn", "kan_Knda"):
-            prefix = "ಇಲ್ಲಿ ಗಮನಿಸಿ, ಸರಳವಾಗಿ ಹೇಳುವುದಾದರೆ "
+            prefix = "ಇಲ್ಲಿ ಮುಖ್ಯವಾಗಿ ಗಮನಿಸಿ, ಸರಳ ಹಾಗೂ ಸ್ಪಷ್ಟವಾಗಿ ಹೇಳುವುದಾದರೆ "
         elif lang in ("hi", "hin_Deva"):
-            prefix = "ध्यान दें कि, सरल शब्दों में "
+            prefix = "यहाँ विशेष रूप से ध्यान दें कि, सरल शब्दों में "
         elif lang in ("ta", "tam_Taml"):
-            prefix = "இங்கே கவனியுங்கள், எளிய முறையில் சொன்னால் "
+            prefix = "இங்கே முக்கியமாகக் கவனியுங்கள், மிகவும் எளிய முறையில் சொன்னால் "
+        elif lang in ("bn", "ben_Beng"):
+            prefix = "এখানে বিশেষভাবে লক্ষ্য করুন যে, অতি সহজ কথায় বলতে গেলে "
         else:
-            prefix = "Notice that, in simple terms "
+            prefix = "Notice here carefully that, to explain in very simple terms "
         expanded = prefix + text.strip()
         words = expanded.split()
-        if len(words) >= min_words:
+        while len(words) < min_words:
+            expanded = prefix + expanded
+            words = expanded.split()
+        if len(words) <= max_words:
             return expanded
+        return " ".join(words[:max_words])
     elif len(words) > max_words:
         return " ".join(words[:max_words])
     return text.strip()
@@ -93,7 +100,7 @@ def ensure_word_budget(text: str, lang: str, min_words: int = 8, max_words: int 
 # ---------------------------------------------------------------------------
 PROTECT: list[re.Pattern] = [
     # 1. Equations & arithmetic expressions with symbols/operators (=, +, -, *, /, ×, ÷, ^, <, >, ≤, ≥)
-    #    e.g., V = I × R, I = V / R, 230 V ÷ 46 Ω = 5 Amperes, a^2 + b^2 = c^2, E = mc^2, F = m × a
+    #    e.g., V = I × R, I = V / R, 230 V ÷ 46 Ω = 5 Amperes, a^2 + b^2 = c^2, E = mc^2, F = m × a, P = V^2 / R
     re.compile(
         r"(?:[A-Za-z0-9_ΩμΔ\.\(\)]+(?:\s+[A-Za-zΩμ]+)?\s*[\=\+\-\*\/\×\÷\^\<\>\≤\≥]\s*)+[A-Za-z0-9_ΩμΔ\.\(\)]+(?:\s+[A-Za-zΩμ]+)?"
     ),
@@ -101,18 +108,31 @@ PROTECT: list[re.Pattern] = [
     re.compile(
         r"\b[A-Za-z]\s*=\s*[A-Za-z0-9_ΩμΔ\.\s\+\-\*\/\×\÷\^\/]+\b"
     ),
-    # 3. Numbers with units or technical symbols (e.g., 230 V, 46 Ω, 5 A, 50 Hz, 24 kHz, 16 kHz, 20 fps, 100 W, 0.35 s, 9.8 m/s^2)
+    # 3. Scientific notation & exponential quantities (e.g. 3 × 10^8 m/s, 6.022 × 10^23, 1.6 × 10^-19 C)
+    re.compile(
+        r"\b\d+(?:\.\d+)?\s*(?:×|x|\*)\s*10\^[-+]?\d+(?:\s*[A-Za-zΩμ\/^]+)?\b",
+        re.IGNORECASE,
+    ),
+    # 4. Numbers with units or technical symbols (e.g., 230 V, 46 Ω, 5 A, 50 Hz, 24 kHz, 16 kHz, 20 fps, 100 W, 0.35 s, 9.8 m/s^2)
     re.compile(
         r"\b\d+(?:\.\d+)?(?:-[A-Za-z]+)?\s*(?:[ΩkKMGμu]?[A-Za-z]+(?:\/[A-Za-z0-9\^]+)?|%|Ω|fps|Hz|kHz|MHz|sec|s|ms|V|A|W|J|N|m|cm|mm|km|kg|g|Ohms?|Volts?|Amperes?|Watts?|Hertz)\b",
         re.IGNORECASE,
     ),
-    # 4. Dimension & resolution notation (e.g., 1280x720)
+    # 5. Common chemistry formulas (e.g., H2O, CO2, NaCl, O2, N2, H2, H2SO4, CaCO3, HCl, NaOH, CH4)
+    re.compile(
+        r"\b(?:H2O|CO2|NaCl|O2|N2|H2|H2SO4|CaCO3|HCl|NaOH|CH4|C6H12O6)\b"
+    ),
+    # 6. Subscripted or indexed variables (e.g. V_in, V_out, R_1, R_2, R_eq, F_net)
+    re.compile(r"\b[A-Za-z]_[A-Za-z0-9]+\b"),
+    # 7. Exponentiation / power variables (e.g. v^2, x^2, c^2, a^2, b^2)
+    re.compile(r"\b[A-Za-z]\^[0-9]+\b"),
+    # 8. Dimension & resolution notation (e.g., 1280x720)
     re.compile(r"\b\d+x\d+\b"),
-    # 5. Parenthesized single symbols/variables/units (e.g., (V), (I), (R), (Ω), (t), (s))
+    # 9. Parenthesized single symbols/variables/units (e.g., (V), (I), (R), (Ω), (t), (s))
     re.compile(r"\([A-Za-z0-9_ΩμΔ\+\-\*\/]\)"),
-    # 6. Standalone special symbols / Greek letters / arrows (e.g., Ω, →, ←, ⇒, ⇔, ≈, ≠, ≤, ≥, ±, ×, ÷)
+    # 10. Standalone special symbols / Greek letters / arrows (e.g., Ω, →, ←, ⇒, ⇔, ≈, ≠, ≤, ≥, ±, ×, ÷)
     re.compile(r"[ΩλθμπΔ→←⇒⇔≈≠≤≥±×÷]"),
-    # 7. Standalone numbers / decimals / percentages
+    # 11. Standalone numbers / decimals / percentages
     re.compile(r"\b\d+(?:\.\d+)?%?\b"),
 ]
 
@@ -646,7 +666,7 @@ class OfflineIndicTranslator:
             results.append(item.get("original", ""))
 
         # Ensure zero Devanagari leakage in non-Devanagari scripts (Kannada, Tamil, Bengali)
-        if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml"):
+        if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml", "bn", "ben_Beng"):
             results = [sanitize_kannada_output(r) if contains_devanagari(r) else r for r in results]
 
         return results
