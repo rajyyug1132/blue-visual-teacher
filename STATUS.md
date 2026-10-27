@@ -73,6 +73,7 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 - YYUG -> TARUN · localization/tts_engine.py · default English narration to an Indian-accented voice: `voice_en` is currently `"enm"` -> `am_michael` (American). The statement asks for Indian-accented English explicitly; use `hf_alpha` or `hm_omega` on English text · your `VOICE_ALIASES` work in bd1058e already makes this close to a one-line default change, but it needs a listen-test before the freeze: Kokoro's `h*` voices on English text are the intended trick, not a bug · also note `cache/artifacts/ohm-s-law_hi` predates your `normalize.py:610` current -> vidyut dhaara fix, so the running demo still shows the wrong word until it is regenerated · blocking? y before 06:00
 - YYUG -> TARUN · localization/tts_engine.py:540, localization/translator.py:355 · both hardcode `self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"`, ignoring `orchestrator.device.get_device()` and the `DEVICE` env var · this is the ENFORCE rule at AGENTS.md:50 ("never hardcode cuda") and re-states a handoff from earlier today that was not picked up · NOT currently breaking anything here: the installed torch is `2.14.1+cpu`, so `cuda.is_available()` is False and both land on cpu anyway -- which is also why requirement 5's CPU path holds for translate/TTS/render today · it matters on any machine with a CUDA torch build, where localization would seize the 6 GB card that AGENTS.md reserves for the planner (qwen2.5:7b alone is 5.2 GB) and `DEVICE=cpu` would not stop it; `translator.py:376` also picks fp16 on cuda where the rule says fp32 · blocking? n before the freeze on this laptop, y if the demo ever runs on a CUDA torch build
 - YYUG -> AYUSH · components/app/app-shell.tsx:58, components/app/dashboard-view.tsx:48 · delete both fallback banners and wire the real endpoints: the dashboard currently tells the user "Authentication is not connected yet" and "The lesson server doesn't expose a history endpoint", and BOTH are false on v1 · verified against the running backend at 00:00 on 2026-10-28: `POST /api/auth/signup` returns a real user and token, `GET /api/auth/me` with the session cookie returns 200, and `GET /api/lessons/history` returns 200 with `[]` (401 only when unauthenticated, which is correct) · `exporter/app.py:181-233` implements signup/login/logout/me/history and `lib/api.ts:185-239` already calls every one of them, so the copy is the only thing missing -- the UI undersells working features to a judge reading the screen · blocking? y before 06:00
+- YYUG -> ALL · DECISION 2026-10-28 00:30 · the Next.js UI (`app/`, `components/`, `lib/`, `hooks/`, owner AYUSH) is the product UI; build around it · supersedes the earlier YYUG -> AYUSH handoff naming the FastAPI-served `web/` on :8000 as the product · `exporter/app.py` stays the backend, and `web/` + `server.js` stay as the offline mock harness pinned by `tests/test_server_behavior.js` and `tests/test_mock_api.js` · the condition that made `web/` the safer pick still has to be met: the two `app/layout.tsx` offline violations (`@vercel/analytics`, `next/font/google`) must be gone before the 06:00 Wi-Fi-off rehearsal; the AYUSH prompt sent at 00:25 lists them as STEP 2 · blocking? y for the rehearsal
 
 ## CONTRACT CHANGE proposals
 
@@ -124,8 +125,11 @@ current 8-type schema cannot render their own example at all.
 `SCENE_TYPES` gains a ninth entry. `visual.params` for it carries:
 
 - `code: list[str]` -- 1 to 12 source lines, <= 80 chars each, rendered verbatim as text.
-- `steps: list[CodeStep]` -- 1 to 6 ordered steps; each `{line: int (1-based index into code), vars: dict[str, str]}`.
-  `line` drives the moving highlight; `vars` is the variable-state table at that step (e.g. `{"i": "0"}` -> `{"i": "1"}`).
+- `trace: list[CodeStep]` -- 1 to 6 ordered steps; each `{line: int (1-based index into code), vars: list[{name, value}]}`
+  with at most 4 pairs, each string <= 24 chars. (As built in `cc3597b`: a list of pairs, not a dict, because `planner.py:302`
+  feeds the schema to Ollama as a constrained grammar and free-form object keys are unreliable on a 3B model.)
+  `line` drives the moving highlight; `vars` is the variable-state table at that step
+  (e.g. `[{"name": "i", "value": "0"}]` -> `[{"name": "i", "value": "1"}]`).
 
 **The code is data and is never executed.** Nothing in `code` or `vars` is passed to `eval`, `exec`, `compile`, a subprocess
 or a template engine; the renderer draws strings. This is the same stance as `mathcheck.py`, which evaluates `check.expr`
@@ -150,7 +154,7 @@ constant: budget = `target_sec * 2.3` words +/- 15%, with the 30-90 s outer boun
 
 **Asks**
 
-- FARHAN: the `code_walkthrough` template and the next/replay controls (see Handoffs). Confirm the `code`/`steps` shape works
+- FARHAN: the `code_walkthrough` template and the next/replay controls (see Handoffs). Confirm the `code`/`trace` shape works
   for a moving highlight, and say if you would rather have the highlight as a per-step line range than a single index.
 - TARUN: confirm narration for a code scene needs no new spoken-form rules (variable names such as `i` read aloud as letters).
 - AYUSH: `level` and `target_sec` on `POST /api/generate` and the input page.
