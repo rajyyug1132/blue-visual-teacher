@@ -772,8 +772,10 @@ def insert_breath_pauses(text: str, lang: str) -> str:
 
     out = text
     for marker in sorted(markers, key=len, reverse=True):
-        pat = re.escape(marker) + r"(?!\s*[,.!?;:|\u0964\u0965])"
-        out = re.sub(pat, marker + ",", out)
+        pat = rf"(^|\s){re.escape(marker)}(?=\s|[,.!?;:|\u0964\u0965]|$)"
+        out = re.sub(pat, r"\g<1>" + marker + ",", out)
+
+
     out = re.sub(r",\s*,+", ",", out)
     out = re.sub(r"\s*,", ", ", out)
     out = re.sub(r",\s*", ", ", out)
@@ -826,19 +828,36 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
     # 0. Expand STEM acronyms first so characters don't get garbled or dropped
     out = expand_stem_acronyms(text, lang)
 
+    # Normalize hyphenated compound words (e.g. fast-charging -> fast charging, forty-six -> forty six)
+    out = re.sub(r"(?<=[^\s\d\(\)\[\]\{\}\<\>])-(?=[^\s\d\(\)\[\]\{\}\<\>])", " ", out)
+
     # 1. Expand units and symbols to native script words first
     if lang in ("kn", "kan_Knda"):
         out = re.sub(r"°\s*C", " ಡಿಗ್ರಿ ಸೆಲ್ಸಿಯಸ್ ", out)
         out = re.sub(r"°\s*F", " ಡಿಗ್ರಿ ಫ್ಯಾರನ್‌ಹೀಟ್ ", out)
         out = re.sub(r"Ω", " ಓಮ್ ", out)
         out = re.sub(r"\bOhm'?s?\b", "ಓಮ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVolts?\b", "ವೋಲ್ಟ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bAmperes?\b|\bAmps?\b", "ಆಂಪಿಯರ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bWatts?\b", "ವ್ಯಾಟ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bHertz\b", "ಹರ್ಟ್ಜ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bkHz\b|\bkilohertz\b", "ಕಿಲೋಹರ್ಟ್ಜ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bfps\b", "ಫ್ರೇಮ್ ಪ್ರತಿ ಸೆಕೆಂಡ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bseconds?\b|\bsecs?\b", "ಸೆಕೆಂಡ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bmeters?\b", "ಮೀಟರ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bJoules?\b", "ಜೂಲ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bNewtons?\b", "ನ್ಯೂಟನ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCurrent\b", "ಕರೆಂಟ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVoltage\b", "ವೋಲ್ಟೇಜ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistance\b", "ಪ್ರತಿರೋಧ", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistors?\b", "ಪ್ರತಿರೋಧಕ", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCircuits?\b", "ಸರ್ಕ್ಯೂಟ್", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bBatter(?:y|ies)\b", "ಬ್ಯಾಟರಿ", out, flags=re.IGNORECASE)
         out = re.sub(r"%", " ಪ್ರತಿಶತ ", out)
         out = re.sub(r"\bV\b", "ವೋಲ್ಟ್", out)
         out = re.sub(r"\bA\b", "ಆಂಪಿಯರ್", out)
         out = re.sub(r"\bW\b", "ವ್ಯಾಟ್", out)
         out = re.sub(r"\bHz\b", "ಹರ್ಟ್ಜ್", out)
-        out = re.sub(r"\bkHz\b", "ಕಿಲೋಹರ್ಟ್ಜ್", out)
-        out = re.sub(r"\bfps\b", "ಫ್ರೇಮ್ ಪ್ರತಿ ಸೆಕೆಂಡ್", out)
         out = re.sub(r"\s*=\s*", " ಸಮಾನ ", out)
         out = re.sub(r"\s*(?:×|\*)\s*", " ಗುಣಿಸು ", out)
         out = re.sub(r"\s*(?:÷|\/)\s*", " ಭಾಗಿಸು ", out)
@@ -849,13 +868,27 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"°\s*F", " डिग्री फ़ारेनहाइट ", out)
         out = re.sub(r"Ω", " ओम ", out)
         out = re.sub(r"\bOhm'?s?\b", "ओम", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVolts?\b", "वोल्ट", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bAmperes?\b|\bAmps?\b", "एम्पीयर", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bWatts?\b", "वाट", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bHertz\b", "हर्ट्ज़", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bkHz\b|\bkilohertz\b", "किलोहर्ट्ज़", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bfps\b", "फ्रेम प्रति सेकंड", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bseconds?\b|\bsecs?\b", "सेकंड", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bmeters?\b", "मीटर", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bJoules?\b", "जूल", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bNewtons?\b", "न्यूटन", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCurrent\b", "करंट", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVoltage\b", "वोल्टेज", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistance\b", "प्रतिरोध", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistors?\b", "प्रतिरोधक", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCircuits?\b", "सर्किट", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bBatter(?:y|ies)\b", "बैटरी", out, flags=re.IGNORECASE)
         out = re.sub(r"%", " प्रतिशत ", out)
         out = re.sub(r"\bV\b", "वोल्ट", out)
         out = re.sub(r"\bA\b", "एम्पीयर", out)
         out = re.sub(r"\bW\b", "वाट", out)
         out = re.sub(r"\bHz\b", "हर्ट्ज़", out)
-        out = re.sub(r"\bkHz\b", "किलोहर्ट्ज़", out)
-        out = re.sub(r"\bfps\b", "फ्रेम प्रति सेकंड", out)
         out = re.sub(r"\s*=\s*", " बराबर ", out)
         out = re.sub(r"\s*(?:×|\*)\s*", " गुणा ", out)
         out = re.sub(r"\s*(?:÷|\/)\s*", " भागाकार ", out)
@@ -866,6 +899,22 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"°\s*F", " டிகிரி பாரன்ஹீட் ", out)
         out = re.sub(r"Ω", " ஓம் ", out)
         out = re.sub(r"\bOhm'?s?\b", "ஓம்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVolts?\b", "வோல்ட்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bAmperes?\b|\bAmps?\b", "ஆம்பியர்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bWatts?\b", "வாட்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bHertz\b", "ஹெர்ட்ஸ்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bkHz\b|\bkilohertz\b", "கிலோஹெர்ட்ஸ்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bfps\b", "பிரேம் பர் விநாடி", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bseconds?\b|\bsecs?\b", "வினாடிகள்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bmeters?\b", "மீட்டர்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bJoules?\b", "ஜூல்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bNewtons?\b", "நியூட்டன்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCurrent\b", "மின்னோட்டம்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVoltage\b", "மின்னழுத்தம்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistance\b", "மின்தடை", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistors?\b", "மின்தடையம்", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCircuits?\b", "மின்சுற்று", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bBatter(?:y|ies)\b", "பேட்டரி", out, flags=re.IGNORECASE)
         out = re.sub(r"%", " சதவீதம் ", out)
         out = re.sub(r"\bV\b", "வோல்ட்", out)
         out = re.sub(r"\bA\b", "ஆம்பியர்", out)
@@ -881,6 +930,22 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"°\s*F", " ডিগ্রি ফারেনহাইট ", out)
         out = re.sub(r"Ω", " ওহম ", out)
         out = re.sub(r"\bOhm'?s?\b", "ওহম", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVolts?\b", "ভোল্ট", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bAmperes?\b|\bAmps?\b", "অ্যাম্পিয়ার", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bWatts?\b", "ওয়াট", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bHertz\b", "হার্টজ", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bkHz\b|\bkilohertz\b", "কিলোহাটর্জ", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bfps\b", "ফ্রেম প্রতি সেকেন্ড", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bseconds?\b|\bsecs?\b", "সেকেন্ড", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bmeters?\b", "মিটার", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bJoules?\b", "জুল", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bNewtons?\b", "নিউটন", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCurrent\b", "কারেন্ট", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bVoltage\b", "ভোল্টেজ", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistance\b", "প্রতিরোধ", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bResistors?\b", "প্রতিরোধক", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bCircuits?\b", "সার্কিট", out, flags=re.IGNORECASE)
+        out = re.sub(r"\bBatter(?:y|ies)\b", "ব্যাটারি", out, flags=re.IGNORECASE)
         out = re.sub(r"%", " শতাংশ ", out)
         out = re.sub(r"\bV\b", "ভোল্ট", out)
         out = re.sub(r"\bA\b", "অ্যাম্পিয়ার", out)
@@ -905,6 +970,16 @@ def clean_for_mms(text: str, lang: str = "kn") -> str:
         out = re.sub(r"\s*(?:÷|\/)\s*", " divided by ", out)
         out = re.sub(r"\s*\+\s*", " plus ", out)
         out = re.sub(r"\s*-\s*", " minus ", out)
+
+    # 1B. Expand any remaining single Latin letters to native script phonetics
+    lang_key = lang.split("_")[0]
+    if lang_key in SINGLE_LETTER_MAP:
+        letter_dict = SINGLE_LETTER_MAP[lang_key]
+        out = re.sub(
+            r"\b([a-zA-Z])\b",
+            lambda m: letter_dict.get(m.group(1).lower(), m.group(1)),
+            out,
+        )
 
     # 2. Expand any residual digits
     out = fix_residual_digits(out, lang)

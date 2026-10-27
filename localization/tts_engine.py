@@ -432,6 +432,43 @@ def apply_soft_envelope(
 
 
 # ---------------------------------------------------------------------------
+# Neural Speech Boundary Trimming (Zero-Latency / Anti-Stutter)
+# ---------------------------------------------------------------------------
+def trim_speech_boundaries(
+    wav: Any,
+    sr: int = TARGET_SR,
+    lead_ms: float = 25.0,
+    trail_ms: float = 35.0,
+    thresh_ratio: float = 0.005,
+) -> Any:
+    """Trim excessive neural silence at onset/offset, keeping natural human breath bounds.
+    
+    Eliminates player latency and inter-sentence pauses while preventing clicks via Hann ramps.
+    """
+    if not (HAS_NUMPY and isinstance(wav, np.ndarray) and len(wav) > 0):
+        return wav
+    max_amp = float(np.max(np.abs(wav)))
+    if max_amp < 1e-5:
+        return wav
+    thresh = max(thresh_ratio * max_amp, 1e-4)
+    above = np.where(np.abs(wav) > thresh)[0]
+    if len(above) == 0:
+        return wav
+    start_idx = max(0, above[0] - int(lead_ms * sr / 1000.0))
+    end_idx = min(len(wav), above[-1] + int(trail_ms * sr / 1000.0))
+    trimmed = wav[start_idx:end_idx].copy()
+
+    att_samples = max(1, int(4.0 * sr / 1000.0))
+    rel_samples = max(1, int(8.0 * sr / 1000.0))
+    if len(trimmed) > att_samples * 2:
+        in_ramp = 0.5 * (1.0 - np.cos(np.pi * np.arange(att_samples) / att_samples))
+        trimmed[:att_samples] *= in_ramp.astype(trimmed.dtype)
+        out_ramp = 0.5 * (1.0 + np.cos(np.pi * (np.arange(rel_samples) + 1) / rel_samples))
+        trimmed[-rel_samples:] *= out_ramp.astype(trimmed.dtype)
+    return trimmed
+
+
+# ---------------------------------------------------------------------------
 # Audio Time Scaling (Expansion & Compression)
 # ---------------------------------------------------------------------------
 def apply_vocal_presence_filter(
@@ -801,14 +838,15 @@ class OfflineTTSEngine:
                         old_len = len(out)
                         new_len = int(old_len * 1.5)
                         c_wav = np.interp(np.linspace(0, old_len, new_len), np.arange(old_len), out).astype(np.float32)
+                    c_wav = trim_speech_boundaries(c_wav, TARGET_SR, lead_ms=25.0, trail_ms=35.0)
                     c_wav = apply_vocal_presence_filter(c_wav, TARGET_SR)
                     c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=4.0, release_ms=4.0)
                     raw_segments.append(c_wav)
 
                     if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
-                        pause_durs.append(0.20)  # Sentence-end teacher pause
+                        pause_durs.append(0.14)  # Natural sentence-end teacher breath pause
                     elif any(p in delim for p in [",", ";", ":"]):
-                        pause_durs.append(0.08)  # Breath/clause pause
+                        pause_durs.append(0.06)  # Breath/clause pause
                     else:
                         pause_durs.append(0.04)
 
@@ -817,7 +855,9 @@ class OfflineTTSEngine:
 
                 # Proportional Segment Scaling (matches English reference rhythm ratios)
                 n_seg = len(raw_segments)
-                fixed_pauses_sec = sum(pause_durs) + TAIL_PAD_SEC
+                # Inter-segment pauses exist strictly between segments (count = n_seg - 1)
+                inter_pauses = pause_durs[:n_seg - 1] if n_seg > 1 else []
+                fixed_pauses_sec = sum(inter_pauses) + TAIL_PAD_SEC
 
                 if ref_ratios is not None and len(ref_ratios) > 0:
                     if len(ref_ratios) == n_seg:
@@ -837,17 +877,19 @@ class OfflineTTSEngine:
                 final_chunks = []
                 if target_dur is not None and target_dur > 0:
                     speech_budget_sec = max(0.5, target_dur - fixed_pauses_sec)
-                    for c_wav, r, p_dur in zip(raw_segments, ratios, pause_durs):
+                    for i, (c_wav, r) in enumerate(zip(raw_segments, ratios)):
                         seg_target_samples = int(round(r * speech_budget_sec * TARGET_SR))
                         scaled_c = time_scale_audio(c_wav, seg_target_samples, sr=TARGET_SR, tail_pad_samples=0)
                         final_chunks.append(scaled_c)
-                        final_chunks.append(np.zeros(int(p_dur * TARGET_SR), dtype=np.float32))
+                        if i < len(inter_pauses):
+                            final_chunks.append(np.zeros(int(inter_pauses[i] * TARGET_SR), dtype=np.float32))
                 else:
-                    for c_wav, p_dur in zip(raw_segments, pause_durs):
+                    for i, c_wav in enumerate(raw_segments):
                         final_chunks.append(c_wav)
-                        final_chunks.append(np.zeros(int(p_dur * TARGET_SR), dtype=np.float32))
+                        if i < len(inter_pauses):
+                            final_chunks.append(np.zeros(int(inter_pauses[i] * TARGET_SR), dtype=np.float32))
 
-                # Add tail padding
+                # Add tail padding (scene duration = speech + 0.35s tail)
                 pad = np.zeros(pad_samples, dtype=np.float32)
                 final_chunks.append(pad)
                 full_wav = np.concatenate(final_chunks)
