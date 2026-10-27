@@ -315,3 +315,20 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
   - Default branch decision (`main` vs `v1`)
   - Approval for leftover folder `C:\Users\karti\blue-visual-teacher` cleanup
   - Signoff on Ayush files (`README.md`, `run_demo.ps1`, `run_demo.sh`)
+
+
+### Pass 7 (YYUG keeper session) · 2026-10-28 02:58
+
+- **Features & Fixes Landed on v1:**
+  - Indian-accented English: verified Kokoro cached voices `hf_alpha.pt` and `hm_omega.pt`. Defaulted English offline TTS in `orchestrator/pipeline.py` warmup to `os.environ.get("VOICE_EN", "hf_alpha")`. Verified on real pipeline backend on port 8001: generated 55.33s audio, voiced 69.7%, peak 0.900, 212 transitions (3.83/sec) -> `SPEECH` verdict.
+  - Tone & silence audio guard: Added `check_audio_is_speech` in `orchestrator/pipeline.py` (50ms RMS window, threshold 0.02, peak > 0.1, voiced < 90%, transitions/sec > 1.5). Job fails immediately with error and deletes invalid file if TTS outputs synthetic tone or silence. Unit test `test_generate_lesson_fails_on_tone_audio` added to `tests/test_orchestrator.py` (108/108 tests passing).
+  - Handoff to TARUN added in `STATUS.md`: `localization/tts_engine.py` synthetic tone fallback must raise or log loudly rather than masking missing voice packs with bell tones.
+  - Merged `origin/tarun/localization` (`--no-ff` commit `a5349c2`): zero-latency onset, boundary silence trimming, STEM unit expansions, 1.15x educational pacing and vocal presence filter for Kannada/Tamil/Bengali.
+  - Honest fresh-clone test in `C:\Users\karti\bvt-fresh2`: tested Python setup commands on PowerShell 5.1 (`python -m venv .venv`, verified `pip --version`), real `npm ci` without junctions (277 packages, 0 vulnerabilities in 45s), Turbopack `npm run dev -- -p 3005` (ready in 438ms), verified `http://localhost:3005/create` returns HTTP 200 with full UI content. Cleaned up temporary test directory.
+  - `components/app/run-locally.tsx` & `README.md`: dropped `--branch v1` since `v1` is default branch.
+- **Fast Gate:**
+  - `tsc --noEmit`: exit 0
+  - `npm run build`: compiled in 724ms, TypeScript in 1514ms, static generation (7/7) in 682ms
+  - `pytest tests/test_ui.py tests/test_e2e_offline.py -q`: 11 passed, 3 skipped (1m08s)
+  - `npm test`: 34/34 renderer tests passed
+  - `npm run test:units`: 12 + 5 passed
