@@ -303,3 +303,55 @@ def test_translation_unavailable_raised_when_model_none():
 
     with pytest.raises(TranslationUnavailable):
         translator.translate_texts(["Hello world"], "hi")
+
+
+def test_kokoro_hindi_with_espeakng_loader():
+    """Verify Kokoro Hindi works with espeakng_loader even when espeak-ng is not on PATH."""
+    import sys
+    from unittest.mock import MagicMock, patch
+    import localization.tts_engine as tts_module
+
+    fake_loader = MagicMock()
+    fake_loader.get_library_path.return_value = "C:/fake/libespeak-ng.dll"
+    
+    mock_kpipeline = MagicMock()
+    mock_kp_hi = MagicMock()
+    mock_kpipeline.side_effect = lambda lang_code: mock_kp_hi if lang_code == "h" else MagicMock()
+    
+    class FakeArray(list):
+        def astype(self, t):
+            return self
+
+    dummy_audio = FakeArray([0.05] * 24000)
+    mock_kp_hi.return_value = [("tokens", "phonemes", dummy_audio)]
+
+    mock_np = MagicMock()
+    mock_np.ndarray = FakeArray
+    mock_np.zeros.return_value = FakeArray([0.0] * 8400)
+    mock_np.concatenate.side_effect = lambda chunks: FakeArray(sum(chunks, []))
+    mock_np.float32 = float
+
+    tts_module.np = mock_np
+    tts_module.KPipeline = mock_kpipeline
+    try:
+        with patch.dict(sys.modules, {"espeakng_loader": fake_loader}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("shutil.which", return_value=None), \
+             patch.object(tts_module, "HAS_KOKORO", True), \
+             patch.object(tts_module, "HAS_NUMPY", True):
+            
+            engine = tts_module.OfflineTTSEngine()
+            assert engine.has_espeak is True, "has_espeak should be True via espeakng_loader"
+            assert engine.kokoro_hi is not None, "kokoro_hi should be initialized"
+
+            wav, dur = engine.synthesize_scene("नमस्ते दुनिया", "hi")
+            assert mock_kp_hi.called, "kokoro_hi should have been invoked for speech synthesis"
+            assert dur > 0, "synthesized duration should be positive"
+            assert len(wav) > 0, "synthesized audio waveform should not be empty"
+            assert wav != "synthetic_sine", "must synthesize real speech from kokoro_hi, not synthetic fallback"
+    finally:
+        if hasattr(tts_module, "KPipeline"):
+            delattr(tts_module, "KPipeline")
+        if not getattr(tts_module, "HAS_NUMPY", False) and hasattr(tts_module, "np"):
+            delattr(tts_module, "np")
+

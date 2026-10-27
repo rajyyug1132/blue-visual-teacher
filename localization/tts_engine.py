@@ -300,6 +300,14 @@ def expand_numbers_and_symbols(text: str, lang: str) -> str:
 # ---------------------------------------------------------------------------
 # Offline TTS Engine
 # ---------------------------------------------------------------------------
+def _has_espeakng_loader() -> bool:
+    try:
+        import espeakng_loader
+        return Path(espeakng_loader.get_library_path()).exists()
+    except Exception:
+        return False
+
+
 class OfflineTTSEngine:
     """Dual-engine TTS generating synchronized scene audio and timing manifests.
     
@@ -313,7 +321,7 @@ class OfflineTTSEngine:
         self.kokoro_hi = None
         self.mms_models: dict[str, Any] = {}
         self.mms_tokenizers: dict[str, Any] = {}
-        self.has_espeak = bool(shutil.which("espeak-ng") or shutil.which("espeak"))
+        self.has_espeak = bool(shutil.which("espeak-ng") or shutil.which("espeak") or _has_espeakng_loader())
 
         # Preload Kokoro pipelines if available
         if HAS_KOKORO:
