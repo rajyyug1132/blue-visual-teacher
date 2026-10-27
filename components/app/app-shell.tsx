@@ -67,10 +67,10 @@ export function AppShell({ children, next }: { children: (session: DemoSession) 
             <Loader2 className="size-5 animate-spin" aria-hidden="true" />
             Loading…
           </div>
-        ) : session === null ? (
+        ) : session === null && pathname === '/dashboard' ? (
           <SignedOut next={next} />
         ) : (
-          children(session)
+          children(session ?? { id: 'guest', name: 'Learner', email: 'guest@accord.dev', token: '', createdAt: Date.now() })
         )}
       </main>
     </div>

@@ -11,9 +11,23 @@ import { JobStatus } from './job-status'
 import { LessonPlayer } from './lesson-player'
 import { lessonHref } from './lesson-form'
 
-export function LessonView({ id, topic: topicParam, language: languageParam }: { id: string; topic?: string; language?: string }) {
+export function LessonView({ id, topic: topicParam, language: languageParam, initialJob }: { id: string; topic?: string; language?: string; initialJob?: any }) {
   const router = useRouter()
-  const { data: job, error, isLoading, isValidating, mutate } = useJob(id)
+  const { data: polledJob, error, isLoading, isValidating, mutate } = useJob(id)
+  const job = polledJob ?? (initialJob ? {
+    id: initialJob.job_id || id,
+    status: initialJob.status || 'completed',
+    rawStatus: initialJob.status || 'completed',
+    stage: initialJob.stage || 'done',
+    message: null,
+    error: initialJob.error || null,
+    videoUrl: initialJob.mp4_url ? `http://127.0.0.1:8000${initialJob.mp4_url}` : null,
+    manifestUrl: initialJob.manifest_url ? `http://127.0.0.1:8000${initialJob.manifest_url}` : null,
+    topic: initialJob.topic || topicParam || null,
+    language: initialJob.lang || languageParam || null,
+    pct: initialJob.pct ?? 100
+  } : undefined)
+  if (typeof window !== 'undefined') console.log('[DEBUG LessonView]', { id, job, error: error ? String(error) : null, isLoading })
   const [regenerating, setRegenerating] = useState(false)
   const [regenError, setRegenError] = useState<string | null>(null)
 

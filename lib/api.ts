@@ -1,7 +1,9 @@
 import { DEFAULT_LANGUAGES, type Language } from './languages'
 import { getAuthToken } from './demo-session'
 
-export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000').replace(/\/+$/, '')
+export const API_BASE_URL = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/+$/, '')
+  : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, '')
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'unknown'
 

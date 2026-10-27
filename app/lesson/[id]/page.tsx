@@ -23,5 +23,11 @@ export default async function LessonPage({
   if (language) qs.set('language', language)
   const next = `/lesson/${encodeURIComponent(id)}${qs.size ? `?${qs}` : ''}`
 
-  return <AppShellClient view="lesson" next={next} id={id} topic={topic} language={language} />
+  let initialJob = null
+  try {
+    const res = await fetch(`http://127.0.0.1:8000/api/status/${encodeURIComponent(id)}`, { cache: 'no-store' })
+    if (res.ok) initialJob = await res.json()
+  } catch {}
+
+  return <AppShellClient view="lesson" next={next} id={id} topic={topic} language={language} initialJob={initialJob} />
 }

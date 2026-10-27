@@ -1,6 +1,6 @@
 'use client'
 
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 
 export type UserSession = {
   id: string
@@ -60,8 +60,15 @@ export function getAuthToken(): string | null {
 }
 
 /** Returns `undefined` during SSR/hydration, then the authenticated user session or null. */
-export function useUserSession(): UserSession | null | undefined {
-  return useSyncExternalStore(subscribe, read, () => undefined)
+export function useUserSession(): UserSession | null {
+  const [session, setSession] = useState<UserSession | null>(null)
+  useEffect(() => {
+    setSession(read())
+    return subscribe(() => {
+      setSession(read())
+    })
+  }, [])
+  return session
 }
 
 // Backwards-compatible aliases for existing components
