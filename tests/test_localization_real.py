@@ -1,8 +1,8 @@
 """D4 + D5 with the real models (IndicTrans2-200M, Kokoro-82M, MMS-TTS-kan). Skips with a reason when absent.
 
 D4: one batched IndicTrans2 call per lesson, KN narration in the Kannada block with zero Devanagari, formulas untouched.
-D5: 24 kHz mono WAV, 0.35 s silent tail per scene, same input -> same duration twice (Kokoro EN, MMS KN seed 42),
-    Kokoro HI when espeak-ng is installed.
+D5: 24 kHz mono WAV, 0.35 s silent tail per scene, same input -> same duration twice (Kokoro EN, MMS KN/TA/BN seed 42),
+    Kokoro HI when espeak-ng is installed. TA and BN skip until facebook/mms-tts-tam and mms-tts-ben are cached.
 """
 import os
 import sys
@@ -93,19 +93,39 @@ def _engine_ready(tts, lang):
         pytest.skip("Kokoro Hindi needs espeak-ng installed (human step)")
     if lang == "kn" and "kn" not in tts.mms_models:
         pytest.skip("facebook/mms-tts-kan not loaded")
+    if lang == "ta" and "ta" not in tts.mms_models:
+        pytest.skip("facebook/mms-tts-tam not loaded")
+    if lang == "bn" and "bn" not in tts.mms_models:
+        pytest.skip("facebook/mms-tts-ben not loaded")
 
 
-def _kn_scenes(translator_or_none):
+_MMS_LINES = {
+    "kn": (
+        "ನಿಮ್ಮ ಫೋನ್ ಚಾರ್ಜರ್ ವೇಗವಾಗಿ ಚಾರ್ಜ್ ಮಾಡುವಾಗ ಏಕೆ ಬಿಸಿಯಾಗುತ್ತದೆ ಎಂದು ಯೋಚಿಸಿದ್ದೀರಾ?",
+        "ಮನೆಯ ಮಾಳಿಗೆಯ ಮೇಲಿನ ನೀರಿನ ಟ್ಯಾಂಕ್ ಬಗ್ಗೆ ಯೋಚಿಸಿ. ನೀರಿನ ಎತ್ತರ ವೋಲ್ಟೇಜ್ ಆಗಿದೆ.",
+    ),
+    "ta": (
+        "ஓம் விதியின்படி ஒரு கடத்தியின் வழியே பாயும் மின்னோட்டம் மின்னழுத்த வேறுபாட்டிற்கு நேர்விகிதத்தில் இருக்கும்.",
+        "மின்னோட்டம் மின்னழுத்தத்தை மின்தடையால் வகுத்தால் கிடைக்கும்.",
+    ),
+    "bn": (
+        "ওহমের সূত্র অনুসারে একটি পরিবাহীর মধ্য দিয়ে প্রবাহিত বিদ্যুৎ প্রবাহ বিভব পার্থক্যের সমানুপাতিক।",
+        "বিদ্যুৎ প্রবাহ রোধ দিয়ে বিভবকে ভাগ করলে পাওয়া যায়।",
+    ),
+}
+
+
+def _mms_scenes(lang):
     p = plan().model_copy(deep=True)
-    p.scenes[0].narration = "ನಿಮ್ಮ ಫೋನ್ ಚಾರ್ಜರ್ ವೇಗವಾಗಿ ಚಾರ್ಜ್ ಮಾಡುವಾಗ ಏಕೆ ಬಿಸಿಯಾಗುತ್ತದೆ ಎಂದು ಯೋಚಿಸಿದ್ದೀರಾ?"
-    p.scenes[1].narration = "ಮನೆಯ ಮಾಳಿಗೆಯ ಮೇಲಿನ ನೀರಿನ ಟ್ಯಾಂಕ್ ಬಗ್ಗೆ ಯೋಚಿಸಿ. ನೀರಿನ ಎತ್ತರ ವೋಲ್ಟೇಜ್ ಆಗಿದೆ."
+    p.scenes[0].narration = _MMS_LINES[lang][0]
+    p.scenes[1].narration = _MMS_LINES[lang][1]
     return p.scenes[:2]
 
 
-@pytest.mark.parametrize("lang", ["en", "kn", "hi"])
+@pytest.mark.parametrize("lang", ["en", "kn", "hi", "ta", "bn"])
 def test_d5_tts_is_24khz_with_tail_and_deterministic(tts, lang, tmp_path):
     _engine_ready(tts, lang)
-    scenes = SCENES_EN if lang == "en" else _kn_scenes(None) if lang == "kn" else SCENES_EN
+    scenes = SCENES_EN if lang in ("en", "hi") else _mms_scenes(lang)
     first = tts.synthesize_all_scenes(scenes, lang, tmp_path / "a.wav")
     second = tts.synthesize_all_scenes(scenes, lang, tmp_path / "b.wav")
     assert [m["duration_sec"] for m in first] == [m["duration_sec"] for m in second], "same input, different duration"
