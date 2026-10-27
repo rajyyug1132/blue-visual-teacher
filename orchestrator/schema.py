@@ -40,6 +40,12 @@ def sec_band(target_sec: int) -> tuple[float, float]:
     return max(30.0, target_sec * 0.85), min(90.0, target_sec * 1.15)
 
 
+def accept_band(target_sec: int) -> tuple[float, float]:
+    """What the validator accepts. The prompt still asks for sec_band(); a real lesson that comes in short (down to
+    60% of the request, never under 30 s) beats the topic-agnostic safe template it would otherwise turn into."""
+    return max(30.0, target_sec * 0.6), sec_band(target_sec)[1]
+
+
 def word_band(target_sec: int, scenes: int) -> tuple[int, int]:
     """The word counts that put the estimate inside sec_band(), also bounded by the 14-32 words per scene rule."""
     lo_sec, hi_sec = sec_band(target_sec)
@@ -114,7 +120,7 @@ class LessonPlan(BaseModel):
     def check_total(self) -> "LessonPlan":
         words = sum(len(s.narration.split()) for s in self.scenes)
         est = estimated_sec(words, len(self.scenes))
-        lo, hi = sec_band(self.target_sec)
+        lo, hi = accept_band(self.target_sec)
         if not (lo <= est <= hi):
             raise ValueError(
                 f"total {words} words (~{est:.0f}s) does not fill a {self.target_sec}s lesson: "

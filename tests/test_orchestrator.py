@@ -627,10 +627,30 @@ def test_target_sec_sets_the_word_budget(target, lengths):
     plan = LessonPlan.model_validate({"title": "Voltage and current", "target_sec": target,
                                       "scenes": _scenes(lengths)})
     assert plan.target_sec == target and plan.level == "beginner"
-    golden = json.loads(GOLDEN_JSON)  # 123 words, ~55 s: right for 60 s, wrong for anything far from it
-    if target != 60:
+    golden = json.loads(GOLDEN_JSON)  # 123 words, ~55 s
+    if target in (30, 45):  # longer than the request allows: still rejected
         with pytest.raises(ValidationError, match=rf"does not fill a {target}s lesson"):
             LessonPlan.model_validate({**golden, "target_sec": target})
+    else:  # at least 60% of the request: a real short lesson is accepted instead of falling back to the template
+        LessonPlan.model_validate({**golden, "target_sec": target})
+
+
+def test_a_short_real_lesson_is_kept_but_a_far_too_short_one_is_not():
+    # 90 s asked: 6 x 20 words (~54 s) passes the 60% floor; 6 x 14 words (~39 s) does not
+    LessonPlan.model_validate({"title": "Voltage and current", "target_sec": 90, "scenes": _scenes([20] * 6)})
+    with pytest.raises(ValidationError, match=r"does not fill a 90s lesson"):
+        LessonPlan.model_validate({"title": "Voltage and current", "target_sec": 90, "scenes": _scenes([14] * 6)})
+
+
+def test_check_result_written_in_words_is_read_as_a_number():
+    from orchestrator import mathcheck
+
+    right = _with_wrong_ohm_result("5")
+    right["scenes"][3]["check"]["result"] = "five"  # the model spelled the answer out
+    assert mathcheck.verify_plan(right)["status"] == "ok"
+    wrong = _with_wrong_ohm_result("6")
+    wrong["scenes"][3]["check"]["result"] = "six"
+    assert mathcheck.verify_plan(wrong)["status"] == "fixed"
 
 
 def test_level_and_length_are_in_the_plan_cache_key(tmp_path):

@@ -176,6 +176,9 @@ def verify_plan(data: dict) -> dict:
             continue
         computed = safe_eval(str(check.get("expr", "")))
         claimed = _first_number(str(check.get("result", "")))
+        if claimed is None:  # small models often spell the answer out ("eight"); read it as the narration says it
+            spelled = spoken_numbers(str(check.get("result", "")))
+            claimed = (str(check.get("result", "")), spelled[0]) if spelled else None
         if claimed is None:
             raise MathCheckError(f"Scene {scene.get('id')} check.result {check.get('result')!r} has no number")
         params = scene["visual"]["params"]
