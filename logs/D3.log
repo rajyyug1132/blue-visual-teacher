@@ -1,56 +1,6 @@
-D3 plan + artifact cache :: FAIL :: 1 failed, 1 passed, 169 deselected, 3 warnings in 8.81s (10.2s)
+D3 plan + artifact cache :: PASS :: 2 passed, 193 deselected, 3 warnings in 26.63s (28.5s)
 
-F.                                                                       [100%]
-================================== FAILURES ===================================
-_____________________ test_artifact_cache_hit_serves_mp4 ______________________
-
-api = (<starlette.testclient.TestClient object at 0x000001714E49E710>, 'E2E Offline 267432')
-
-    def test_artifact_cache_hit_serves_mp4(api):
-        client, topic = api
-        first = poll(client, client.post("/api/generate", json={"topic": topic, "lang": "en"}).json()["job_id"])
->       assert first["stage"] == "done" and first["cached"] is False
-E       AssertionError: assert ('error' == 'done'
-E         
-E         - done
-E         + error)
-
-tests\test_e2e_offline.py:153: AssertionError
------------------------------- Captured log call ------------------------------
-ERROR    bvt:app.py:73 job 40f904e75299 failed:
-Traceback (most recent call last):
-  File "C:\PROJECT\exporter\app.py", line 65, in _run
-    out = app.state.generate(job["topic"], job["lang"], progress)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\tests\test_e2e_offline.py", line 118, in <lambda>
-    lambda topic, lang, cb: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\orchestrator\pipeline.py", line 121, in generate_lesson
-    export(out, lang, report)
-  File "C:\PROJECT\exporter\export_mp4.py", line 49, in render_and_mux_mp4
-    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 4103, in launch
-    self._sync(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 111, in _sync
-    return task.result()
-           ^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_browser_type.py", line 101, in launch
-    await self._channel.send(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 78, in send
-    return await self._connection.wrap_api_call(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 636, in wrap_api_call
-    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-╔════════════════════════════════════════════════════════════╗
-║ Looks like Playwright was just installed or updated.       ║
-║ Please run the following command to download new browsers: ║
-║                                                            ║
-║     playwright install                                     ║
-║                                                            ║
-║ <3 Playwright Team                                         ║
-╚════════════════════════════════════════════════════════════╝
+..                                                                       [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\torch\jit\_script.py:1491
   C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
@@ -75,7 +25,5 @@ tests/test_e2e_offline.py::test_artifact_cache_hit_serves_mp4
     return self.router.on_event(event_type)  # ty: ignore[deprecated]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ===========================
-FAILED tests/test_e2e_offline.py::test_artifact_cache_hit_serves_mp4 - Assert...
-1 failed, 1 passed, 169 deselected, 3 warnings in 8.81s
+2 passed, 193 deselected, 3 warnings in 26.63s
 

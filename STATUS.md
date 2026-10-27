@@ -10,15 +10,17 @@ Evidence per check in `logs/D#.log`; latest table in `logs/summary.md`.
 | D# | check | state | owner | evidence |
 |---|---|---|---|---|
 | D1 | schema + golden fixture (CC-1 counts [22,27,24,29,21]) | PASS | YYUG | logs/D1.log |
-| D2 | planner ladder, 20 topics >=19 valid, P50 <20 s, math ok | PASS: 19/20 valid, P50 15.6 s, 0 final failures, all answers spoken | YYUG | logs/D2.log |
-| D3 | tier-1 plan hit <5 ms, tier-2 artifact hit serves MP4 | FAIL this run: Playwright Chromium missing (export cannot mux MP4) | YYUG | logs/D3.log |
-| D4 | IndicTrans2 batched + IndicProcessor, KN no Devanagari | BLOCKED: d4_ tests skipped | TARUN | logs/D4.log |
+| D2 | planner ladder, 20 topics >=19 valid, P50 <20 s | PASS: 19/20 valid, P50 15.1 s, 0 final failures, 0 unspoken answers | YYUG | logs/D2.log |
+| D3 | tier-1 plan hit <5 ms, tier-2 artifact hit serves MP4 | PASS | YYUG | logs/D3.log |
+| D4 | IndicTrans2 batched + IndicProcessor, KN no Devanagari | PASS (pure-Python IndicTransToolkit in .venv) | TARUN | logs/D4.log |
 | D5 | Kokoro EN/HI, MMS KN seed 42, 24 kHz, 0.35 s tail, deterministic | PASS | TARUN | logs/D5.log |
-| D6 | renderer: 8 templates, deterministic, Indic fits 1280x720 | PASS | FARHAN | logs/D6.log |
-| D7 | export 20 topics x en/hi/kn, BLUEPRINT 6.2 checks | BLOCKED: d7_ tests skipped/failed (Playwright) | AYUSH | logs/D7.log |
-| D8 | UI: language selector, progress, toasts, MP4 download | FAIL: Playwright Chromium missing | AYUSH | logs/D8.log |
-| D9 | pytest tests/ incl. test_e2e_offline.py, sockets blocked | FAIL: 3 failed, 153 passed, 11 skipped, 4 errors (Playwright) | ALL | logs/D9.log |
-| D10 | README licenses, run_demo.sh, 10 topics pre-cached | PASS | AYUSH | logs/D10.log |
+| D6 | renderer: 8 templates, deterministic, Indic fits 1280x720 | PASS | FARHAN (assist PR #2) | logs/D6.log |
+| D7 | export 20 topics x en/hi/kn, BLUEPRINT 6.2 checks | PASS 60/60 (checked against the tier-2 cached MP4s from 15:04-15:48; not re-rendered after the v1 merge) | AYUSH (assist PR #4) | logs/D7.log |
+| D8 | UI: language selector, progress, toasts, MP4 download | PASS | FARHAN + AYUSH | logs/D8.log |
+| D9 | pytest tests/ incl. test_e2e_offline.py, sockets blocked | PASS: 192 passed, 3 skipped (30.6 min) | ALL | logs/D9.log |
+| D10 | README licenses, run_demo.sh, 10 topics pre-cached | PASS | AYUSH (assist PR #4) | logs/D10.log |
+
+Full rerun on branch v1 (yyug/integration + tarun/localization), 2026-10-27 19:22-20:20: **10/10 PASS** (logs/summary.md).
 
 Runtime for these checks: Python 3.11 venv with requirements.txt (transformers 4.46.3, CPU torch), IndicTransToolkit
 built pure-Python (no MSVC here), HF weights in the standard cache. See LEARNINGS.md.

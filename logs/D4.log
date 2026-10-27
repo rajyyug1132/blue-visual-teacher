@@ -1,11 +1,11 @@
-D4 IndicTrans2 + IndicProcessor :: BLOCKED :: translation tests all skipped: 2 skipped, 169 deselected, 1 warning in 6.28s (7.5s)
+D4 IndicTrans2 + IndicProcessor :: PASS :: 2 passed, 193 deselected, 1 warning in 40.65s (42.6s)
 
-ss                                                                       [100%]
+..                                                                       [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\torch\jit\_script.py:1491
   C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
     warnings.warn(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-2 skipped, 169 deselected, 1 warning in 6.28s
+2 passed, 193 deselected, 1 warning in 40.65s
 

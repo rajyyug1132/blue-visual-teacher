@@ -1,387 +1,11 @@
-D9 pytest incl. offline e2e :: FAIL :: 3 failed, 153 passed, 11 skipped, 12 warnings, 4 errors in 59.92s (61.4s)
+D9 pytest incl. offline e2e :: PASS :: 192 passed, 3 skipped, 48 warnings in 1835.38s (0:30:35) (1838.4s)
 
-.FFF.sssss.............................................................. [ 42%]
-........................................................................ [ 84%]
-..ssssss...............EEEE                                              [100%]
-=================================== ERRORS ====================================
-_________ ERROR at setup of test_d8_language_selector_offers_en_hi_kn _________
-
-server = ('http://127.0.0.1:64520', {'fail': False}, [])
-
-    @pytest.fixture
-    def page(server):
-        sync_api = pytest.importorskip("playwright.sync_api")
-        base, _, _ = server
-        with sync_api.sync_playwright() as p:
->           browser = p.chromium.launch(headless=True)
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-tests\test_ui.py:76: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
-    self._sync(
-.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
-    await self._channel.send(
-.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
-    return await self._connection.wrap_api_call(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <playwright._impl._connection.Connection object at 0x000001CAF3EA83D0>
-cb = <function Channel.send.<locals>.<lambda> at 0x000001CAF31716C0>
-is_internal = False, title = None
-
-    async def wrap_api_call(
-        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
-    ) -> Any:
-        if self._api_zone.get():
-            return await cb()
-        task = asyncio.current_task(self._loop)
-        parsed_st = _attach_api_call_information(
-            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
-            is_internal,
-            title,
-        )
-        self._api_zone.set(parsed_st)
-        try:
-            return await cb()
-        except Exception as error:
->           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-E           ╔════════════════════════════════════════════════════════════╗
-E           ║ Looks like Playwright was just installed or updated.       ║
-E           ║ Please run the following command to download new browsers: ║
-E           ║                                                            ║
-E           ║     playwright install                                     ║
-E           ║                                                            ║
-E           ║ <3 Playwright Team                                         ║
-E           ╚════════════════════════════════════════════════════════════╝
-
-.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
-_ ERROR at setup of test_d8_generate_shows_progress_then_player_and_download __
-
-server = ('http://127.0.0.1:64520', {'fail': False}, [])
-
-    @pytest.fixture
-    def page(server):
-        sync_api = pytest.importorskip("playwright.sync_api")
-        base, _, _ = server
-        with sync_api.sync_playwright() as p:
->           browser = p.chromium.launch(headless=True)
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-tests\test_ui.py:76: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
-    self._sync(
-.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
-    await self._channel.send(
-.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
-    return await self._connection.wrap_api_call(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <playwright._impl._connection.Connection object at 0x000001CAECD60A90>
-cb = <function Channel.send.<locals>.<lambda> at 0x000001CAF3171BC0>
-is_internal = False, title = None
-
-    async def wrap_api_call(
-        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
-    ) -> Any:
-        if self._api_zone.get():
-            return await cb()
-        task = asyncio.current_task(self._loop)
-        parsed_st = _attach_api_call_information(
-            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
-            is_internal,
-            title,
-        )
-        self._api_zone.set(parsed_st)
-        try:
-            return await cb()
-        except Exception as error:
->           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-E           ╔════════════════════════════════════════════════════════════╗
-E           ║ Looks like Playwright was just installed or updated.       ║
-E           ║ Please run the following command to download new browsers: ║
-E           ║                                                            ║
-E           ║     playwright install                                     ║
-E           ║                                                            ║
-E           ║ <3 Playwright Team                                         ║
-E           ╚════════════════════════════════════════════════════════════╝
-
-.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
-______ ERROR at setup of test_d8_errors_show_a_friendly_toast_with_retry ______
-
-server = ('http://127.0.0.1:64520', {'fail': False}, [])
-
-    @pytest.fixture
-    def page(server):
-        sync_api = pytest.importorskip("playwright.sync_api")
-        base, _, _ = server
-        with sync_api.sync_playwright() as p:
->           browser = p.chromium.launch(headless=True)
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-tests\test_ui.py:76: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
-    self._sync(
-.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
-    await self._channel.send(
-.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
-    return await self._connection.wrap_api_call(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <playwright._impl._connection.Connection object at 0x000001CAF1EA2190>
-cb = <function Channel.send.<locals>.<lambda> at 0x000001CAF3172B60>
-is_internal = False, title = None
-
-    async def wrap_api_call(
-        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
-    ) -> Any:
-        if self._api_zone.get():
-            return await cb()
-        task = asyncio.current_task(self._loop)
-        parsed_st = _attach_api_call_information(
-            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
-            is_internal,
-            title,
-        )
-        self._api_zone.set(parsed_st)
-        try:
-            return await cb()
-        except Exception as error:
->           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-E           ╔════════════════════════════════════════════════════════════╗
-E           ║ Looks like Playwright was just installed or updated.       ║
-E           ║ Please run the following command to download new browsers: ║
-E           ║                                                            ║
-E           ║     playwright install                                     ║
-E           ║                                                            ║
-E           ║ <3 Playwright Team                                         ║
-E           ╚════════════════════════════════════════════════════════════╝
-
-.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
-____________ ERROR at setup of test_d8_topic_validation_is_inline _____________
-
-server = ('http://127.0.0.1:64520', {'fail': False}, [])
-
-    @pytest.fixture
-    def page(server):
-        sync_api = pytest.importorskip("playwright.sync_api")
-        base, _, _ = server
-        with sync_api.sync_playwright() as p:
->           browser = p.chromium.launch(headless=True)
-                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-tests\test_ui.py:76: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
-    self._sync(
-.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
-    await self._channel.send(
-.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
-    return await self._connection.wrap_api_call(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <playwright._impl._connection.Connection object at 0x000001CAF314F6D0>
-cb = <function Channel.send.<locals>.<lambda> at 0x000001CAF3172520>
-is_internal = False, title = None
-
-    async def wrap_api_call(
-        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
-    ) -> Any:
-        if self._api_zone.get():
-            return await cb()
-        task = asyncio.current_task(self._loop)
-        parsed_st = _attach_api_call_information(
-            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
-            is_internal,
-            title,
-        )
-        self._api_zone.set(parsed_st)
-        try:
-            return await cb()
-        except Exception as error:
->           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-E           ╔════════════════════════════════════════════════════════════╗
-E           ║ Looks like Playwright was just installed or updated.       ║
-E           ║ Please run the following command to download new browsers: ║
-E           ║                                                            ║
-E           ║     playwright install                                     ║
-E           ║                                                            ║
-E           ║ <3 Playwright Team                                         ║
-E           ╚════════════════════════════════════════════════════════════╝
-
-.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
-================================== FAILURES ===================================
-____________________ test_d7_golden_lesson_exports_offline ____________________
-
-tmp_path = WindowsPath('C:/Users/karti/AppData/Local/Temp/pytest-of-karti/pytest-87/test_d7_golden_lesson_exports_0')
-
-    def test_d7_golden_lesson_exports_offline(tmp_path):
-        require_exporter()
-        from exporter.export_mp4 import render_and_mux_mp4
-        plan, _ = golden_plan()
-        timing = WordRateTTS().synthesize_all_scenes(plan.scenes, "en", tmp_path / "lesson_audio.wav")
-        total = timing[-1]["end_sec"]
-        (tmp_path / "manifest.json").write_text(json.dumps({"title": plan.title, "lang": "en", "total_sec": total,
-                                                            "audio": "lesson_audio.wav", "scenes": timing}), encoding="utf-8")
-        stages = []
-        t0 = time.perf_counter()
->       render_and_mux_mp4(tmp_path, "en", lambda s, p: stages.append(s))
-
-tests\test_e2e_offline.py:102: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-exporter\export_mp4.py:49: in render_and_mux_mp4
-    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
-    self._sync(
-.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
-    await self._channel.send(
-.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
-    return await self._connection.wrap_api_call(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <playwright._impl._connection.Connection object at 0x000001CAEC78B3D0>
-cb = <function Channel.send.<locals>.<lambda> at 0x000001CAEC78ED40>
-is_internal = False, title = None
-
-    async def wrap_api_call(
-        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
-    ) -> Any:
-        if self._api_zone.get():
-            return await cb()
-        task = asyncio.current_task(self._loop)
-        parsed_st = _attach_api_call_information(
-            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
-            is_internal,
-            title,
-        )
-        self._api_zone.set(parsed_st)
-        try:
-            return await cb()
-        except Exception as error:
->           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-E           ╔════════════════════════════════════════════════════════════╗
-E           ║ Looks like Playwright was just installed or updated.       ║
-E           ║ Please run the following command to download new browsers: ║
-E           ║                                                            ║
-E           ║     playwright install                                     ║
-E           ║                                                            ║
-E           ║ <3 Playwright Team                                         ║
-E           ╚════════════════════════════════════════════════════════════╝
-
-.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
-_____________________ test_d7_api_generate_poll_download ______________________
-
-api = (<starlette.testclient.TestClient object at 0x000001CAE8DE0450>, 'E2E Offline c3026d')
-
-    def test_d7_api_generate_poll_download(api):
-        client, topic = api
-        assert client.get("/api/languages").json() == ["en"]
-        health = client.get("/api/health").json()
-        assert health["ffmpeg"] is True and health["offline_flags"] is True
-        st = poll(client, client.post("/api/generate", json={"topic": topic, "lang": "en"}).json()["job_id"])
->       assert st["stage"] == "done" and st["error"] is None, st
-E       AssertionError: {'job_id': '7ae3bd182f19', 'topic': 'E2E Offline c3026d', 'lang': 'en', 'stage': 'error', ...}
-E       assert ('error' == 'done'
-E         
-E         - done
-E         + error)
-
-tests\test_e2e_offline.py:142: AssertionError
------------------------------- Captured log call ------------------------------
-ERROR    bvt:app.py:73 job 7ae3bd182f19 failed:
-Traceback (most recent call last):
-  File "C:\PROJECT\exporter\app.py", line 65, in _run
-    out = app.state.generate(job["topic"], job["lang"], progress)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\tests\test_e2e_offline.py", line 118, in <lambda>
-    lambda topic, lang, cb: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\orchestrator\pipeline.py", line 121, in generate_lesson
-    export(out, lang, report)
-  File "C:\PROJECT\exporter\export_mp4.py", line 49, in render_and_mux_mp4
-    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 4103, in launch
-    self._sync(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 111, in _sync
-    return task.result()
-           ^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_browser_type.py", line 101, in launch
-    await self._channel.send(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 78, in send
-    return await self._connection.wrap_api_call(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 636, in wrap_api_call
-    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-╔════════════════════════════════════════════════════════════╗
-║ Looks like Playwright was just installed or updated.       ║
-║ Please run the following command to download new browsers: ║
-║                                                            ║
-║     playwright install                                     ║
-║                                                            ║
-║ <3 Playwright Team                                         ║
-╚════════════════════════════════════════════════════════════╝
-_____________________ test_artifact_cache_hit_serves_mp4 ______________________
-
-api = (<starlette.testclient.TestClient object at 0x000001CAED158F90>, 'E2E Offline 27812a')
-
-    def test_artifact_cache_hit_serves_mp4(api):
-        client, topic = api
-        first = poll(client, client.post("/api/generate", json={"topic": topic, "lang": "en"}).json()["job_id"])
->       assert first["stage"] == "done" and first["cached"] is False
-E       AssertionError: assert ('error' == 'done'
-E         
-E         - done
-E         + error)
-
-tests\test_e2e_offline.py:153: AssertionError
------------------------------- Captured log call ------------------------------
-ERROR    bvt:app.py:73 job f20473e3fe04 failed:
-Traceback (most recent call last):
-  File "C:\PROJECT\exporter\app.py", line 65, in _run
-    out = app.state.generate(job["topic"], job["lang"], progress)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\tests\test_e2e_offline.py", line 118, in <lambda>
-    lambda topic, lang, cb: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\orchestrator\pipeline.py", line 121, in generate_lesson
-    export(out, lang, report)
-  File "C:\PROJECT\exporter\export_mp4.py", line 49, in render_and_mux_mp4
-    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 4103, in launch
-    self._sync(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 111, in _sync
-    return task.result()
-           ^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_browser_type.py", line 101, in launch
-    await self._channel.send(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 78, in send
-    return await self._connection.wrap_api_call(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 636, in wrap_api_call
-    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-╔════════════════════════════════════════════════════════════╗
-║ Looks like Playwright was just installed or updated.       ║
-║ Please run the following command to download new browsers: ║
-║                                                            ║
-║     playwright install                                     ║
-║                                                            ║
-║ <3 Playwright Team                                         ║
-╚════════════════════════════════════════════════════════════╝
+.....sss................................................................ [ 36%]
+........................................................................ [ 73%]
+...................................................                      [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\torch\jit\_script.py:1491
-tests/test_localization_real.py::test_d5_tts_is_24khz_with_tail_and_deterministic[en]
+tests/test_localization_l1_to_l8.py::test_l1_offline_weight_loading_sockets_blocked
   C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
     warnings.warn(
 
@@ -403,34 +27,34 @@ tests/test_e2e_offline.py::test_d7_api_generate_poll_download
           
     return self.router.on_event(event_type)  # ty: ignore[deprecated]
 
-tests/test_localization_real.py::test_d5_tts_is_24khz_with_tail_and_deterministic[en]
-tests/test_tts_and_localization.py::test_zero_double_padding_and_audio_length_sync
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 4 warnings
+tests/test_tts_and_localization.py: 1 warning
   C:\PROJECT\.venv\Lib\site-packages\torch\nn\modules\rnn.py:1011: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
     super().__init__("LSTM", *args, **kwargs)
 
-tests/test_localization_real.py::test_d5_tts_is_24khz_with_tail_and_deterministic[en]
-tests/test_tts_and_localization.py::test_zero_double_padding_and_audio_length_sync
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 4 warnings
+tests/test_tts_and_localization.py: 1 warning
   C:\PROJECT\.venv\Lib\site-packages\torch\nn\utils\weight_norm.py:145: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
     WeightNorm.apply(module, name, dim)
 
-tests/test_localization_real.py::test_d5_tts_is_24khz_with_tail_and_deterministic[en]
-tests/test_tts_and_localization.py::test_zero_double_padding_and_audio_length_sync
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 6 warnings
+tests/test_tts_and_localization.py: 1 warning
   C:\PROJECT\.venv\Lib\site-packages\misaki\en.py:143: DeprecationWarning: open_text is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
     with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_gold.json") as r:
 
-tests/test_localization_real.py::test_d5_tts_is_24khz_with_tail_and_deterministic[en]
-tests/test_tts_and_localization.py::test_zero_double_padding_and_audio_length_sync
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 6 warnings
+tests/test_tts_and_localization.py: 1 warning
   C:\PROJECT\.venv\Lib\site-packages\misaki\en.py:145: DeprecationWarning: open_text is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
     with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_silver.json") as r:
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ===========================
-FAILED tests/test_e2e_offline.py::test_d7_golden_lesson_exports_offline - pla...
-FAILED tests/test_e2e_offline.py::test_d7_api_generate_poll_download - Assert...
-FAILED tests/test_e2e_offline.py::test_artifact_cache_hit_serves_mp4 - Assert...
-ERROR tests/test_ui.py::test_d8_language_selector_offers_en_hi_kn - playwrigh...
-ERROR tests/test_ui.py::test_d8_generate_shows_progress_then_player_and_download
-ERROR tests/test_ui.py::test_d8_errors_show_a_friendly_toast_with_retry - pla...
-ERROR tests/test_ui.py::test_d8_topic_validation_is_inline - playwright._impl...
-3 failed, 153 passed, 11 skipped, 12 warnings, 4 errors in 59.92s
+192 passed, 3 skipped, 48 warnings in 1835.38s (0:30:35)
 

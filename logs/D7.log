@@ -1,120 +1,6 @@
-D7 export 20 topics x en/hi/kn :: BLOCKED :: export tests all skipped: 2 failed, 3 skipped, 166 deselected, 3 warnings in 8.03s (9.3s)
+D7 export 20 topics x en/hi/kn :: PASS ::   warnings.warn( (79.3s)
 
-FFsss                                                                    [100%]
-================================== FAILURES ===================================
-____________________ test_d7_golden_lesson_exports_offline ____________________
-
-tmp_path = WindowsPath('C:/Users/karti/AppData/Local/Temp/pytest-of-karti/pytest-86/test_d7_golden_lesson_exports_0')
-
-    def test_d7_golden_lesson_exports_offline(tmp_path):
-        require_exporter()
-        from exporter.export_mp4 import render_and_mux_mp4
-        plan, _ = golden_plan()
-        timing = WordRateTTS().synthesize_all_scenes(plan.scenes, "en", tmp_path / "lesson_audio.wav")
-        total = timing[-1]["end_sec"]
-        (tmp_path / "manifest.json").write_text(json.dumps({"title": plan.title, "lang": "en", "total_sec": total,
-                                                            "audio": "lesson_audio.wav", "scenes": timing}), encoding="utf-8")
-        stages = []
-        t0 = time.perf_counter()
->       render_and_mux_mp4(tmp_path, "en", lambda s, p: stages.append(s))
-
-tests\test_e2e_offline.py:102: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-exporter\export_mp4.py:49: in render_and_mux_mp4
-    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.venv\Lib\site-packages\playwright\sync_api\_generated.py:4103: in launch
-    self._sync(
-.venv\Lib\site-packages\playwright\_impl\_browser_type.py:101: in launch
-    await self._channel.send(
-.venv\Lib\site-packages\playwright\_impl\_connection.py:78: in send
-    return await self._connection.wrap_api_call(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-self = <playwright._impl._connection.Connection object at 0x000001DA95D94890>
-cb = <function Channel.send.<locals>.<lambda> at 0x000001DA97A39300>
-is_internal = False, title = None
-
-    async def wrap_api_call(
-        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
-    ) -> Any:
-        if self._api_zone.get():
-            return await cb()
-        task = asyncio.current_task(self._loop)
-        parsed_st = _attach_api_call_information(
-            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
-            is_internal,
-            title,
-        )
-        self._api_zone.set(parsed_st)
-        try:
-            return await cb()
-        except Exception as error:
->           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-E           playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-E           ╔════════════════════════════════════════════════════════════╗
-E           ║ Looks like Playwright was just installed or updated.       ║
-E           ║ Please run the following command to download new browsers: ║
-E           ║                                                            ║
-E           ║     playwright install                                     ║
-E           ║                                                            ║
-E           ║ <3 Playwright Team                                         ║
-E           ╚════════════════════════════════════════════════════════════╝
-
-.venv\Lib\site-packages\playwright\_impl\_connection.py:636: Error
-_____________________ test_d7_api_generate_poll_download ______________________
-
-api = (<starlette.testclient.TestClient object at 0x000001DA98EED190>, 'E2E Offline 9b6b87')
-
-    def test_d7_api_generate_poll_download(api):
-        client, topic = api
-        assert client.get("/api/languages").json() == ["en"]
-        health = client.get("/api/health").json()
-        assert health["ffmpeg"] is True and health["offline_flags"] is True
-        st = poll(client, client.post("/api/generate", json={"topic": topic, "lang": "en"}).json()["job_id"])
->       assert st["stage"] == "done" and st["error"] is None, st
-E       AssertionError: {'job_id': '8a73036eda6e', 'topic': 'E2E Offline 9b6b87', 'lang': 'en', 'stage': 'error', ...}
-E       assert ('error' == 'done'
-E         
-E         - done
-E         + error)
-
-tests\test_e2e_offline.py:142: AssertionError
------------------------------- Captured log call ------------------------------
-ERROR    bvt:app.py:73 job 8a73036eda6e failed:
-Traceback (most recent call last):
-  File "C:\PROJECT\exporter\app.py", line 65, in _run
-    out = app.state.generate(job["topic"], job["lang"], progress)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\tests\test_e2e_offline.py", line 118, in <lambda>
-    lambda topic, lang, cb: pipeline.generate_lesson(topic, lang, cb, tts=WordRateTTS(),
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\orchestrator\pipeline.py", line 121, in generate_lesson
-    export(out, lang, report)
-  File "C:\PROJECT\exporter\export_mp4.py", line 49, in render_and_mux_mp4
-    browser = p.chromium.launch(headless=True, args=CHROMIUM_ARGS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\sync_api\_generated.py", line 4103, in launch
-    self._sync(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_sync_base.py", line 111, in _sync
-    return task.result()
-           ^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_browser_type.py", line 101, in launch
-    await self._channel.send(
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 78, in send
-    return await self._connection.wrap_api_call(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\PROJECT\.venv\Lib\site-packages\playwright\_impl\_connection.py", line 636, in wrap_api_call
-    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
-playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at C:\Users\karti\AppData\Local\Temp\cursor-sandbox-cache\7b50d93495c80edcda9be4555b94df0f\playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
-╔════════════════════════════════════════════════════════════╗
-║ Looks like Playwright was just installed or updated.       ║
-║ Please run the following command to download new browsers: ║
-║                                                            ║
-║     playwright install                                     ║
-║                                                            ║
-║ <3 Playwright Team                                         ║
-╚════════════════════════════════════════════════════════════╝
+..sss                                                                    [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\torch\jit\_script.py:1491
   C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
@@ -139,8 +25,80 @@ tests/test_e2e_offline.py::test_d7_api_generate_poll_download
     return self.router.on_event(event_type)  # ty: ignore[deprecated]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ===========================
-FAILED tests/test_e2e_offline.py::test_d7_golden_lesson_exports_offline - pla...
-FAILED tests/test_e2e_offline.py::test_d7_api_generate_poll_download - Assert...
-2 failed, 3 skipped, 166 deselected, 3 warnings in 8.03s
+2 passed, 3 skipped, 190 deselected, 3 warnings in 42.55s
+
+WARNING: Defaulting repo_id to hexgrad/Kokoro-82M. Pass repo_id='hexgrad/Kokoro-82M' to suppress this warning.
+WARNING: Defaulting repo_id to hexgrad/Kokoro-82M. Pass repo_id='hexgrad/Kokoro-82M' to suppress this warning.
+PASS Photosynthesis               en  52.05s gen 0.0s 
+PASS Photosynthesis               hi  52.05s gen 0.0s 
+PASS Photosynthesis               kn  52.05s gen 0.0s 
+PASS Newton's Third Law           en  39.48s gen 0.0s 
+PASS Newton's Third Law           hi  39.48s gen 0.0s 
+PASS Newton's Third Law           kn  39.48s gen 0.0s 
+PASS Binary Search                en  46.83s gen 0.0s 
+PASS Binary Search                hi  63.17s gen 0.0s 
+PASS Binary Search                kn  83.14s gen 0.0s 
+PASS Supply and Demand            en  43.73s gen 0.0s 
+PASS Supply and Demand            hi  66.78s gen 0.0s 
+PASS Supply and Demand            kn  79.16s gen 0.0s 
+PASS DNA Replication              en  51.17s gen 0.0s 
+PASS DNA Replication              hi   71.0s gen 0.0s 
+PASS DNA Replication              kn  84.23s gen 0.0s 
+PASS Pythagoras Theorem           en  45.08s gen 0.0s 
+PASS Pythagoras Theorem           hi   54.6s gen 0.0s 
+PASS Pythagoras Theorem           kn  75.46s gen 0.0s 
+PASS Water Cycle                  en  55.45s gen 0.0s 
+PASS Water Cycle                  hi  64.75s gen 0.0s 
+PASS Water Cycle                  kn  86.58s gen 0.0s 
+PASS Compound Interest            en  45.35s gen 0.0s 
+PASS Compound Interest            hi  58.02s gen 0.0s 
+PASS Compound Interest            kn  73.49s gen 0.0s 
+PASS Acid-Base Titration          en  41.48s gen 0.0s 
+PASS Acid-Base Titration          hi  58.48s gen 0.0s 
+PASS Acid-Base Titration          kn  68.41s gen 0.0s 
+PASS TCP Three-Way Handshake      en  48.25s gen 0.0s 
+PASS TCP Three-Way Handshake      hi  65.75s gen 0.0s 
+PASS TCP Three-Way Handshake      kn   76.9s gen 0.0s 
+PASS Indian Independence Movement en  46.02s gen 0.0s 
+PASS Indian Independence Movement hi  61.92s gen 0.0s 
+PASS Indian Independence Movement kn  78.81s gen 0.0s 
+PASS Monsoon                      en  40.12s gen 0.0s 
+PASS Monsoon                      hi  54.62s gen 0.0s 
+PASS Monsoon                      kn  64.53s gen 0.0s 
+PASS GST                          en  44.92s gen 0.0s 
+PASS GST                          hi  59.65s gen 0.0s 
+PASS GST                          kn   79.4s gen 0.0s 
+PASS Mughal Empire                en  51.38s gen 0.0s 
+PASS Mughal Empire                hi  67.08s gen 0.0s 
+PASS Mughal Empire                kn  80.55s gen 0.0s 
+PASS Democracy                    en  39.98s gen 0.0s 
+PASS Democracy                    hi  56.35s gen 0.0s 
+PASS Democracy                    kn  77.83s gen 0.0s 
+PASS Green Revolution             en   46.3s gen 0.0s 
+PASS Green Revolution             hi  57.23s gen 0.0s 
+PASS Green Revolution             kn  78.42s gen 0.0s 
+PASS Mauryan Empire               en  51.67s gen 0.0s 
+PASS Mauryan Empire               hi  58.08s gen 0.0s 
+PASS Mauryan Empire               kn  73.78s gen 0.0s 
+PASS Fundamental Rights           en  46.35s gen 0.0s 
+PASS Fundamental Rights           hi   63.0s gen 0.0s 
+PASS Fundamental Rights           kn  75.62s gen 0.0s 
+PASS Climate Change               en   38.6s gen 0.0s 
+PASS Climate Change               hi  58.23s gen 0.0s 
+PASS Climate Change               kn  74.77s gen 0.0s 
+PASS Panchayati Raj               en   47.9s gen 0.0s 
+PASS Panchayati Raj               hi  62.55s gen 0.0s 
+PASS Panchayati Raj               kn  81.56s gen 0.0s 
+en: P50 0.0s P90 0.0s
+hi: P50 0.0s P90 0.0s
+kn: P50 0.0s P90 0.0s
+harness: 60/60 pass · fallback topics 1/20 · report C:\PROJECT\reports\stress_20261027_193550.csv
+C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+C:\PROJECT\.venv\Lib\site-packages\torch\nn\modules\rnn.py:1011: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  super().__init__("LSTM", *args, **kwargs)
+C:\PROJECT\.venv\Lib\site-packages\torch\nn\utils\weight_norm.py:145: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
 

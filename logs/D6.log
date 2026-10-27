@@ -1,12 +1,12 @@
-D6 renderer 8 templates :: PASS :: 1 passed, 6 skipped, 164 deselected, 1 warning in 7.58s (8.9s)
+D6 renderer 8 templates :: PASS :: 7 passed, 188 deselected, 1 warning in 8.33s (9.5s)
 
-ssssss.                                                                  [100%]
+.......                                                                  [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\torch\jit\_script.py:1491
   C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
     warnings.warn(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-1 passed, 6 skipped, 164 deselected, 1 warning in 7.58s
+7 passed, 188 deselected, 1 warning in 8.33s
 
 grep setInterval / Math.random / Date.now: none
