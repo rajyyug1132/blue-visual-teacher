@@ -5,11 +5,14 @@ import {
   AlertTriangle,
   Download,
   ExternalLink,
+  Loader2,
   Play,
   Pause,
   RotateCcw,
   SkipForward,
+  Sparkles,
 } from 'lucide-react'
+import { replanScene } from '@/lib/api'
 
 interface Scene {
   id?: number | string
@@ -17,11 +20,13 @@ interface Scene {
   end_sec?: number
   duration_sec?: number
   narration?: string
+  visual?: any
 }
 
 interface Manifest {
   title?: string
   total_sec?: number
+  lang?: string
   scenes?: Scene[]
 }
 
@@ -29,10 +34,14 @@ export function LessonPlayer({
   src,
   title,
   manifestUrl,
+  topic,
+  lang,
 }: {
   src: string
   title: string
   manifestUrl?: string | null
+  topic?: string | null
+  lang?: string | null
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [failed, setFailed] = useState(false)
@@ -40,6 +49,8 @@ export function LessonPlayer({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [manifest, setManifest] = useState<Manifest | null>(null)
+  const [replanning, setReplanning] = useState(false)
+  const [replanStatus, setReplanStatus] = useState<string | null>(null)
 
   const fileName = `${title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'lesson'}.mp4`
 
@@ -112,6 +123,56 @@ export function LessonPlayer({
     }
   }
 
+  async function handleReplanSimpler() {
+    if (!manifest?.scenes || manifest.scenes.length === 0) return
+    const activeScene = manifest.scenes[activeSceneIdx]
+    const sceneId = typeof activeScene.id === 'number' ? activeScene.id : activeSceneIdx + 1
+    const effTopic = topic || manifest.title || title
+    const effLang = lang || manifest.lang || 'en'
+
+    setReplanning(true)
+    setReplanStatus(null)
+
+    try {
+      const res = await replanScene({
+        topic: effTopic,
+        sceneId,
+        currentScene: activeScene,
+        lang: effLang,
+      })
+
+      if (res.ok) {
+        if (res.manifest) {
+          setManifest(res.manifest)
+        } else if (res.scene) {
+          const updated = [...manifest.scenes]
+          updated[activeSceneIdx] = {
+            ...updated[activeSceneIdx],
+            narration: res.scene.narration,
+            visual: res.scene.visual ?? updated[activeSceneIdx].visual,
+            duration_sec: res.duration_sec ?? updated[activeSceneIdx].duration_sec,
+          }
+          setManifest({ ...manifest, scenes: updated })
+        }
+        setReplanStatus(`Scene ${activeSceneIdx + 1} simplified!`)
+        setTimeout(() => setReplanStatus(null), 3000)
+
+        if (videoRef.current && sceneBoundaries[activeSceneIdx] !== undefined) {
+          videoRef.current.currentTime = sceneBoundaries[activeSceneIdx]
+          videoRef.current.play().catch(() => {})
+        }
+      } else {
+        setReplanStatus('Simplification failed.')
+        setTimeout(() => setReplanStatus(null), 3000)
+      }
+    } catch {
+      setReplanStatus('Could not replan scene.')
+      setTimeout(() => setReplanStatus(null), 3000)
+    } finally {
+      setReplanning(false)
+    }
+  }
+
   function formatTime(sec: number) {
     const s = Math.floor(sec)
     const m = Math.floor(s / 60)
@@ -162,7 +223,7 @@ export function LessonPlayer({
       {/* Primary Video Controls Bar */}
       <div className="border-t-2 border-ink bg-white px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={togglePlay}
@@ -194,9 +255,32 @@ export function LessonPlayer({
             </button>
 
             {manifest?.scenes && manifest.scenes.length > 0 && (
-              <span className="ml-2 rounded-full border border-ink/20 bg-ink/5 px-2.5 py-1 text-xs font-bold text-ink/75">
-                Scene {activeSceneIdx + 1} of {manifest.scenes.length}
-              </span>
+              <div className="ml-1 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-ink/20 bg-ink/5 px-2.5 py-1 text-xs font-bold text-ink/75">
+                  Scene {activeSceneIdx + 1} of {manifest.scenes.length}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleReplanSimpler}
+                  disabled={replanning}
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-brand-orange bg-brand-yellow/30 px-3 py-1 text-xs font-extrabold text-ink shadow-sm transition-transform hover:scale-105 hover:bg-brand-yellow disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Explain again with a simpler 10-year-old everyday Indian analogy"
+                >
+                  {replanning ? (
+                    <Loader2 className="size-3.5 animate-spin text-brand-orange" />
+                  ) : (
+                    <Sparkles className="size-3.5 text-brand-orange" />
+                  )}
+                  <span>{replanning ? 'Simplifying…' : 'Explain Again, Simpler'}</span>
+                </button>
+
+                {replanStatus && (
+                  <span className="rounded-full border border-brand-green/40 bg-brand-green/20 px-2.5 py-0.5 text-[11px] font-bold text-brand-green">
+                    {replanStatus}
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

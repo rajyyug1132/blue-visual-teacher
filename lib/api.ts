@@ -10,11 +10,42 @@ import {
   SHOWCASE_MESSAGE,
 } from './showcase'
 
-export const API_BASE_URL = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/+$/, '')
-  : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, '')
+function stripTrailingSlash(url: string) {
+  return url.replace(/\/+$/, '')
+}
+
+// SSR has no window, so it falls back to 127.0.0.1. The page is often opened as localhost.
+// Those are the same machine but different strings, and React will not hydrate a <video src> that differs.
+function canonicalApiBase(url: string) {
+  const base = stripTrailingSlash(url)
+  try {
+    const parsed = new URL(base)
+    if (parsed.hostname === 'localhost') parsed.hostname = '127.0.0.1'
+    return stripTrailingSlash(parsed.toString())
+  } catch {
+    return base
+  }
+}
+
+export const API_BASE_URL = canonicalApiBase(
+  typeof window !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`)
+    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000')
+)
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'unknown'
+
+export type StageProfilerData = {
+  plan_ms: number
+  translate_ms: number
+  tts_ms: number
+  export_ms: number
+  cache_hit: boolean
+  peak_ram_mb: number
+  eval_count?: number
+  eval_sec?: number
+  tokens_per_sec?: number
+}
 
 export type Job = {
   id: string
@@ -28,6 +59,8 @@ export type Job = {
   topic: string | null
   language: string | null
   pct?: number
+  profiler?: StageProfilerData | null
+  telemetry?: any
 }
 
 export type LessonRecord = {
@@ -160,7 +193,7 @@ export function resolveArtifactUrl(url: string | null): string | null {
   if (!url) return null
   if (url.startsWith('/demo/')) return url // shop-window assets are same-origin, never prefixed with API_BASE_URL
   try {
-    return new URL(url, `${API_BASE_URL}/`).toString()
+    return canonicalApiBase(new URL(url, `${API_BASE_URL}/`).toString())
   } catch {
     return null
   }
@@ -195,6 +228,19 @@ function parseJob(body: unknown, fallbackId?: string): Job {
   const videoUrl = pickString(body, videoKeys) ?? pickString(nested, videoKeys)
   const manifestUrl = pickString(body, manifestKeys) ?? pickString(nested, manifestKeys)
 
+  const profilerRaw = isObject(body.profiler) ? body.profiler : isObject(body.telemetry) && isObject((body.telemetry as any).profiler) ? (body.telemetry as any).profiler : undefined
+  const profiler: StageProfilerData | undefined = profilerRaw ? {
+    plan_ms: typeof profilerRaw.plan_ms === 'number' ? profilerRaw.plan_ms : 0,
+    translate_ms: typeof profilerRaw.translate_ms === 'number' ? profilerRaw.translate_ms : 0,
+    tts_ms: typeof profilerRaw.tts_ms === 'number' ? profilerRaw.tts_ms : 0,
+    export_ms: typeof profilerRaw.export_ms === 'number' ? profilerRaw.export_ms : 0,
+    cache_hit: Boolean(profilerRaw.cache_hit),
+    peak_ram_mb: typeof profilerRaw.peak_ram_mb === 'number' ? profilerRaw.peak_ram_mb : 0,
+    eval_count: typeof profilerRaw.eval_count === 'number' ? profilerRaw.eval_count : undefined,
+    eval_sec: typeof profilerRaw.eval_sec === 'number' ? profilerRaw.eval_sec : undefined,
+    tokens_per_sec: typeof profilerRaw.tokens_per_sec === 'number' ? profilerRaw.tokens_per_sec : undefined,
+  } : undefined
+
   return {
     id,
     rawStatus,
@@ -207,6 +253,8 @@ function parseJob(body: unknown, fallbackId?: string): Job {
     topic: pickString(body, ['topic', 'title', 'prompt']),
     language: pickString(body, ['language', 'lang', 'language_code']),
     pct: typeof body.pct === 'number' ? body.pct : undefined,
+    profiler,
+    telemetry: isObject(body.telemetry) ? body.telemetry : undefined,
   }
 }
 
@@ -352,4 +400,40 @@ export async function getHealth(): Promise<HealthResult> {
   } catch (err) {
     return { ok: false, message: err instanceof ApiError ? err.message : 'Lesson server unavailable.' }
   }
+}
+
+
+export async function replanScene(params: {
+  topic: string
+  sceneId: number
+  currentScene?: any
+  lang?: string
+}): Promise<{ ok: boolean; scene_id: number; scene?: any; manifest?: any; audio_url?: string; duration_sec?: number }> {
+  if (isShowcase()) {
+    return {
+      ok: true,
+      scene_id: params.sceneId,
+      scene: {
+        id: params.sceneId,
+        narration: `Think of ${params.topic} like water flowing from a garden hose. Squeezing the pipe restricts water, just like resistance restricts electrical current.`,
+        visual: {
+          type: 'compare',
+          params: {
+            labels: ['Garden Hose: Water Flow', 'Squeezed Pipe: Resistance', 'Water Flow: Current'],
+            steps: ['Open pipe allows full flow', 'Squeezing pipe restricts output'],
+          },
+        },
+      },
+    }
+  }
+
+  return request('/api/replan_scene', {
+    method: 'POST',
+    body: JSON.stringify({
+      topic: params.topic,
+      scene_id: params.sceneId,
+      current_scene: params.currentScene,
+      lang: params.lang || 'en',
+    }),
+  })
 }

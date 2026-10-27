@@ -5,18 +5,34 @@ from orchestrator.spoken import to_spoken
 MAX_CONCEPT_WORDS = 4
 MAX_CONCEPT_CHARS = 40
 
-# Spoken-only filler used to reach the requested length; each is a complete, topic-neutral sentence. The short
-# ones exist so a scene can be topped up to the per-scene cap without overshooting it.
+# Spoken-only filler used to reach the requested length; each is a complete, topic-neutral sentence.
+# Unique sentences ensure zero repeated lines across scenes.
 PADS = (
     "Keep this picture in mind while you revise.",
     "Notice how each step follows the one before it.",
     "Think of one example you have seen yourself.",
     "This idea matters in everyday life.",
+    "Every part of the system works together smoothly.",
+    "Understanding the foundation makes advanced concepts much easier.",
+    "Take a moment to connect these ideas.",
+    "Consistent practice strengthens your intuition over time.",
+    "Observing real patterns confirms theoretical reasoning.",
+    "Clear reasoning eliminates confusion during complex problem solving.",
+    "Step by step analysis reveals how each component interacts.",
+    "Careful observation helps uncover subtle connections.",
+    "Simple models often explain surprisingly complex phenomena.",
+    "Structured thinking makes challenging problems manageable.",
+    "Reliable systems depend on well understood principles.",
     "Check your work.",
     "Think about it.",
     "Keep it simple.",
     "That is the rule.",
     "Try one example.",
+    "Remember the core rule.",
+    "Focus on the big picture.",
+    "Practice makes it clear.",
+    "Test every assumption.",
+    "Verify each step.",
 )
 
 
@@ -47,29 +63,28 @@ def build_safe_fallback_lesson(concept: str, level: str = "beginner", target_sec
     s = _spoken(c)  # read aloud: narration
     cores = [
         (f"How does {s} actually work in everyday life?",
-         {"type": "title", "params": {"labels": [c, "Core Concept & Intuition", "Step-by-Step Guide"],
-                                      "steps": [f"Mastering {c} in One Minute"]}}),
-        (f"Think of {s} like traffic rules at a busy junction: clear rules turn chaos into predictable flow.",
-         {"type": "compare", "params": {"labels": [f"Without {c}", f"With {c}"],
-                                        "steps": ["Unstructured & slow process", "Systematic & predictable result"]}}),
+         {"type": "title", "params": {"labels": [c, "Core Principles & Overview", "Interactive Study Guide"],
+                                      "steps": [f"Mastering {c} Step by Step"]}}),
+        (f"Comparing key aspects of {s} clarifies how different components behave under standard conditions.",
+         {"type": "table", "params": {"labels": ["Feature", "Input Factor", "Observed Outcome", "Primary Purpose"],
+                                      "steps": ["Primary State: Baseline condition", "Active Process: Dynamic change", "Final State: Balanced system"]}}),
         (f"At its core, {s} takes an input, applies one clear rule, and produces a verified output.",
-         {"type": "flow", "params": {"labels": ["1. Input State", f"2. Apply {c} Rule", "3. Verified Output"],
-                                     "steps": ["Deterministic transformation at each stage"]}}),
-        (f"In practice, we change one input to {s} and watch how the output responds.",
-         {"type": "labeled_diagram", "params": {"labels": [f"{c} System", "Input Parameter", "Control Mechanism",
-                                                           "Measured Output"],
-                                                "steps": ["Step 1: Measure input", "Step 2: Compute response"]}}),
-        ("A common mistake is skipping a check and trusting the first result.",
-         {"type": "compare", "params": {"labels": ["Common Mistake", "Correct Approach"],
-                                        "steps": ["Skip the check", "Verify each input"]}}),
-        (f"To recap {s}: remember the rule, follow the input to output, and verify with an example.",
+         {"type": "flow", "params": {"labels": ["1. Initial Input", f"2. Apply {c} Transformation", "3. Verified Result"],
+                                     "steps": ["Deterministic execution through every stage"]}}),
+        (f"Looking at how {s} divides across components reveals the relative balance within the system.",
+         {"type": "pie", "params": {"labels": ["Primary Share: 50 percent", "Secondary Share: 30 percent", "Remaining Share: 20 percent"],
+                                    "steps": ["Balanced distribution across components"]}}),
+        (f"To recap {s}: remember the core rule, follow the process flow, and verify each stage.",
          {"type": "bullets", "params": {"labels": [f"Key Takeaways: {c}"],
-                                        "steps": ["Understand the intuitive analogy",
-                                                  "Follow the three-step input-to-output flow",
-                                                  "Verify results with a concrete example"]}}),
+                                        "steps": ["Observe foundational principles in action",
+                                                  "Follow the step-by-step transformation flow",
+                                                  "Confirm each result with systematic verification"]}}),
+        ("A common mistake is skipping verification and assuming outcomes without checking.",
+         {"type": "compare", "params": {"labels": ["Common Pitfall", "Recommended Practice"],
+                                        "steps": ["Unchecked assumptions cause failure", "Systematic validation ensures reliability"]}}),
     ]
     count = scenes_for(target_sec)
-    keep = {4: (0, 1, 2, 3), 5: (0, 1, 2, 3, 5), 6: (0, 1, 2, 3, 4, 5)}[count]
+    keep = {4: (0, 1, 2, 4), 5: (0, 1, 2, 3, 4), 6: (0, 1, 2, 3, 5, 4)}[count]
     narrations = [cores[i][0] for i in keep]
     visuals = [cores[i][1] for i in keep]
 
@@ -91,8 +106,9 @@ def build_safe_fallback_lesson(concept: str, level: str = "beginner", target_sec
                 return
             progress = False
             for i in sorted(range(count), key=lambda j: len(text_of(j).split())):
+                used = {p for sp in added for p in sp}
                 for pad in PADS:
-                    if pad not in added[i] and can_add(i, pad):
+                    if pad not in used and can_add(i, pad):
                         added[i].append(pad)
                         progress = True
                         break

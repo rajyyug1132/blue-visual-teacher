@@ -611,13 +611,23 @@ def test_generate_lesson_fits_long_audio_and_leaves_the_cached_plan_alone(tmp_pa
 
 # --- CC-2 part 2: learner level and target length (Stage 1 inputs) -------------------------------------------
 
-def _narration(words_n: int) -> str:
-    return " ".join(["voltage"] * words_n)
+WORDS_BY_SCENE = [
+    ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey", "xray", "yankee", "zulu", "red", "blue", "green", "yellow", "orange", "purple", "black", "white", "gray", "silver"],
+    ["apple", "banana", "cherry", "date", "elderberry", "fig", "grape", "honeydew", "kiwi", "lemon", "mango", "nectarine", "orange", "papaya", "quince", "raspberry", "strawberry", "tangerine", "ugli", "vanilla", "watermelon", "apricot", "blackberry", "blueberry", "cantaloupe", "clementine", "currant", "damson", "guava", "kumquat", "lime", "lychee", "mandarin", "mulberry", "olive"],
+    ["ant", "bear", "cat", "dog", "elephant", "fox", "giraffe", "horse", "iguana", "jaguar", "kangaroo", "lion", "monkey", "newt", "owl", "panda", "quail", "rabbit", "snake", "tiger", "urchin", "viper", "walrus", "xerus", "yak", "zebra", "badger", "camel", "dolphin", "ferret", "gorilla", "hedgehog", "jackal", "koala", "lemur"],
+    ["alder", "birch", "cedar", "dogwood", "elm", "fir", "ginkgo", "hawthorn", "ironwood", "juniper", "katsura", "larch", "maple", "nutmeg", "oak", "pine", "quaking", "redwood", "spruce", "tulip", "umbrella", "viburnum", "willow", "xylosma", "yew", "zelkova", "ash", "beech", "chestnut", "cypress", "hickory", "linden", "magnolia", "poplar", "sycamore"],
+    ["copper", "silver", "gold", "iron", "lead", "tin", "zinc", "nickel", "cobalt", "platinum", "titanium", "chromium", "manganese", "aluminum", "magnesium", "calcium", "sodium", "potassium", "lithium", "barium", "strontium", "radium", "uranium", "thorium", "tungsten", "tantalum", "osmium", "iridium", "rhodium", "palladium", "ruthenium", "rhenium", "vanadium", "niobium", "zirconium"],
+    ["amber", "amethyst", "aquamarine", "beryl", "citrine", "diamond", "emerald", "garnet", "heliodor", "iolite", "jade", "kunzite", "lapis", "malachite", "nephrite", "onyx", "peridot", "quartz", "ruby", "sapphire", "topaz", "turquoise", "uvarovite", "vesuvianite", "wulfenite", "xenotime", "yugawaralite", "zircon", "agate", "carnelian", "chalcedony", "chrysoprase", "jasper", "moonstone", "opal"]
+]
+
+def _narration(words_n: int, idx: int = 0) -> str:
+    vocab = WORDS_BY_SCENE[idx % len(WORDS_BY_SCENE)]
+    return " ".join([vocab[k % len(vocab)] for k in range(words_n)])
 
 
 def _scenes(lengths: list[int]) -> list[dict]:
-    return [{"id": i + 1, "narration": _narration(n),
-             "visual": {"type": "title", "params": {"labels": ["Ohm's Law"], "steps": ["Voltage and current"]}}}
+    return [{"id": i + 1, "narration": _narration(n, i),
+             "visual": {"type": "title", "params": {"labels": [f"Ohm's Law {i+1}"], "steps": [f"Voltage and current {i+1}"]}}}
             for i, n in enumerate(lengths)]
 
 
@@ -730,3 +740,63 @@ def test_generate_lesson_fails_on_tone_audio(tmp_path, monkeypatch):
     # Ensure tone audio was not left behind in artifacts
     assert not (tmp_path / "ohm-s-law_en" / "lesson_audio.wav").exists()
     assert not (tmp_path / "ohm-s-law_en" / "manifest.json").exists()
+
+
+
+# --- Feature Tests: StageProfiler, MCQ Quiz Schema, Single-Scene Re-Planner ------------------
+
+def test_stage_profiler_tracks_latencies_and_ram():
+    from orchestrator.planner import StageProfiler
+    prof = StageProfiler(cache_hit=False)
+    prof.record_stage("plan", 0.35)
+    prof.record_ollama_eval(140, 0.35)
+    prof.record_stage("translate", 0.08)
+    prof.record_stage("tts", 0.42)
+    prof.record_stage("export", 1.25)
+    data = prof.to_dict()
+
+    assert data["plan_ms"] == 350.0
+    assert data["translate_ms"] == 80.0
+    assert data["tts_ms"] == 420.0
+    assert data["export_ms"] == 1250.0
+    assert data["cache_hit"] is False
+    assert data["peak_ram_mb"] > 0
+    assert data["eval_count"] == 140
+    assert data["tokens_per_sec"] == 400.0
+
+
+def test_mcq_quiz_schema_and_append_quiz():
+    from orchestrator.planner import build_quiz_scene, append_quiz_scene
+    from orchestrator.schema import VisualType
+
+    quiz_scene = build_quiz_scene("Ohm's Law", 5)
+    assert quiz_scene.visual.type == "quiz"
+    assert len(quiz_scene.visual.params.labels) == 2
+    assert quiz_scene.visual.params.labels[1] == "1"
+    assert len(quiz_scene.visual.params.steps) == 4
+    assert 18 <= len(quiz_scene.narration.split()) <= 26
+
+    # Test replacing/appending into a LessonPlan
+    golden = json.loads(GOLDEN_JSON)
+    plan = LessonPlan.model_validate(golden)
+    updated = append_quiz_scene(plan, "Ohm's Law")
+    assert updated.scenes[-1].visual.type == "quiz"
+    assert updated.scenes[-1].visual.params.labels[1] == "1"
+
+
+def test_replan_single_scene_rewrites_scene_at_beginner_level():
+    from orchestrator.planner import replan_single_scene
+
+    curr = {
+        "id": 2,
+        "narration": "Think of an overhead water tank on your house roof.",
+        "visual": {"type": "compare", "params": {"labels": ["Tank"], "steps": ["High pressure"]}}
+    }
+    res = replan_single_scene("Ohm's Law", 2, curr, lang="en")
+    assert res["ok"] is True
+    assert res["scene_id"] == 2
+    scene = res["scene"]
+    assert 18 <= len(scene["narration"].split()) <= 26
+    # Narration should not repeat the original sentence
+    assert "Think of an overhead water tank on your house roof." not in scene["narration"]
+    assert scene["visual"]["type"] in ("compare", "flow", "table")

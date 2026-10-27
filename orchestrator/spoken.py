@@ -101,8 +101,8 @@ def shorten_narration(text: str, max_words: int | None = None, min_words: int | 
     """Trim an overlong narration to complete sentences, or to a clause break; None if that is impossible."""
     from orchestrator.schema import WORDS_MAX, WORDS_MIN
 
-    max_words = WORDS_MAX if max_words is None else max_words
-    min_words = WORDS_MIN if min_words is None else min_words
+    max_words = 32 if max_words is None else max_words
+    min_words = 14 if min_words is None else min_words
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     kept = []
     for sentence in sentences:

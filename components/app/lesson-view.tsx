@@ -107,7 +107,7 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
         <div className="grid items-start gap-6 lg:grid-cols-[1.6fr_1fr]">
           <div className="flex flex-col gap-6">
             {job.status === 'completed' && job.videoUrl ? (
-              <LessonPlayer src={job.videoUrl} title={title} manifestUrl={job.manifestUrl} />
+              <LessonPlayer src={job.videoUrl} title={title} manifestUrl={job.manifestUrl} topic={topic} lang={language} />
             ) : job.status === 'completed' ? (
               <Notice
                 title="Lesson finished, but no video link was returned."

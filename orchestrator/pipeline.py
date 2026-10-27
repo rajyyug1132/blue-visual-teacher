@@ -174,13 +174,17 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
         report("done", 100)
         return hit
 
+    from orchestrator.planner import StageProfiler
+    profiler = StageProfiler(cache_hit=False)
     times, t0 = {}, time.perf_counter()
 
     def stage(name, fn):
         report(name, 0)
         start = time.perf_counter()
         result = fn()
-        times[name] = round(time.perf_counter() - start, 3)
+        dur = round(time.perf_counter() - start, 3)
+        times[name] = dur
+        profiler.record_stage(name, dur)
         return result
 
     if plan_fn is None:
@@ -188,6 +192,8 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
         plan, telemetry = stage("plan", lambda: plan_lesson(topic, level=level, target_sec=target_sec))
     else:
         plan, telemetry = stage("plan", lambda: plan_fn(topic))
+    profiler.record_ollama_eval(telemetry.get("output_tokens", 0) if isinstance(telemetry, dict) else 0,
+                                telemetry.get("eval_sec", 0.0) if isinstance(telemetry, dict) else 0.0)
 
     if lang != "en":
         translator = translator or warmup(planner=False)["translator"]
@@ -195,6 +201,7 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
     else:
         localized = plan
         times["translate"] = 0.0
+        profiler.record_stage("translate", 0.0)
 
     out = artifact_dir(topic, lang, level, target_sec)
     out.mkdir(parents=True, exist_ok=True)
@@ -224,9 +231,10 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
     times["render_encode"] = round(time.perf_counter() - start, 3)
 
     times["total"] = round(time.perf_counter() - t0, 3)
+    prof_dict = profiler.to_dict()
     (out / "telemetry.json").write_text(json.dumps({"topic": topic, "lang": lang, "level": level,
                                                     "target_sec": target_sec, "stage_sec": times,
-                                                    "planner": telemetry}, ensure_ascii=False, indent=2,
+                                                    "planner": telemetry, "profiler": prof_dict}, ensure_ascii=False, indent=2,
                                                    default=str), encoding="utf-8")
     report("done", 100)
     return out

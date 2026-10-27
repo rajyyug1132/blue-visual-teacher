@@ -145,6 +145,7 @@ def _run(job_id: str) -> None:
             if tel.exists():
                 import json
                 job["telemetry"] = json.loads(tel.read_text(encoding="utf-8"))
+                job["profiler"] = job["telemetry"].get("profiler", {})
             job.update(stage="done", status="completed", pct=100)
             if job.get("user_id"):
                 auth_db.record_lesson(
@@ -163,6 +164,13 @@ def _run(job_id: str) -> None:
                     error=err_msg
                 )
 
+
+
+class ReplanSceneRequest(BaseModel):
+    topic: str
+    scene_id: int
+    current_scene: Optional[Dict[str, Any]] = None
+    lang: Optional[str] = "en"
 
 @app.on_event("startup")
 def _startup() -> None:
@@ -258,9 +266,23 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
     if user_id:
         auth_db.record_lesson(job_id, user_id, topic, target_lang, status="queued", pct=0, stage="queued")
 
-    hit = pipeline.cached_artifact(topic, target_lang)
+    hit = pipeline.cached_artifact(topic, target_lang, level=job["level"], target_sec=job["target_sec"])
     if hit:
         _urls(job, hit)
+        from orchestrator.planner import StageProfiler
+        profiler = StageProfiler(cache_hit=True)
+        prof_data = profiler.to_dict()
+        tel_file = hit / "telemetry.json"
+        if tel_file.exists():
+            try:
+                import json
+                job["telemetry"] = json.loads(tel_file.read_text(encoding="utf-8"))
+                if "profiler" in job["telemetry"]:
+                    prof_data.update(job["telemetry"]["profiler"])
+                    prof_data["cache_hit"] = True
+            except Exception:
+                pass
+        job["profiler"] = prof_data
         job.update(stage="done", status="completed", pct=100, cached=True)
         if user_id:
             auth_db.record_lesson(
@@ -279,6 +301,8 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
         "mp4_url": job.get("mp4_url"),
         "video_url": job.get("mp4_url"),
         "manifest_url": job.get("manifest_url"),
+        "telemetry": job.get("telemetry"),
+        "profiler": job.get("profiler"),
     }
 
 
@@ -311,6 +335,17 @@ def status(job_id: str, current_user: Optional[Dict[str, Any]] = Depends(get_cur
         }
 
     raise HTTPException(404, "unknown job")
+
+@app.post("/api/replan_scene")
+@app.post("/replan_scene")
+def replan_scene_endpoint(req: ReplanSceneRequest) -> dict:
+    from orchestrator.planner import replan_single_scene
+    topic = req.topic.strip()
+    scene_id = req.scene_id
+    lang = req.lang or "en"
+    result = replan_single_scene(topic, scene_id, req.current_scene, lang)
+    return result
+
 
 
 @app.get("/api/languages")

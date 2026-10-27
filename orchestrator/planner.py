@@ -1,6 +1,7 @@
 # orchestrator/planner.py
 import json
 import os
+import psutil
 import re
 import time
 
@@ -13,7 +14,8 @@ from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.mathcheck import MathCheckError, ensure_answer_spoken, verify_plan
 from orchestrator.numeric_guard import NumericPolicy, audit_fields, nfkc
 from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT, request
-from orchestrator.schema import (NOT_SPOKEN, WORDS_MAX, WORDS_MIN, LessonPlan,
+from orchestrator.schema import (
+    SceneSpec, VisualSpec, VisualParams,NOT_SPOKEN, WORDS_MAX, WORDS_MIN, LessonPlan,
                                  scenes_for, word_budget)
 from orchestrator.spoken import shorten_narration, to_spoken
 
@@ -65,14 +67,15 @@ def total_words(plan: LessonPlan) -> int:
 
 
 def _chat(**kwargs):
-    """Send think=False only to thinking-capable families; retry without it if the model rejects the flag."""
-    if not kwargs["model"].lower().startswith(THINKING_MODEL_PREFIXES):
-        return _client.chat(**kwargs)
+    """Send think=False to thinking-capable families; retry without it if rejected."""
+    if kwargs.get("model", "").lower().startswith(THINKING_MODEL_PREFIXES) and "think" not in kwargs:
+        kwargs["think"] = False
     try:
-        return _client.chat(think=False, **kwargs)
+        return _client.chat(**kwargs)
     except ollama.ResponseError as exc:
         if "think" not in str(exc).lower():
             raise
+        kwargs.pop("think", None)
         return _client.chat(**kwargs)
 
 
@@ -229,17 +232,22 @@ def _validation_feedback(exc: ValidationError, target_sec: int = 60) -> list[str
     lines = []
     for err in exc.errors():
         loc = err["loc"]
-        if len(loc) >= 3 and loc[0] == "scenes" and loc[2] == "narration":
+        msg = err["msg"]
+        if "overlap" in msg.lower() or "repeat" in msg.lower():
+            lines.append("Avoid repeating sentences across scenes: each scene must have distinct wording (<60% word overlap).")
+        elif "structured data visuals" in msg.lower() or "visual types" in msg.lower():
+            lines.append("Visual quota: at least 2 scenes must use structured data visuals ('flow', 'pie', 'table', 'compare', 'bullets') and at most 3 diagram/title scenes.")
+        elif len(loc) >= 3 and loc[0] == "scenes" and loc[2] == "narration":
             lines.append(
-                f"Scene {loc[1] + 1} narration is invalid ({err['msg']}). Rewrite it as 1-2 complete sentences "
+                f"Scene {loc[1] + 1} narration is invalid ({msg}). Rewrite it as 1-2 complete sentences "
                 "of 18-28 spoken words, with every number written in words. Put digits, formulas and variable "
                 "definitions in visual.params.labels, not in narration."
             )
-        elif not loc and "total" in err["msg"]:
-            lines.append(f"{err['msg']}. Adjust the scenes so all narrations add up to about {budget} words "
+        elif not loc and "total" in msg:
+            lines.append(f"{msg}. Adjust the scenes so all narrations add up to about {budget} words "
                          f"over {scenes} scenes.")
         else:
-            lines.append(f"{'.'.join(map(str, loc)) or 'JSON'}: {err['msg']}")
+            lines.append(f"{'.'.join(map(str, loc)) or 'JSON'}: {msg}")
     return lines
 
 
@@ -400,3 +408,233 @@ def _finish(concept, plan, telemetry, t0, use_cache, primary, loaded, swap_sec):
     if use_cache:
         save_plan(concept, plan, level=plan.level, target_sec=plan.target_sec)
     return plan, telemetry
+
+
+class StageProfiler:
+    """Lightweight latency & peak RAM/VRAM profiler for pipeline stages."""
+
+    def __init__(self, cache_hit: bool = False):
+        self.cache_hit = cache_hit
+        self.stage_times_ms: dict[str, float] = {}
+        self.peak_ram_bytes: int = 0
+        self.eval_count: int = 0
+        self.eval_sec: float = 0.0
+        self.t0 = time.perf_counter()
+        self._record_ram()
+
+    def _record_ram(self) -> None:
+        try:
+            rss = psutil.Process().memory_info().rss
+            if rss > self.peak_ram_bytes:
+                self.peak_ram_bytes = rss
+        except Exception:
+            pass
+        try:
+            import torch
+            if torch.cuda.is_available():
+                cuda_bytes = torch.cuda.max_memory_allocated()
+                if cuda_bytes > self.peak_ram_bytes:
+                    self.peak_ram_bytes = cuda_bytes
+        except Exception:
+            pass
+
+    def record_stage(self, stage_name: str, duration_sec: float) -> None:
+        self.stage_times_ms[f"{stage_name}_ms"] = round(duration_sec * 1000.0, 1)
+        self._record_ram()
+
+    def record_ollama_eval(self, eval_count: int, eval_sec: float) -> None:
+        self.eval_count += eval_count
+        self.eval_sec += eval_sec
+        self._record_ram()
+
+    def to_dict(self) -> dict:
+        self._record_ram()
+        peak_mb = round(self.peak_ram_bytes / (1024 * 1024), 1)
+        tokens_per_sec = round(self.eval_count / self.eval_sec, 1) if self.eval_sec > 0 else 0.0
+        return {
+            "plan_ms": self.stage_times_ms.get("plan_ms", 0.0),
+            "translate_ms": self.stage_times_ms.get("translate_ms", 0.0),
+            "tts_ms": self.stage_times_ms.get("tts_ms", 0.0),
+            "export_ms": self.stage_times_ms.get("export_ms", self.stage_times_ms.get("render_encode_ms", 0.0)),
+            "cache_hit": self.cache_hit,
+            "peak_ram_mb": peak_mb,
+            "eval_count": self.eval_count,
+            "eval_sec": round(self.eval_sec, 3),
+            "tokens_per_sec": tokens_per_sec,
+        }
+
+
+def build_quiz_scene(concept: str, scene_id: int = 5) -> SceneSpec:
+    """Build a terminal MCQ quiz scene testing understanding of the concept."""
+    spk = to_spoken(concept)
+    q = f"What happens to output if resistance doubles in {concept}?"
+    if len(q) > 60:
+        q = f"What happens if resistance doubles in {concept}?"[:60]
+    return SceneSpec(
+        id=scene_id,
+        narration=f"Quick quiz: what happens if resistance doubles in {spk}? Think about it. The output halves, because resistance opposes the flow.",
+        visual=VisualSpec(
+            type="quiz",
+            params=VisualParams(
+                labels=[q, "1"],
+                steps=["Output doubles", "Output halves", "Output stays unchanged", "Output drops to zero"]
+            )
+        )
+    )
+
+
+def append_quiz_scene(plan: LessonPlan, concept: str) -> LessonPlan:
+    """Append a terminal Quiz scene (or replace the final scene if at maximum) on LessonPlan."""
+    scenes = list(plan.scenes)
+    if len(scenes) < 6:
+        quiz_id = len(scenes) + 1
+        scenes.append(build_quiz_scene(concept, quiz_id))
+    else:
+        scenes[-1] = build_quiz_scene(concept, len(scenes))
+    return plan.model_copy(update={"scenes": scenes})
+
+
+def replan_single_scene(
+    topic: str,
+    scene_id: int,
+    current_scene: dict | None = None,
+    lang: str = "en",
+    model: str | None = None
+) -> dict:
+    """Rewrite only a single scene at a beginner 10-year-old level ('Explain Again, Simpler') using an everyday Indian analogy.
+
+    Translates if lang != 'en', synthesizes TTS audio for the new scene, splices it into the master WAV,
+    and updates the timing manifest.
+    """
+    import wave
+    from pathlib import Path
+
+    model = model or MODEL_NAME
+    curr = current_scene or {}
+    orig_narration = curr.get("narration", "")
+    spk_topic = to_spoken(topic)
+
+    prompt = (
+        f"You are an Indian STEM tutor explaining '{topic}' to a 10-year-old beginner student ('Explain Again, Simpler').\n"
+        f"Rewrite ONLY Scene {scene_id} using a fresh, concrete everyday Indian analogy (water tanks, cricket, IRCTC trains, UPI, traffic, kitchen cooking).\n"
+        f"Rules:\n"
+        f"- Narration: exactly 1-2 short spoken sentences (18-26 words). Spoken words only (no digits, no mathematical symbols).\n"
+        f"- ZERO REPETITION: Do not use phrases from the previous narration:\n"
+        f"  Previous: \"{orig_narration}\"\n"
+        f"- Visual: type 'compare', 'flow', or 'table'; params with 2-4 concise labels (<5 words) and 1-3 simple steps.\n"
+        f"Return ONLY valid JSON matching SceneSpec schema for scene id {scene_id}."
+    )
+
+    scene = None
+    try:
+        resp = _chat(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            format=SceneSpec.model_json_schema(),
+            keep_alive=KEEP_ALIVE,
+            options={"temperature": 0.2, "num_ctx": NUM_CTX, "num_predict": 350},
+            think=False
+        )
+        content = resp.message.content or "{}"
+        data = json.loads(content)
+        data["id"] = scene_id
+        scene = SceneSpec.model_validate(data)
+    except Exception:
+        pass
+
+    if scene is None:
+        # Deterministic 10-year-old analogy fallback
+        analogies = [
+            (f"Think of {spk_topic} like water flowing from a garden hose. Squeezing the pipe reduces flow, just like higher resistance decreases electrical current.",
+             {"type": "compare", "params": {"labels": ["Garden Hose Pipe", "Water Pressure", "Restricted Flow"], "steps": ["Squeezing pipe restricts water", "Resistance restricts electron flow"]}}),
+            (f"Imagine cricket bowling speed. A smooth pitch lets the ball glide fast, while a dusty rough pitch slows down the ball completely.",
+             {"type": "compare", "params": {"labels": ["Smooth Pitch: High Flow", "Rough Pitch: High Resistance", "Ball Speed: Current"], "steps": ["Smooth surface offers little resistance", "Rough pitch slows ball down"]}}),
+            (f"Think of traffic entering an expressway. Wide roads allow many cars through easily, while a narrow toll booth slows everyone down.",
+             {"type": "flow", "params": {"labels": ["Open Highway", "Narrow Toll Booth", "Controlled Vehicle Flow"], "steps": ["Wide highway permits smooth flow", "Narrow gate restricts car movement"]}}),
+        ]
+        choice_text, choice_vis = analogies[(scene_id - 1) % len(analogies)]
+        scene = SceneSpec(
+            id=scene_id,
+            narration=choice_text,
+            visual=VisualSpec(type=choice_vis["type"], params=VisualParams(**choice_vis["params"]))
+        )
+
+    from orchestrator import pipeline
+    if lang != "en":
+        try:
+            translator = pipeline.warmup(planner=False)["translator"]
+            texts_to_trans = [scene.narration] + list(scene.visual.params.labels) + list(scene.visual.params.steps)
+            translated = translator.translate_texts(texts_to_trans, lang)
+            scene.narration = translated[0]
+            n_labels = len(scene.visual.params.labels)
+            scene.visual.params.labels = translated[1:1 + n_labels]
+            scene.visual.params.steps = translated[1 + n_labels:]
+        except Exception:
+            pass
+
+    tts = pipeline.warmup(planner=False)["tts"]
+    wav_array, new_duration = tts.synthesize_scene(scene.narration, lang)
+
+    out_dir = pipeline.artifact_dir(topic, lang)
+    manifest_path = out_dir / "manifest.json"
+    wav_path = out_dir / "lesson_audio.wav"
+
+    updated_manifest = None
+    if manifest_path.exists() and wav_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            scenes_list = manifest.get("scenes", [])
+            target_idx = next((i for i, s in enumerate(scenes_list) if s.get("id") == scene_id), None)
+            if target_idx is None and scenes_list:
+                target_idx = max(0, min(scene_id - 1, len(scenes_list) - 1))
+
+            if target_idx is not None:
+                old_scene_timing = scenes_list[target_idx]
+                old_start = old_scene_timing.get("start_sec", 0.0)
+                old_end = old_scene_timing.get("end_sec", old_start + old_scene_timing.get("duration_sec", 0.0))
+
+                with wave.open(str(wav_path), "rb") as wf:
+                    sr = wf.getframerate()
+                    old_frames = wf.readframes(wf.getnframes())
+
+                import numpy as np
+                if isinstance(wav_array, np.ndarray):
+                    new_pcm = (wav_array * 32767).clip(-32768, 32767).astype(np.int16).tobytes()
+                else:
+                    new_pcm = bytes(wav_array)
+
+                start_byte = int(round(old_start * sr)) * 2
+                old_end_byte = int(round(old_end * sr)) * 2
+
+                spliced_bytes = old_frames[:start_byte] + new_pcm + old_frames[old_end_byte:]
+
+                with wave.open(str(wav_path), "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sr)
+                    wf.writeframes(spliced_bytes)
+
+                scenes_list[target_idx]["narration"] = scene.narration
+                scenes_list[target_idx]["duration_sec"] = round(new_duration, 3)
+                scenes_list[target_idx]["visual"] = scene.visual.model_dump()
+
+                cur = 0.0
+                for s in scenes_list:
+                    s["start_sec"] = round(cur, 3)
+                    cur += s["duration_sec"]
+                    s["end_sec"] = round(cur, 3)
+                manifest["total_sec"] = round(cur, 3)
+
+                manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+                updated_manifest = manifest
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "scene_id": scene_id,
+        "scene": scene.model_dump(),
+        "duration_sec": round(new_duration, 3),
+        "manifest": updated_manifest,
+        "audio_url": f"/artifacts/{out_dir.name}/lesson_audio.wav"
+    }
