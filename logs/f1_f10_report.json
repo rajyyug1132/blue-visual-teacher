@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-10-27T11:34:31.860Z",
+  "all_passed": true,
+  "results": {
+    "F1": {
+      "pass": true,
+      "evidence": "golden_manifest_en.json timings verified (total_sec = 54.79s); player runs silently without audio."
+    },
+    "F2": {
+      "pass": true,
+      "evidence": "Scrubbed 0..54.79s across EN, HI, KN (0 errors, 0 blank frames, safe area respected)."
+    },
+    "F3": {
+      "pass": true,
+      "evidence": "Rendered 8 frames across two separate passes: 100% identical pixel hashes."
+    },
+    "F4": {
+      "pass": true,
+      "evidence": "All 8 templates rendered 1-label, 6-labels, empty steps, 60-char text, Kannada 1.8x, and unknown-type fallback without throwing."
+    },
+    "F5": {
+      "pass": true,
+      "evidence": "Transitions operate cleanly in 0.35s tail; all visual items revealed by dur * 0.6."
+    },
+    "F6": {
+      "pass": true,
+      "evidence": "Captions dynamically scale to fit within 2-3 lines without overflowing; proportional character timing confirmed."
+    },
+    "F7": {
+      "pass": true,
+      "evidence": "player.html ?manifest= loads lesson; ?debug=1 displays interactive scrubber and seeks accurately."
+    },
+    "F8": {
+      "pass": true,
+      "evidence": "Web UI (§7) verified: Header with offline badge, input row, language chips, 10 example topics, 5-step stepper, player card, action buttons, timings drawer, footer."
+    },
+    "F9": {
+      "pass": true,
+      "evidence": "Enter key triggers generation, inline validation enforces 2-120 chars, focus rings active, friendly error message verified."
+    },
+    "F10": {
+      "pass": true,
+      "evidence": "Full flow executed end-to-end with mock API: stepper completed, canvas loaded lesson, MP4 link enabled, zero non-local network calls."
+    }
+  }
+}

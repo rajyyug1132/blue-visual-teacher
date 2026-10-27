@@ -71,7 +71,7 @@
     ctx.restore();
   }
 
-  // Draw caption bar with word-by-word highlight
+  // Draw caption bar with responsive font-scaling and word-by-word highlight
   function drawCaptions(ctx, narration, lt, dur, theme, lang) {
     if (!narration) return;
     const font = theme.getFont(lang);
@@ -84,19 +84,18 @@
     // Caption card background
     theme.drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 12, 'rgba(19, 34, 74, 0.95)', theme.colors.panelBorder);
 
-    // Compute word timings
     const words = narration.trim().split(/\s+/);
     if (words.length === 0) {
       ctx.restore();
       return;
     }
 
+    // Determine active word index based on proportional character timing
     const totalChars = words.reduce((acc, w) => acc + w.length, 0);
     const effectiveDur = Math.max(0.5, dur - 0.5);
     let charAccum = 0;
-
-    // Determine active word index
     let activeWordIdx = -1;
+
     for (let i = 0; i < words.length; i++) {
       const fracStart = charAccum / totalChars;
       charAccum += words[i].length;
@@ -113,52 +112,82 @@
       }
     }
 
-    // Format text lines
-    ctx.font = `500 24px ${font}`;
+    // Adapt font size dynamically from 24px down to 16px so all words fit within 2 or 3 lines
+    const maxLineW = boxW - 64;
+    const fontCandidates = [24, 21, 18, 16];
+    let chosenFontSize = 16;
+    let chosenLines = [];
+
+    for (let f = 0; f < fontCandidates.length; f++) {
+      const fs = fontCandidates[f];
+      ctx.font = `500 ${fs}px ${font}`;
+      const lines = [];
+      let currentLine = [];
+      let currentWidth = 0;
+
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        const wordW = ctx.measureText(word + ' ').width;
+        if (currentWidth + wordW > maxLineW && currentLine.length > 0) {
+          lines.push(currentLine);
+          currentLine = [];
+          currentWidth = 0;
+        }
+        currentLine.push({ word, idx: wIdx, width: wordW });
+        currentWidth += wordW;
+      }
+      if (currentLine.length > 0) lines.push(currentLine);
+
+      const lHeight = fs * 1.35;
+      if (lines.length <= 2 || (lines.length === 3 && fs <= 18)) {
+        chosenFontSize = fs;
+        chosenLines = lines;
+        break;
+      }
+      if (f === fontCandidates.length - 1) {
+        chosenFontSize = fs;
+        chosenLines = lines;
+      }
+    }
+
+    // Render all words across the chosen lines with accurate inter-word spacing
+    const lineHeight = chosenFontSize * 1.35;
+    const totalBlockHeight = chosenLines.length * lineHeight;
+    const startY = boxY + (boxH - totalBlockHeight) / 2 + (lineHeight / 2);
     ctx.textBaseline = 'middle';
 
-    // Wrap words into lines with layout positions
-    const lines = [];
-    let currentLine = [];
-    let currentWidth = 0;
-    const maxLineW = boxW - 60;
+    for (let l = 0; l < chosenLines.length; l++) {
+      const lineWords = chosenLines[l];
+      ctx.font = `500 ${chosenFontSize}px ${font}`;
+      const spaceWidth = ctx.measureText(' ').width;
 
-    words.forEach((word, idx) => {
-      const wordW = ctx.measureText(word + ' ').width;
-      if (currentWidth + wordW > maxLineW && currentLine.length > 0) {
-        lines.push(currentLine);
-        currentLine = [];
-        currentWidth = 0;
+      // Calculate exact rendered line width including spaces
+      let totalLineWidth = 0;
+      for (let w = 0; w < lineWords.length; w++) {
+        const { word, idx } = lineWords[w];
+        ctx.font = idx === activeWordIdx ? `700 ${chosenFontSize}px ${font}` : `500 ${chosenFontSize}px ${font}`;
+        totalLineWidth += ctx.measureText(word).width;
+        if (w < lineWords.length - 1) totalLineWidth += spaceWidth;
       }
-      currentLine.push({ word, idx, width: wordW });
-      currentWidth += wordW;
-    });
-    if (currentLine.length > 0) lines.push(currentLine);
 
-    // Render lines centered vertically
-    const maxVisibleLines = Math.min(2, lines.length);
-    const startY = boxY + (boxH / 2) - ((maxVisibleLines - 1) * 16);
+      let curX = boxX + (boxW - totalLineWidth) / 2;
+      const curY = startY + l * lineHeight;
 
-    for (let l = 0; l < maxVisibleLines; l++) {
-      const lineWords = lines[l];
-      const lineWidth = lineWords.reduce((s, w) => s + w.width, 0);
-      let curX = boxX + (boxW - lineWidth) / 2;
-      const curY = startY + l * 34;
-
-      lineWords.forEach(({ word, idx, width }) => {
+      for (let w = 0; w < lineWords.length; w++) {
+        const { word, idx } = lineWords[w];
         if (idx === activeWordIdx) {
           ctx.fillStyle = theme.colors.accent2; // Highlight color
-          ctx.font = `700 25px ${font}`;
+          ctx.font = `700 ${chosenFontSize}px ${font}`;
         } else if (activeWordIdx >= 0 && idx < activeWordIdx) {
-          ctx.fillStyle = theme.colors.text;   // Already spoken
-          ctx.font = `500 24px ${font}`;
+          ctx.fillStyle = theme.colors.text;    // Spoken
+          ctx.font = `500 ${chosenFontSize}px ${font}`;
         } else {
-          ctx.fillStyle = theme.colors.muted;  // Upcoming
-          ctx.font = `500 24px ${font}`;
+          ctx.fillStyle = theme.colors.muted;   // Upcoming
+          ctx.font = `500 ${chosenFontSize}px ${font}`;
         }
         ctx.fillText(word, curX, curY);
-        curX += width;
-      });
+        curX += ctx.measureText(word).width + spaceWidth;
+      }
     }
     ctx.restore();
   }
@@ -209,9 +238,14 @@
         _ctx = _canvas.getContext('2d');
       }
 
-      // Wait for fonts to be ready
+      // Wait for fonts to be ready per FARHAN_BLUEPRINT.md §3
       try {
-        if (document.fonts && typeof document.fonts.ready !== 'undefined') {
+        if (typeof document !== 'undefined' && document.fonts) {
+          const font = getTheme().getFont(_lang);
+          await Promise.allSettled([
+            document.fonts.load(`24px ${font}`),
+            document.fonts.load(`700 32px ${font}`)
+          ]);
           await document.fonts.ready;
         }
       } catch (fontErr) {
@@ -238,7 +272,9 @@
       return false;
     }
 
-    const t = Math.max(0, Math.min(_totalDuration, Number(t_sec) || 0));
+    const numericT = Number(t_sec);
+    const validT = isNaN(numericT) ? 0 : numericT;
+    const t = Math.max(0, Math.min(_totalDuration, validT));
     const scene = getActiveScene(_scenes, t);
     if (!scene) return false;
 

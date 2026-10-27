@@ -67,6 +67,27 @@
       return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
     },
 
+    // Truncate text with ellipsis if it exceeds maxWidth
+    truncate(ctx, text, maxWidth) {
+      if (!text) return '';
+      if (ctx.measureText(text).width <= maxWidth) return text;
+      const ellipsis = '...';
+      let low = 0;
+      let high = text.length;
+      let result = '';
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const candidate = text.substring(0, mid) + ellipsis;
+        if (ctx.measureText(candidate).width <= maxWidth) {
+          result = candidate;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      return result || ellipsis;
+    },
+
     // Word wrap helper (respects spaces for Latin and Indic scripts)
     wrapText(ctx, text, maxWidth) {
       if (!text) return [];
@@ -74,13 +95,22 @@
       const lines = [];
       let currentLine = words[0] || '';
 
+      // If first word itself exceeds maxWidth, truncate it
+      if (ctx.measureText(currentLine).width > maxWidth) {
+        currentLine = this.truncate(ctx, currentLine, maxWidth);
+      }
+
       for (let i = 1; i < words.length; i++) {
-        const candidate = currentLine + ' ' + words[i];
+        let word = words[i];
+        if (ctx.measureText(word).width > maxWidth) {
+          word = this.truncate(ctx, word, maxWidth);
+        }
+        const candidate = currentLine + ' ' + word;
         if (ctx.measureText(candidate).width <= maxWidth) {
           currentLine = candidate;
         } else {
           lines.push(currentLine);
-          currentLine = words[i];
+          currentLine = word;
         }
       }
       if (currentLine) {
@@ -97,29 +127,48 @@
 
       while (fontSize > minPx) {
         const lines = this.wrapText(ctx, text, box.width);
-        const totalHeight = lines.length * (fontSize * 1.25);
+        const lineHeight = fontSize * 1.25;
+        const totalHeight = lines.length * lineHeight;
         if (totalHeight <= box.height && lines.every(l => ctx.measureText(l).width <= box.width)) {
-          return { fontSize, lines, lineHeight: fontSize * 1.25 };
+          return { fontSize, lines, lineHeight };
         }
         fontSize -= 2;
         ctx.font = `${weight} ${fontSize}px ${family}`;
       }
 
-      // Fallback: at minPx, wrap and truncate if necessary
-      const lines = this.wrapText(ctx, text, box.width);
-      return { fontSize: minPx, lines, lineHeight: minPx * 1.25 };
+      // At minPx: wrap, and if lines exceed box.height, truncate last visible line
+      ctx.font = `${weight} ${minPx}px ${family}`;
+      const lineHeight = minPx * 1.25;
+      const maxAllowedLines = Math.max(1, Math.floor(box.height / lineHeight));
+      let lines = this.wrapText(ctx, text, box.width);
+
+      if (lines.length > maxAllowedLines) {
+        lines = lines.slice(0, maxAllowedLines);
+        lines[maxAllowedLines - 1] = this.truncate(ctx, lines[maxAllowedLines - 1], box.width);
+      }
+
+      return { fontSize: minPx, lines, lineHeight };
     },
 
-    // Draw rounded rectangle helper
+    // Draw rounded rectangle helper with fallback for minimal contexts
     drawRoundedRect(ctx, x, y, width, height, radius, fillStyle, strokeStyle, lineWidth = 1) {
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.arcTo(x + width, y, x + width, y + height, radius);
-      ctx.arcTo(x + width, y + height, x, y + height, radius);
-      ctx.arcTo(x, y + height, x, y, radius);
-      ctx.arcTo(x, y, x + width, y, radius);
-      ctx.closePath();
+      if (typeof ctx.arcTo === 'function') {
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + width, y, x + width, y + height, radius);
+        ctx.arcTo(x + width, y + height, x, y + height, radius);
+        ctx.arcTo(x, y + height, x, y, radius);
+        ctx.arcTo(x, y, x + width, y, radius);
+        ctx.closePath();
+      } else if (typeof ctx.rect === 'function') {
+        ctx.rect(x, y, width, height);
+      } else if (typeof ctx.fillRect === 'function' && fillStyle) {
+        ctx.fillStyle = fillStyle;
+        ctx.fillRect(x, y, width, height);
+        ctx.restore();
+        return;
+      }
       if (fillStyle) {
         ctx.fillStyle = fillStyle;
         ctx.fill();

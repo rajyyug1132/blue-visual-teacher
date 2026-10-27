@@ -1,0 +1,38 @@
+================================================================
+ BLUE VISUAL TEACHER — ACCEPTANCE TEST SUITE (F1–F10)
+================================================================
+
+✓ Local test server running on http://127.0.0.1:58844
+✓ Browser launched: Google Chrome (156.0.8078.48)
+
+--- CHECK F1: Golden Manifest Timings & Silent Playback ---
+✓ F1 PASS
+
+--- CHECK F2: Scrubbing 0..total in 0.05s steps (EN, HI, KN) ---
+✓ F2 PASS
+
+--- CHECK F3: Two Runs Frame Hash Identity ---
+Run 1 hashes: ["773823a0_41ac7ca8","22bd135f_-1364391a","34b62562_-38bd9722","-51a72930_-55ef8bf1","6a823139_-305ecde6","-6e951ed_77e843ff","-76ce69ad_-7e099ff1","77b54972_-1ffecaa2"]
+Run 2 hashes: ["773823a0_41ac7ca8","22bd135f_-1364391a","34b62562_-38bd9722","-51a72930_-55ef8bf1","6a823139_-305ecde6","-6e951ed_77e843ff","-76ce69ad_-7e099ff1","77b54972_-1ffecaa2"]
+✓ F3 PASS
+
+--- CHECK F4: All 8 Templates Extreme Inputs & Graceful Fallback ---
+✓ F4 PASS
+
+--- CHECK F5: Transitions, Stagger, and Visibility Timing ---
+✓ F5 PASS
+
+--- CHECK F6: Caption Line Fitting & Proportional Word Highlighting ---
+✓ F6 PASS
+
+--- CHECK F7: player.html Standalone Query Modes ---
+✓ F7 PASS
+
+--- CHECK F8: Web UI Layout & Components (§7) ---
+✓ F8 PASS
+
+--- CHECK F9: UI Rules (Keys, Focus Rings, Inline Validation, Error Toast) ---
+✓ F9 PASS
+
+--- CHECK F10: Full E2E Flow (?mock=1) & Offline Network Audit ---
+✓ F10 PASS
