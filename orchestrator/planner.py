@@ -15,12 +15,14 @@ from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE
 from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, LessonPlan
 from orchestrator.spoken import shorten_narration, to_spoken
 
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")  # GPU gets the planner; TTS/MT run on CPU (DEVICE)
+# Primary planner: fast and resident. OLLAMA_MODEL is the older name, still honoured.
+MODEL_NAME = os.environ.get("PLANNER_MODEL") or os.environ.get("OLLAMA_MODEL") or "qwen2.5:3b"
+# Bigger model for one escalation attempt after the primary fails twice. PLANNER_ESCALATION_MODEL="" disables it.
+ESCALATION_MODEL = os.environ.get("PLANNER_ESCALATION_MODEL", "qwen2.5:7b")
 THINKING_MODEL_PREFIXES = ("qwen3", "gemma")  # only these get think=False
 KEEP_ALIVE = -1  # must be a number: the string "-1" is rejected by the server ("missing unit in duration")
 NUM_CTX = 4096  # same for every call: a different num_ctx makes Ollama reload the model
 CLASSIFY_SCHEMA = {"type": "object", "properties": {"has_formula": {"type": "boolean"}}, "required": ["has_formula"]}
-STAGES = ("plan", "retry", "qualitative")  # then the safe template
 
 # Pinned to localhost so a stray OLLAMA_HOST can never route planning off the machine.
 _client = ollama.Client(host="http://127.0.0.1:11434", timeout=120)
@@ -140,14 +142,35 @@ def _validation_feedback(exc: ValidationError) -> list[str]:
     return lines
 
 
-def warm_up_ollama(model: str = MODEL_NAME) -> None:
+def warm_up_ollama(model: str | None = None) -> None:
     """Pin model in memory at startup so live demo requests incur near-zero load_duration."""
-    _client.generate(model=model, prompt="ping", keep_alive=KEEP_ALIVE, options={"num_predict": 1, "num_ctx": NUM_CTX})
+    _client.generate(model=model or MODEL_NAME, prompt="ping", keep_alive=KEEP_ALIVE,
+                     options={"num_predict": 1, "num_ctx": NUM_CTX})
 
 
-def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
-                policy: NumericPolicy | None = None) -> tuple[LessonPlan, dict]:
-    """Retry ladder: plan -> retry with the problem list -> regenerate in qualitative mode -> safe template."""
+def _unload(model: str) -> None:
+    """keep_alive=0 evicts the model now, so only one planner model sits in VRAM (6 GB card)."""
+    try:
+        _client.generate(model=model, prompt="", keep_alive=0)
+    except LLM_ERRORS:
+        pass  # daemon down: nothing is loaded anyway
+
+
+def _ladder(primary: str, escalation: str) -> list[tuple[str, str]]:
+    """(stage, model) rungs before the safe template. Qualitative mode reuses whichever model is loaded last."""
+    rungs = [("plan", primary), ("retry", primary)]
+    if escalation and escalation != primary:
+        rungs.append(("escalate", escalation))
+    rungs.append(("qualitative", rungs[-1][1]))
+    return rungs
+
+
+def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
+                policy: NumericPolicy | None = None, escalation_model: str | None = None) -> tuple[LessonPlan, dict]:
+    """Ladder: plan -> retry with the problem list -> escalate to the bigger model (fresh, with the problem list)
+    -> regenerate in qualitative mode -> safe template. Telemetry records every rung's model and seconds."""
+    model = model or MODEL_NAME
+    escalation = ESCALATION_MODEL if escalation_model is None else escalation_model
     t0 = time.perf_counter()
     if use_cache and (cached := load_plan(concept)) is not None:
         return cached, {"cache_hit": True, "fallback_used": False, "total_words": total_words(cached),
@@ -160,25 +183,42 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
 
     base = [{"role": "system", "content": SYSTEM_PROMPT}] + FEW_SHOT_MESSAGES
     messages = base + [{"role": "user", "content": request(concept, policy)}]
-    errors = []
-    for attempt, stage in enumerate(STAGES):
+    errors, rungs, problems = [], [], []
+    loaded = model
+    swap_sec = 0.0
+    for attempt, (stage, rung_model) in enumerate(_ladder(model, escalation)):
+        if rung_model != loaded:
+            t_swap = time.perf_counter()
+            _unload(loaded)
+            swap_sec += time.perf_counter() - t_swap
+            loaded = rung_model
         stage_policy: NumericPolicy = "none" if stage == "qualitative" else policy
-        if stage == "qualitative":
+        if stage == "escalate":
+            # Fresh conversation for the bigger model, told what went wrong (no drafts to copy from).
+            note = ("\nA previous draft was rejected for these problems; avoid them:\n- " + "\n- ".join(problems)
+                    if problems else "")
+            messages = base + [{"role": "user", "content": request(concept, policy) + note}]
+        elif stage == "qualitative":
             # Fresh conversation: the failed drafts would pull the model back to the same numbers.
             messages = base + [{"role": "user", "content": request(concept, "none") + "\n" + QUALITATIVE_MODE}]
         resp = None
+        t_rung = time.perf_counter()
         try:
             resp = _chat(
-                model=model,
+                model=rung_model,
                 messages=messages,
                 format=LessonPlan.model_json_schema(),
                 keep_alive=KEEP_ALIVE,
-                options={"temperature": 0.0 if attempt == 0 else 0.2, "num_ctx": NUM_CTX, "num_predict": 850},
+                options={"temperature": 0.0 if stage in ("plan", "escalate") else 0.2, "num_ctx": NUM_CTX,
+                         "num_predict": 850},
             )
             plan, info = _parse_plan(resp.message.content or "", stage_policy, repair_answer=stage != "plan")
+            rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
+                          "ok": True})
             telemetry = {
                 "attempt": attempt + 1,
                 "stage": stage,
+                "model": rung_model,
                 "cache_hit": False,
                 "classify_sec": classify_sec,
                 "prompt_tokens": resp.prompt_eval_count or 0,
@@ -188,15 +228,21 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
                 "total_words": total_words(plan),
                 "fallback_used": False,
                 "errors": errors,
+                "rungs": rungs,
                 **info,
             }
-            return _finish(concept, plan, telemetry, t0, use_cache)
+            return _finish(concept, plan, telemetry, t0, use_cache, model, loaded, swap_sec)
         except LLM_ERRORS as exc:
             # Daemon down or HTTP error: there is no model output to correct, so go to the next rung.
             errors.append(f"{stage}: {type(exc).__name__}: {exc}")
+            rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
+                          "ok": False})
             continue
         except PlanRejected as exc:
+            problems = exc.problems
             errors.append(f"{stage}: " + " | ".join(exc.problems))
+            rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
+                          "ok": False})
             feedback = "Problems:\n- " + "\n- ".join(exc.problems)
         messages = messages + [
             {"role": "assistant", "content": resp.message.content or "{}"},
@@ -206,13 +252,24 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
 
     # Deterministic safe template if every rung failed. Never cached, so a later run can retry the LLM.
     plan = build_safe_fallback_lesson(concept)
-    return plan, {"attempt": len(STAGES) + 1, "stage": "template", "cache_hit": False, "fallback_used": True,
-                  "policy": policy, "classify_sec": classify_sec, "total_words": total_words(plan),
-                  "math": {"status": "none"}, "errors": errors, "total_sec": round(time.perf_counter() - t0, 3)}
+    telemetry = {"attempt": len(rungs) + 1, "stage": "template", "model": None, "cache_hit": False,
+                 "fallback_used": True, "policy": policy, "classify_sec": classify_sec,
+                 "total_words": total_words(plan), "math": {"status": "none"}, "errors": errors, "rungs": rungs}
+    return _finish(concept, plan, telemetry, t0, False, model, loaded, swap_sec)
 
 
-def _finish(concept, plan, telemetry, t0, use_cache):
-    telemetry["total_sec"] = round(time.perf_counter() - t0, 3)
+def _finish(concept, plan, telemetry, t0, use_cache, primary, loaded, swap_sec):
+    telemetry["total_sec"] = round(time.perf_counter() - t0, 3)  # time the student waited for this plan
+    if loaded != primary:
+        # Put the fast model back for the next request; this runs after the plan is ready.
+        t_swap = time.perf_counter()
+        _unload(loaded)
+        try:
+            warm_up_ollama(primary)
+        except LLM_ERRORS:
+            pass
+        swap_sec += time.perf_counter() - t_swap
+    telemetry["swap_sec"] = round(swap_sec, 2)
     if use_cache:
         save_plan(concept, plan)
     return plan, telemetry
