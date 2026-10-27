@@ -1,3 +1,4 @@
+
 """localization/translator.py — Batched IndicTrans2 translation with placeholder protection.
 
 Replaces the crude FORMULA_REGEX with a comprehensive PROTECT list and a 3-tier cascade:
@@ -672,6 +673,9 @@ class OfflineIndicTranslator:
         if tgt_lang_short in ("kn", "kan_Knda", "ta", "tam_Taml", "bn", "ben_Beng"):
             results = [sanitize_kannada_output(r) if contains_devanagari(r) else r for r in results]
 
+        # STEM Collocation Repairs (e.g. current -> धारा / ವಿದ್ಯುತ್ ಪ್ರವಾಹ instead of वर्तमान / ಪ್ರಸ್ತುತ)
+        results = [repair_stem_collocations(r, tgt_lang_short) for r in results]
+
         return results
 
     def localize_lesson(self, plan: LessonPlan, lang: str) -> LessonPlan:
@@ -707,4 +711,33 @@ class OfflineIndicTranslator:
             s.visual.params.steps = translated[cursor : cursor + n_steps]
             cursor += n_steps
 
-        return localized
+        return localized# ---------------------------------------------------------------------------
+# STEM Collocation Repairs (Fixes IndicTrans2 physics mistranslations)
+# ---------------------------------------------------------------------------
+def repair_stem_collocations(text: str, lang: str) -> str:
+    """Repair common IndicTrans2 polysemy errors in STEM contexts.
+    
+    e.g., 'current' mistranslated to 'वर्तमान' (present time) instead of 'धारा' (electric current).
+    """
+    lang_key = lang.split("_")[0]
+    out = text
+    if lang_key in ("hi", "hin"):
+        out = re.sub(r"वर्तमान\s+समय\s+प्रतिरोध", "धारा गुणा प्रतिरोध", out)
+        out = re.sub(r"वर्तमान\s+समय", "धारा", out)
+        out = re.sub(r"\bवर्तमान\b(?=\s*(?:प्रतिरोध|वोल्टेज|धारा|के\s+बराबर|गुणा|इकाई|प्रवाह))", "धारा", out)
+    elif lang_key in ("kn", "kan"):
+        out = re.sub(r"ಪ್ರಸ್ತುತ\s+ಸಮಯದ\s+ಪ್ರತಿರೋಧ", "ವಿದ್ಯುತ್ ಪ್ರವಾಹ ಗುಣಿಸು ಪ್ರತಿರೋಧ", out)
+        out = re.sub(r"ಪ್ರಸ್ತುತ\s+ಸಮಯ", "ವಿದ್ಯುತ್ ಪ್ರವಾಹ", out)
+        out = re.sub(r"\bಪ್ರಸ್ತುತ\b(?=\s*(?:ಪ್ರತಿರೋಧ|ವೋಲ್ಟೇಜ್|ಸಮಾನ|ಗುಣಿಸು|ಆಂಪಿಯರ್))", "ವಿದ್ಯುತ್ ಪ್ರವಾಹ", out)
+    elif lang_key in ("ta", "tam"):
+        out = re.sub(r"தற்போதைய\s+நேர\s+எதிர்ப்பு", "மின்னோட்டம் பெருக்கல் மின்தடை", out)
+        out = re.sub(r"தற்போதைய\s+நேரம்", "மின்னோட்டம்", out)
+        out = re.sub(r"\bதற்போதைய\b(?=\s*(?:மின்தடை|மின்னழுத்தம்|சமம்|பெருக்கல்|ஆம்பியர்))", "மின்னோட்டம்", out)
+    elif lang_key in ("bn", "ben"):
+        out = re.sub(r"বর্তমান\s+সময়ের\s+প্রতিরোধ", "বিদ্যুৎ প্রবাহ গুণ প্রতিরোধ", out)
+        out = re.sub(r"বর্তমান\s+সময়", "বিদ্যুৎ প্রবাহ", out)
+        out = re.sub(r"\bবর্তমান\b(?=\s*(?:প্রতিরোধ|ভোল্টেজ|সমান|গুণ|অ্যাম্পিয়ার))", "বিদ্যুৎ প্রবাহ", out)
+    return out
+
+
+
