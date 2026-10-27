@@ -29,6 +29,7 @@ except ImportError:
     HAS_TORCH = False
 
 from orchestrator.schema import LessonPlan
+from localization.normalize import fix_residual_digits, speak_en
 
 LANG_CODE_MAP = {
     "en": "eng_Latn",
@@ -636,6 +637,10 @@ class OfflineIndicTranslator:
             return plan
 
         localized = plan.model_copy(deep=True)
+        # 1. Call speak_en on scene narration before IndicTrans2
+        for s in localized.scenes:
+            s.narration = speak_en(s.narration)
+
         flat_strings = [localized.title]
         for s in localized.scenes:
             flat_strings.append(s.narration)
@@ -647,7 +652,10 @@ class OfflineIndicTranslator:
         localized.title = translated[cursor]
         cursor += 1
         for s in localized.scenes:
-            s.narration = ensure_word_budget(translated[cursor], lang)
+            trans_narr = translated[cursor]
+            # 2. Call fix_residual_digits on narration after IndicTrans2
+            narr_fixed = fix_residual_digits(trans_narr, lang)
+            s.narration = ensure_word_budget(narr_fixed, lang)
             cursor += 1
             n_labels = len(s.visual.params.labels)
             s.visual.params.labels = translated[cursor : cursor + n_labels]

@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | **Yyug** | `orchestrator/` | `schema.py`, `planner.py`, `prompts.py`, `cache.py`, `fallbacks.py`, `run_pipeline.py`, `CLAUDE.md` | Merged | Planner, Tier 1 cache, safe fallbacks & CLI verified |
 | **Farhan** | `renderer/` | `player.html`, `engine.js`, `templates.js`, `theme.js` | In Progress | Canvas renderer & 8 templates (UNBLOCKED by `golden_manifest_en.json`) |
-| **Tarun** | `localization/` | `translator.py`, `tts_engine.py`, `captions.py`, `warmup.py`, `assets/fonts/` | Done (14:00) | `translator.py` (PROTECT, colon-split, zero-Devanagari, sandhi budget); `tts_engine.py` (KN number expansion, deterministic seed, zero double-pad); `captions.py`; `golden_manifest_en.json` |
+| **Tarun** | `localization/` | `translator.py`, `tts_engine.py`, `captions.py`, `normalize.py`, `warmup.py`, `assets/fonts/` | Done (14:00) | `translator.py` (PROTECT, colon-split, zero-Devanagari, sandhi budget); `normalize.py` (speak_en, clean_for_mms, fix_residual_digits); `tts_engine.py` (zero double-pad, MMS seed); `captions.py`; `golden_manifest_en.json` |
 | **Ayush** | `exporter/` | `export_mp4.py`, `app.py`, `test_harness.py`, `README.md` | In Progress | Exporter & FastAPI backend (UNBLOCKED by `golden_manifest_en.json`) |
 
 ## Handoffs

@@ -50,6 +50,8 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
+from localization.normalize import clean_for_mms
+
 TARGET_SR = 24000
 TAIL_PAD_SEC = 0.35
 WORDS_PER_SEC = 2.3
@@ -417,9 +419,11 @@ class OfflineTTSEngine:
         mms_lang = lang if lang in self.mms_models else ("hi" if lang == "hi" else None)
         if mms_lang and mms_lang in self.mms_models and HAS_TORCH and HAS_NUMPY:
             try:
+                # Call clean_for_mms before every MMS-TTS call
+                mms_input_text = clean_for_mms(clean_text, mms_lang)
                 tokenizer = self.mms_tokenizers[mms_lang]
                 model = self.mms_models[mms_lang]
-                inputs = tokenizer(clean_text, return_tensors="pt").to(self.device)
+                inputs = tokenizer(mms_input_text, return_tensors="pt").to(self.device)
 
                 # Deterministic duration predictor fix (crucial for zero drift)
                 torch.manual_seed(42)
