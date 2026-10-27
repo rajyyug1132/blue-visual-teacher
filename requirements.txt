@@ -1,0 +1,22 @@
+# Python 3.11 (spaCy, needed by Kokoro's misaki, has no Windows wheels for 3.13 yet).
+# CPU torch:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+transformers==4.46.3          # IndicTrans2's custom model code breaks on the 4.5x cache API (past_key_values)
+huggingface_hub<1
+sentencepiece
+sacremoses
+indic-nlp-library-itt
+sacrebleu
+IndicTransToolkit==1.1.1      # Cython; needs MSVC Build Tools on Windows (see README "Known limits")
+kokoro>=0.9
+misaki[en]
+soundfile
+scipy
+numpy
+pydantic>=2.6
+ollama==0.6.3                 # keep_alive must be the number -1
+httpx
+fastapi
+uvicorn
+playwright                    # then: python -m playwright install chromium
+pytest
