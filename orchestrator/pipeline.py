@@ -59,7 +59,7 @@ def warmup(planner: bool = True) -> dict:
     with _engines_lock:
         if "tts" not in _engines:
             from localization.tts_engine import OfflineTTSEngine
-            _engines["tts"] = OfflineTTSEngine()
+            _engines["tts"] = OfflineTTSEngine(voice_en="af_heart")
         if "translator" not in _engines:
             from localization.translator import OfflineIndicTranslator
             _engines["translator"] = OfflineIndicTranslator()
