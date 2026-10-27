@@ -129,6 +129,21 @@ def _run(job_id: str) -> None:
             job["stage"] = stage
         job["status"] = "processing"
         job["pct"] = int(pct)
+        if stage == "render" and not job.get("preview_ready"):
+            try:
+                out = pipeline.artifact_dir(
+                    job["topic"], job["lang"],
+                    job.get("level") or "beginner",
+                    job.get("target_sec") or 60
+                )
+                if (out / "manifest.json").exists() and (out / "lesson_audio.wav").exists():
+                    job.update(
+                        manifest_url=f"/artifacts/{out.name}/manifest.json",
+                        audio_url=f"/artifacts/{out.name}/lesson_audio.wav",
+                        preview_ready=True,
+                    )
+            except Exception as exc:
+                log.warning("failed to set live preview urls: %s", exc)
         # Update SQLite if job belongs to a registered user
         if job.get("user_id"):
             auth_db.record_lesson(
@@ -250,7 +265,7 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
     job = {
         "job_id": job_id, "user_id": user_id, "topic": topic, "lang": target_lang, "level": req.level or "beginner", "target_sec": req.target_sec or 60,
         "status": "queued", "stage": "queued", "pct": 0, "stage_times": {}, "telemetry": {}, "error": None,
-        "mp4_url": None, "manifest_url": None, "audio_url": None, "cached": False
+        "mp4_url": None, "manifest_url": None, "audio_url": None, "preview_ready": False, "cached": False
     }
     jobs[job_id] = job
 
@@ -279,6 +294,8 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
         "mp4_url": job.get("mp4_url"),
         "video_url": job.get("mp4_url"),
         "manifest_url": job.get("manifest_url"),
+        "audio_url": job.get("audio_url"),
+        "preview_ready": job.get("preview_ready", False),
     }
 
 
