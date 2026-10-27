@@ -494,11 +494,11 @@ class OfflineTTSEngine:
 
     def __init__(
         self,
-        voice_en: str = "af_heart",
-        speed_en: float = 0.98,
+        voice_en: str = "am_michael",
+        speed_en: float = 1.0,
         voice_hi: str = "hf_alpha",
-        speed_hi: float = 0.98,
-        mms_speaking_rate: float = 0.95,
+        speed_hi: float = 1.0,
+        mms_speaking_rate: float = 1.0,
     ):
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
         self.voice_en = voice_en
@@ -510,7 +510,33 @@ class OfflineTTSEngine:
         self.kokoro_hi = None
         self.mms_models: dict[str, Any] = {}
         self.mms_tokenizers: dict[str, Any] = {}
-        self.has_espeak = bool(shutil.which("espeak-ng") or shutil.which("espeak") or _has_espeakng_loader())
+
+        # Discover bundled or system espeak-ng for Hindi Kokoro
+        for ec in [
+            Path(os.environ.get("BVT_TOOLS", "")) / "espeak-ng" / "eSpeak NG",
+            Path(r"D:\git\project requirements\tools\espeak-ng\eSpeak NG"),
+            Path(r"C:\Program Files\eSpeak NG"),
+        ]:
+            dll = ec / "libespeak-ng.dll"
+            if ec.is_dir() and dll.is_file():
+                if str(ec) not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = str(ec) + os.path.pathsep + os.environ.get("PATH", "")
+                os.environ["PHONEMIZER_ESPEAK_PATH"] = str(ec)
+                os.environ["ESPEAK_DATA_PATH"] = str(ec)
+                try:
+                    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+                    EspeakWrapper.set_library(str(dll))
+                    EspeakWrapper.set_data_path(str(ec))
+                except Exception:
+                    pass
+                break
+
+        self.has_espeak = bool(
+            shutil.which("espeak-ng")
+            or shutil.which("espeak")
+            or _has_espeakng_loader()
+            or os.environ.get("PHONEMIZER_ESPEAK_PATH")
+        )
 
         # Preload Kokoro pipelines if available
         if HAS_KOKORO:
@@ -609,6 +635,12 @@ class OfflineTTSEngine:
                 ]
                 if chunks:
                     speech_wav = np.concatenate(chunks).astype(np.float32)
+                    try:
+                        max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
+                        if max_v > 1e-5:
+                            speech_wav = (speech_wav / max_v) * 0.95
+                    except Exception:
+                        pass
                     speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
                     pad = np.zeros(pad_samples, dtype=np.float32)
                     full_wav = np.concatenate([speech_wav, pad])
@@ -629,6 +661,12 @@ class OfflineTTSEngine:
                 ]
                 if chunks:
                     speech_wav = np.concatenate(chunks).astype(np.float32)
+                    try:
+                        max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
+                        if max_v > 1e-5:
+                            speech_wav = (speech_wav / max_v) * 0.95
+                    except Exception:
+                        pass
                     speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
                     pad = np.zeros(pad_samples, dtype=np.float32)
                     full_wav = np.concatenate([speech_wav, pad])
@@ -646,6 +684,9 @@ class OfflineTTSEngine:
             try:
                 # Call clean_for_mms before every MMS-TTS call
                 mms_input_text = clean_for_mms(clean_text, mms_lang)
+                # Strip commas and periods for MMS-TTS so it speaks fluently without stutter/awkward pauses
+                mms_input_text = re.sub(r"[,\.\?\!\:\;\|\-\—\–\u0964\u0965]", " ", mms_input_text)
+                mms_input_text = re.sub(r"\s+", " ", mms_input_text).strip()
                 tokenizer = self.mms_tokenizers[mms_lang]
                 model = self.mms_models[mms_lang]
                 inputs = tokenizer(mms_input_text, return_tensors="pt").to(self.device)
@@ -666,6 +707,12 @@ class OfflineTTSEngine:
                         np.linspace(0, old_len, new_len), np.arange(old_len), out
                     ).astype(np.float32)
 
+                try:
+                    max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
+                    if max_v > 1e-5:
+                        speech_wav = (speech_wav / max_v) * 0.95
+                except Exception:
+                    pass
                 speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
                 pad = np.zeros(pad_samples, dtype=np.float32)
                 full_wav = np.concatenate([speech_wav, pad])

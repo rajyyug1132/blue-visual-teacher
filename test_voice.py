@@ -37,11 +37,16 @@ DEFAULT_TEXTS = {
 }
 
 
-def synthesize_and_save(lang: str, text: str, target_dur: float | None = None, play: bool = False) -> Path:
+def synthesize_and_save(lang: str, text: str, voice: str | None = None, target_dur: float | None = None, play: bool = False) -> Path:
     from localization.tts_engine import OfflineTTSEngine
 
     print(f"\n[TTS Engine] Initializing voice synthesizer for '{lang}'...")
-    tts = OfflineTTSEngine()
+    kwargs = {}
+    if voice and lang == "en":
+        kwargs["voice_en"] = voice
+    elif voice and lang == "hi":
+        kwargs["voice_hi"] = voice
+    tts = OfflineTTSEngine(**kwargs)
 
     engine_desc = "Synthetic Fallback"
     if lang == "en" and tts.kokoro_en is not None:
@@ -92,6 +97,11 @@ def main():
         help="Target language code (default: 'en')",
     )
     parser.add_argument(
+        "--voice",
+        default=None,
+        help="Custom voice ID (e.g. 'am_michael', 'af_bella', 'bm_george' for English; 'hf_alpha', 'hm_omega' for Hindi)",
+    )
+    parser.add_argument(
         "--text",
         default=None,
         help="Custom text to speak. If omitted, uses a standard STEM lesson sentence.",
@@ -110,7 +120,7 @@ def main():
 
     args = parser.parse_args()
     text = args.text or DEFAULT_TEXTS.get(args.lang, DEFAULT_TEXTS["en"])
-    synthesize_and_save(args.lang, text, target_dur=args.target_dur, play=args.play)
+    synthesize_and_save(args.lang, text, voice=args.voice, target_dur=args.target_dur, play=args.play)
 
 
 if __name__ == "__main__":
