@@ -33,7 +33,7 @@ Follow these steps to run the full application locally on your machine.
 
 #### 1. Clone repository (branch `v1`)
 ```powershell
-git clone --branch v1 https://github.com/rajyyug1132/blue-visual-teacher
+git clone https://github.com/rajyyug1132/blue-visual-teacher
 cd blue-visual-teacher
 ```
 
@@ -68,7 +68,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 #### 1. Clone repository (branch `v1`)
 ```bash
-git clone --branch v1 https://github.com/rajyyug1132/blue-visual-teacher
+git clone https://github.com/rajyyug1132/blue-visual-teacher
 cd blue-visual-teacher
 ```
 

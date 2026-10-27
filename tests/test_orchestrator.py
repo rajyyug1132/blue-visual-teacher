@@ -688,3 +688,45 @@ def test_fallback_fills_the_requested_length(target):
     assert plan.target_sec == target
     assert lo <= sum(words(plan)) <= hi
     assert all(schema.WORDS_MIN <= w <= schema.WORDS_MAX for w in words(plan))
+
+
+def test_generate_lesson_fails_on_tone_audio(tmp_path, monkeypatch):
+    import numpy as np
+    import wave
+    from orchestrator import pipeline
+    from orchestrator.schema import LessonPlan
+
+    monkeypatch.setattr(pipeline, "ARTIFACTS", tmp_path)
+    plan = LessonPlan.model_validate_json(GOOD_JSON)
+
+    class ToneTTS:
+        def synthesize_all_scenes(self, scenes, lang, out_wav_path):
+            sr = 24000
+            dur = 35.0
+            n_samples = int(dur * sr)
+            t = np.linspace(0, dur, n_samples, endpoint=False)
+            audio = (0.90 * np.sin(2 * np.pi * 440.0 * t) * 32767).astype(np.int16)
+            with wave.open(str(out_wav_path), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sr)
+                wf.writeframes(audio.tobytes())
+            timing, cursor = [], 0.0
+            for s in scenes:
+                sdur = dur / len(scenes)
+                timing.append({"id": s.id, "start_sec": cursor, "end_sec": cursor + sdur, "duration_sec": sdur,
+                               "narration": s.narration, "visual": s.visual.model_dump()})
+                cursor += sdur
+            return timing
+
+    with pytest.raises(RuntimeError, match="non-speech audio"):
+        pipeline.generate_lesson(
+            "Ohm's Law",
+            "en",
+            tts=ToneTTS(),
+            plan_fn=lambda topic: (plan, {}),
+            export=lambda d, lang, cb: None,
+        )
+    # Ensure tone audio was not left behind in artifacts
+    assert not (tmp_path / "ohm-s-law_en" / "lesson_audio.wav").exists()
+    assert not (tmp_path / "ohm-s-law_en" / "manifest.json").exists()

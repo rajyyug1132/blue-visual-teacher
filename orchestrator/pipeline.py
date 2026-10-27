@@ -18,7 +18,7 @@ from orchestrator.cache import topic_slug
 
 DURATION_MIN_SEC, DURATION_MAX_SEC = 30.0, 90.0
 ROOT = Path(__file__).resolve().parent.parent
-ARTIFACTS = ROOT / "cache" / "artifacts"
+ARTIFACTS = Path(os.environ.get("CACHE_ARTIFACTS_DIR", ROOT / "cache" / "artifacts"))
 STAGES = ("plan", "translate", "tts", "render", "encode", "done")
 LEVELS = ("beginner", "intermediate")
 DEFAULT_LEVEL, DEFAULT_TARGET_SEC = "beginner", 60
@@ -59,7 +59,8 @@ def warmup(planner: bool = True) -> dict:
     with _engines_lock:
         if "tts" not in _engines:
             from localization.tts_engine import OfflineTTSEngine
-            _engines["tts"] = OfflineTTSEngine(voice_en="af_heart")
+            voice_en = os.environ.get("VOICE_EN", "hf_alpha")
+            _engines["tts"] = OfflineTTSEngine(voice_en=voice_en)
         if "translator" not in _engines:
             from localization.translator import OfflineIndicTranslator
             _engines["translator"] = OfflineIndicTranslator()
@@ -85,6 +86,82 @@ def available_languages() -> list[str]:
                 langs.append(code)
     return langs
 
+
+
+
+def check_audio_is_speech(wav_path: Path | str, lang: str, voice: str | None = None) -> None:
+    """Validate that synthesized WAV contains real speech, not silence or a synthetic tone.
+
+    Enforces 50 ms RMS windows (threshold 0.02):
+      - peak > 0.1
+      - voiced percentage < 90% (synthetic tones have ~95-100% continuous voicing)
+      - transitions per second > 1.5 (~2 per second; speech alternates between voiced and unvoiced/pauses)
+    """
+    import math
+    import struct
+    import wave
+
+    p = Path(wav_path)
+    if not p.is_file() or p.stat().st_size < 100:
+        if p.exists():
+            p.unlink(missing_ok=True)
+        raise RuntimeError(f"TTS audio file is missing or empty for lang '{lang}' (voice: {voice})")
+
+    with wave.open(str(p), "rb") as wf:
+        sr = wf.getframerate()
+        nch = wf.getnchannels()
+        sw = wf.getsampwidth()
+        nframes = wf.getnframes()
+        raw = wf.readframes(nframes)
+
+    duration = nframes / max(sr, 1)
+    if sw != 2:
+        return
+
+    fmt = f"<{nframes * nch}h"
+    samples = struct.unpack(fmt, raw)
+    if nch > 1:
+        samples = samples[::nch]
+    float_samples = [s / 32768.0 for s in samples]
+
+    peak = max((abs(s) for s in float_samples), default=0.0)
+    window_size = int(sr * 0.05)
+    if window_size <= 0:
+        return
+
+    n_windows = len(float_samples) // window_size
+    if n_windows == 0:
+        if p.exists():
+            p.unlink(missing_ok=True)
+        raise RuntimeError(f"TTS audio too short ({duration:.2f}s) for lang '{lang}' (voice: {voice})")
+
+    threshold = 0.02
+    voiced_count = 0
+    transitions = 0
+    prev_voiced = None
+
+    for i in range(n_windows):
+        start = i * window_size
+        chunk = float_samples[start : start + window_size]
+        rms = math.sqrt(sum(s * s for s in chunk) / len(chunk))
+        is_voiced = rms > threshold
+        if is_voiced:
+            voiced_count += 1
+        if prev_voiced is not None and is_voiced != prev_voiced:
+            transitions += 1
+        prev_voiced = is_voiced
+
+    voiced_pct = (voiced_count / n_windows) * 100.0
+    trans_per_sec = transitions / max(duration, 0.1)
+
+    if peak <= 0.1 or voiced_pct >= 90.0 or trans_per_sec < 1.5:
+        if p.exists():
+            p.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"TTS generated non-speech audio (silent tone or lack of natural pauses) for lang '{lang}' "
+            f"(voice: {voice}): peak={peak:.3f}, voiced={voiced_pct:.1f}%, transitions/sec={trans_per_sec:.2f}. "
+            "Offline TTS failed to produce genuine spoken voice."
+        )
 
 def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEFAULT_LEVEL,
                     target_sec: int = DEFAULT_TARGET_SEC, tts=None, translator=None, export=None,
@@ -131,6 +208,10 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
         times["duration_fit"] = round(time.perf_counter() - start, 3)
         telemetry = {**telemetry, "duration_trims": trims}
     total = duration_gate(timing)
+
+    if wav.exists():
+        voice_used = getattr(tts, f"voice_{lang}", getattr(tts, "voice_en" if lang == "en" else "voice_hi", None))
+        check_audio_is_speech(wav, lang=lang, voice=voice_used)
 
     manifest = {"title": localized.title, "lang": lang, "total_sec": total, "audio": wav.name,
                 "sample_rate": 24000, "scenes": timing}

@@ -58,7 +58,7 @@ class WordRateTTS:
                              "duration_sec": dur, "narration": s.narration, "visual": s.visual.model_dump()})
             n = int(dur * 24000)
             for i in range(n):
-                v = int(1500 * math.sin(2 * math.pi * 220 * i / 24000))
+                v = int(10000 * math.sin(2 * math.pi * 220 * i / 24000)) if (i % 7200) < 3600 else 0
                 frames += v.to_bytes(2, "little", signed=True)
             cursor += dur
         with wave.open(str(out_wav_path), "wb") as w:
@@ -70,7 +70,10 @@ class WordRateTTS:
 
 
 def golden_plan(topic=None):
-    return LessonPlan.model_validate_json(FIXTURE.read_text(encoding="utf-8")), {"fixture": True}
+    plan = LessonPlan.model_validate_json(FIXTURE.read_text(encoding="utf-8"))
+    if topic:
+        plan.title = topic
+    return plan, {"fixture": True}
 
 
 def require_exporter():

@@ -67,7 +67,7 @@ export function RunLocally({ variant, language = 'en' }: { variant: 'preview' | 
       )}
       <pre className="overflow-x-auto rounded-xl bg-ink px-3 py-2 text-xs text-cream">
         <code>
-          {`git clone --branch v1 https://github.com/rajyyug1132/blue-visual-teacher
+          {`git clone https://github.com/rajyyug1132/blue-visual-teacher
 cd blue-visual-teacher
 # one-time setup: see README "Run it locally" (Python 3.11 venv, Ollama + qwen2.5:3b, FFmpeg, model download)
 # terminal 1: lesson server
