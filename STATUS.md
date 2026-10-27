@@ -205,3 +205,26 @@ Votes: YYUG [x] · FARHAN [ ] · TARUN [ ] · AYUSH [ ]
   `app/layout.tsx` offline violations, and nothing deployed at the Vercel URL.
 
 **From Pass 2 on, one keeper pushes to v1** -- two agents merging and pushing the same branch is the race this role exists to prevent.
+
+### Pass 2 (YYUG keeper session) · 2026-10-28 00:35
+
+- **Rebased** onto AYUSH's `d1c1223` (his keeper log + CC-1 vote). Two STATUS.md conflicts, both resolved keeping both sides:
+  his `AYUSH ✅` vote on CC-1 kept, his Pass 1 kept verbatim, mine placed beside it with the reconciliation note above.
+- **Merged:** `yyug/dashboard-banners` (`86a39e3`, merge `b6388e2`) -- the dashboard now renders real history from
+  `GET /api/lessons/history` and only shows the demo banner for a tokenless local session. 3 files, frontend only.
+  Verified live before merging: a fresh user signed up, generated Ohm's Law, and the dashboard listed it.
+- **Gate on the merge:** `tsc --noEmit` exit 0 · `next build` compiles, `/dashboard` prerendered · `tests/test_ui.py` +
+  `tests/test_e2e_offline.py` 10 passed, 3 skipped · renderer 18/18 · `test:units` 12 + 5. Full suite on the pre-merge code:
+  204 passed, 3 skipped (Pass 1). The merge changes no Python.
+- **Held:** `yyug/code-walkthrough` (`cc3597b`, owner YYUG). Two reasons. (1) Until FARHAN's `code_walkthrough` template exists,
+  the planner can now choose a scene type that nothing renders, and the judges' Python-loops sample is the topic most likely to
+  trigger it -- merging the schema alone makes that demo worse, not better. Merge it together with his template. (2) It was cut
+  from the pre-rebase `96cd58c`, so it must be replayed first: `git rebase --onto v1 96cd58c yyug/code-walkthrough`; a plain
+  merge drags in duplicate docs commits. Not yet full-suite tested (its own run was stopped to free RAM for the baseline).
+- **Skipped:** `origin/ayush/frontend` -- unchanged, still stale.
+- **Decision recorded:** the Next UI is the product UI (Handoffs, 00:30).
+- **Vercel:** unchanged -- nothing deployed at the URL, CLI logged out on this machine.
+- **Waiting on owners:** AYUSH (STEP 0-4 prompt sent 00:25: sync, offline fixes in `app/layout.tsx`, hardcoded
+  `127.0.0.1:8000` in `app/lesson/[id]/page.tsx:28` and `components/app/lesson-view.tsx:24-25`, next-scene/replay, level +
+  length inputs) · FARHAN (code_walkthrough template, `web/` next/replay) · TARUN (Indian-English voice default, device hardcode).
+
