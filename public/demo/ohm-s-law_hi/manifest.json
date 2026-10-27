@@ -21,7 +21,8 @@
           ],
           "steps": [
             "भारत में रोजमर्रा की बिजली"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Ohm's Law V = I × R Electricity in everyday gadgets"
         }
       }
     },
@@ -42,7 +43,8 @@
           "steps": [
             "उच्च दबाव अधिक प्रवाह को धक्का देता है",
             "संकीर्ण पाइप प्रवाह को प्रतिबंधित करता है"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Roof Tank Height → Voltage (V) Pipe Water Flow → Current (I) Narrow Tap → Resistance (R) Pressure pushes flow Narrower path restricts flow"
         }
       }
     },
@@ -64,7 +66,8 @@
           "steps": [
             "I = V / R",
             "R = V / I"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance V = I × R V : Voltage (Volts) I : Current (Amperes) R : Resistance (Ohms Ω) I = V / R R = V / I"
         }
       }
     },
@@ -85,7 +88,8 @@
           ],
           "steps": [
             "230 V ÷ 46 Ω = 5 Amperes"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Supply: V = 230 V Heater Coil: R = 46 Ω Formula: I = V / R Result: I = 5 A 230 V ÷ 46 Ω = 5 Amperes"
         }
       }
     },
@@ -105,7 +109,8 @@
             "वोल्टेज (V) : वोल्ट में विद्युत दबाव",
             "प्रतिरोध (R) : ओम में विरोध का प्रवाह (Ω)",
             "वर्तमान (I = V / R) : एम्पीयर में प्रवाह दर"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Key Takeaways: Ohm's Law Voltage (V): Electrical pressure in Volts Resistance (R): Opposition to flow in Ohms (Ω) Current (I = V / R): Flow rate in Amperes"
         }
       }
     }

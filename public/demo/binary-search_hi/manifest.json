@@ -21,7 +21,8 @@
           ],
           "steps": [
             "क्रमबद्ध डेटा में त्वरित खोज"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Binary Search Logarithmic Time Divide and Conquer Fast Lookup in Sorted Data"
         }
       }
     },
@@ -41,7 +42,8 @@
           "steps": [
             "रैखिक : सूची के साथ काम बढ़ता है",
             "द्विआधारी : काम बहुत धीरे-धीरे बढ़ता है।"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Linear Scan: One by One Binary Search: Cut in Half Linear: work grows with the list Binary: work grows very slowly"
         }
       }
     },
@@ -62,7 +64,8 @@
           "steps": [
             "एक क्रमबद्ध सूची की आवश्यकता है",
             "प्रत्येक चरण में खोज को आधा कर देता है"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Find the middle element Compare target with middle Keep the correct half Requires a sorted list Halves the search each step"
         }
       }
     },
@@ -83,7 +86,8 @@
           ],
           "steps": [
             "कई के बजाय दो चेक"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Sorted list of roll numbers Check middle: too small Keep the right half Target found Two checks instead of many"
         }
       }
     },
@@ -103,7 +107,8 @@
             "पूर्व शर्त : डेटा को क्रमबद्ध किया जाना चाहिए",
             "तंत्र : प्रत्येक चरण में सीमा को आधा करें",
             "गति : लघुगणक तुलनाएँ"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Binary Search Summary Precondition: data must be sorted Mechanism: halve the range each step Speed: logarithmic comparisons"
         }
       }
     }

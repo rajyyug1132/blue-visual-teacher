@@ -1,7 +1,7 @@
 {
   "title": "Ohm's Law: Voltage, Current, and Resistance",
   "lang": "en",
-  "total_sec": 53.9,
+  "total_sec": 55.275,
   "audio": "lesson_audio.wav",
   "sample_rate": 24000,
   "scenes": [
@@ -21,35 +21,38 @@
           ],
           "steps": [
             "Everyday Electricity in India"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Ohm's Law V = I × R Electricity in everyday gadgets"
         }
       }
     },
     {
       "id": 2,
       "start_sec": 9.125,
-      "end_sec": 18.875,
-      "duration_sec": 9.75,
-      "narration": "Think of an overhead water tank on your house roof. Water height is Voltage, water flow through the pipe is Current, and a narrow tap is Resistance.",
+      "end_sec": 20.25,
+      "duration_sec": 11.125,
+      "narration": "Compare water tanks: rooftop tank fills kitchen taps. Flow like cricket matches: one tank fills many taps. Table: train schedule, train, station, time.",
       "visual": {
-        "type": "compare",
+        "type": "table",
         "params": {
           "labels": [
-            "Roof Tank Height → Voltage (V)",
-            "Pipe Water Flow → Current (I)",
-            "Narrow Tap → Resistance (R)"
+            "Train",
+            "Station",
+            "Schedule"
           ],
           "steps": [
-            "Higher pressure pushes more flow",
-            "Narrower pipe restricts flow"
-          ]
+            "Train arrives at station",
+            "Station schedules next train",
+            "Train departs"
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Roof Tank Height → Voltage (V) Pipe Water Flow → Current (I) Narrow Tap → Resistance (R) Pressure pushes flow Narrower path restricts flow"
         }
       }
     },
     {
       "id": 3,
-      "start_sec": 18.875,
-      "end_sec": 30.5,
+      "start_sec": 20.25,
+      "end_sec": 31.875,
       "duration_sec": 11.625,
       "narration": "Georg Ohm discovered that Voltage equals Current multiplied by Resistance: V equals I times R. Doubling voltage doubles the current if resistance stays constant.",
       "visual": {
@@ -64,14 +67,15 @@
           "steps": [
             "I = V / R",
             "R = V / I"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance V = I × R V : Voltage (Volts) I : Current (Amperes) R : Resistance (Ohms Ω) I = V / R R = V / I"
         }
       }
     },
     {
       "id": 4,
-      "start_sec": 30.5,
-      "end_sec": 44.0,
+      "start_sec": 31.875,
+      "end_sec": 45.375,
       "duration_sec": 13.5,
       "narration": "Let's test a two hundred thirty volt Indian wall socket powering an iron box with forty-six ohms resistance. Two hundred thirty divided by forty-six gives five amperes of current.",
       "visual": {
@@ -85,14 +89,15 @@
           ],
           "steps": [
             "230 V ÷ 46 Ω = 5 Amperes"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Supply: V = 230 V Heater Coil: R = 46 Ω Formula: I = V / R Result: I = 5 A 230 V ÷ 46 Ω = 5 Amperes"
         }
       }
     },
     {
       "id": 5,
-      "start_sec": 44.0,
-      "end_sec": 53.9,
+      "start_sec": 45.375,
+      "end_sec": 55.275,
       "duration_sec": 9.9,
       "narration": "To recap: Voltage pushes electrons, Resistance opposes them, and Current is the resulting flow governed by V equals I times R.",
       "visual": {
@@ -105,7 +110,8 @@
             "Voltage (V): Electrical pressure in Volts",
             "Resistance (R): Opposition to flow in Ohms (Ω)",
             "Current (I = V / R): Flow rate in Amperes"
-          ]
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Key Takeaways: Ohm's Law Voltage (V): Electrical pressure in Volts Resistance (R): Opposition to flow in Ohms (Ω) Current (I = V / R): Flow rate in Amperes"
         }
       }
     }

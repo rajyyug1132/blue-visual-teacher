@@ -1,7 +1,7 @@
 {
   "title": "Photosynthesis: Plants Make Their Food",
   "lang": "en",
-  "total_sec": 52.05,
+  "total_sec": 50.55,
   "audio": "lesson_audio.wav",
   "sample_rate": 24000,
   "scenes": [
@@ -21,33 +21,38 @@
           ],
           "steps": [
             "Morning Green, Evening Yellow"
-          ]
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Photosynthesis Plants Make Food Sunlight, Water, Air Morning Green, Evening Yellow"
         }
       }
     },
     {
       "id": 2,
       "start_sec": 8.175,
-      "end_sec": 17.55,
-      "duration_sec": 9.375,
-      "narration": "Think of a water tank where water flows in and out. Plants have a similar system where water flows in from roots and out through leaves.",
+      "end_sec": 16.05,
+      "duration_sec": 7.875,
+      "narration": "A sunny day fills our water tank with fresh water. Like a cricket match, sunlight is the ball that fills our tank.",
       "visual": {
-        "type": "compare",
+        "type": "table",
         "params": {
           "labels": [
-            "Roots: Water In",
-            "Leaves: Water Out"
+            "Sun",
+            "Water Tank",
+            "Cricket Match"
           ],
           "steps": [
-            "Water In, Water Out"
-          ]
+            "Sunlight shines, fills like a cricket ball in a match.",
+            "Water tank collects sunlight, like a cricket team collects balls.",
+            "Cricket match ends, water tank is full."
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Roots: Water In Leaves: Water Out Water In, Water Out"
         }
       }
     },
     {
       "id": 3,
-      "start_sec": 17.55,
-      "end_sec": 31.7,
+      "start_sec": 16.05,
+      "end_sec": 30.2,
       "duration_sec": 14.15,
       "narration": "Photosynthesis is like a water tank where plants take in carbon dioxide (carbon dioxide) from air, water (water) from roots, and sunlight (light energy) to produce glucose (glucose) and oxygen (oxygen).",
       "visual": {
@@ -58,14 +63,15 @@
           ],
           "steps": [
             "Carbon Dioxide + Water + Light → Glucose + Oxygen"
-          ]
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Carbon dioxide + water + light energy → glucose + oxygen Carbon Dioxide + Water + Light → Glucose + Oxygen"
         }
       }
     },
     {
       "id": 4,
-      "start_sec": 31.7,
-      "end_sec": 41.525,
+      "start_sec": 30.2,
+      "end_sec": 40.025,
       "duration_sec": 9.825,
       "narration": "Let's see how much glucose a plant makes. If a plant takes in carbon dioxide and water, and gets light energy, it produces glucose and oxygen.",
       "visual": {
@@ -76,14 +82,15 @@
           ],
           "steps": [
             "CO2 + H2O + Light → Glucose + Oxygen"
-          ]
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food CO2 + H2O + Light → Glucose + Oxygen CO2 + H2O + Light → Glucose + Oxygen"
         }
       }
     },
     {
       "id": 5,
-      "start_sec": 41.525,
-      "end_sec": 52.05,
+      "start_sec": 40.025,
+      "end_sec": 50.55,
       "duration_sec": 10.525,
       "narration": "To recap: Plants use sunlight, water, and air to make their food, glucose, and release oxygen. Photosynthesis is a key process for life on Earth.",
       "visual": {
@@ -96,7 +103,8 @@
             "Sunlight, Water, Air: Inputs",
             "Glucose, Oxygen: Outputs",
             "Photosynthesis: Life's Engine"
-          ]
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Key Takeaways Sunlight, Water, Air: Inputs Glucose, Oxygen: Outputs Photosynthesis: Life's Engine"
         }
       }
     }

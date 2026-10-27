@@ -21,7 +21,8 @@
           ],
           "steps": [
             "Fast Lookup in Sorted Data"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Binary Search Logarithmic Time Divide and Conquer Fast Lookup in Sorted Data"
         }
       }
     },
@@ -41,7 +42,8 @@
           "steps": [
             "Linear: work grows with the list",
             "Binary: work grows very slowly"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Linear Scan: One by One Binary Search: Cut in Half Linear: work grows with the list Binary: work grows very slowly"
         }
       }
     },
@@ -62,7 +64,8 @@
           "steps": [
             "Requires a sorted list",
             "Halves the search each step"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Find the middle element Compare target with middle Keep the correct half Requires a sorted list Halves the search each step"
         }
       }
     },
@@ -83,7 +86,8 @@
           ],
           "steps": [
             "Two checks instead of many"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Sorted list of roll numbers Check middle: too small Keep the right half Target found Two checks instead of many"
         }
       }
     },
@@ -103,7 +107,8 @@
             "Precondition: data must be sorted",
             "Mechanism: halve the range each step",
             "Speed: logarithmic comparisons"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Binary Search Summary Precondition: data must be sorted Mechanism: halve the range each step Speed: logarithmic comparisons"
         }
       }
     }

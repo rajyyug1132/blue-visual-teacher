@@ -21,7 +21,8 @@
           ],
           "steps": [
             "ವಿಂಗಡಿಸಲಾದ ದತ್ತಾಂಶದಲ್ಲಿ ತ್ವರಿತ ಶೋಧನೆ"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Binary Search Logarithmic Time Divide and Conquer Fast Lookup in Sorted Data"
         }
       }
     },
@@ -41,7 +42,8 @@
           "steps": [
             "ರೇಖೀಯ : ಪಟ್ಟಿಯೊಂದಿಗೆ ಕೆಲಸವೂ ಬೆಳೆಯುತ್ತದೆ.",
             "ಬೈನರಿ : ಕೆಲಸವು ಬಹಳ ನಿಧಾನವಾಗಿ ಬೆಳೆಯುತ್ತದೆ."
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Linear Scan: One by One Binary Search: Cut in Half Linear: work grows with the list Binary: work grows very slowly"
         }
       }
     },
@@ -62,7 +64,8 @@
           "steps": [
             "ವಿಂಗಡಿಸಲಾದ ಪಟ್ಟಿಯ ಅಗತ್ಯವಿದೆ",
             "ಪ್ರತಿ ಹಂತದಲ್ಲೂ ಹುಡುಕಾಟವನ್ನು ಅರ್ಧಕ್ಕೆ ಇಳಿಸಿ"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Find the middle element Compare target with middle Keep the correct half Requires a sorted list Halves the search each step"
         }
       }
     },
@@ -83,7 +86,8 @@
           ],
           "steps": [
             "ಹಲವು ಚೆಕ್ಗಳ ಬದಲಿಗೆ ಎರಡು ಚೆಕ್ಗಳು"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Sorted list of roll numbers Check middle: too small Keep the right half Target found Two checks instead of many"
         }
       }
     },
@@ -103,7 +107,8 @@
             "ಪೂರ್ವ ಷರತ್ತು : ದತ್ತಾಂಶವನ್ನು ವಿಂಗಡಿಸಬೇಕು",
             "ಕಾರ್ಯವಿಧಾನ : ಪ್ರತಿ ಹಂತದಲ್ಲೂ ವ್ಯಾಪ್ತಿಯನ್ನು ಅರ್ಧಕ್ಕೆ ಇಳಿಸಿ",
             "ವೇಗ : ಲಾಗರಿದಮಿಕ್ ಹೋಲಿಕೆಗಳು"
-          ]
+          ],
+          "topic_en": "Binary Search: Halving the Search Space Binary Search Summary Precondition: data must be sorted Mechanism: halve the range each step Speed: logarithmic comparisons"
         }
       }
     }
