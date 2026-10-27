@@ -1,0 +1,88 @@
+
+model qwen2.5:3b | warm-up 18.65s
+
+topic                           sec  swap   cls policy  stage       model       math   said viol final words
+------------------------------------------------------------------------------------------------------------
+Photosynthesis                59.30   3.4  0.28 none    escalate    qwen2.5:7b  none   -       9 ok      113
+    rungs: plan qwen2.5:3b 16.34s x -> retry qwen2.5:3b 17.69s x -> escalate qwen2.5:7b 24.97s ok
+    ex: Leaves capture sunlight, use it to split water into hydrogen and oxygen. Oxygen is released, and hydrogen combines with carbon dioxide to form glucose, a sugar.
+    ! plan: Remove the numbers (100) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'grams' from scene 4 narration, k
+    ! retry: Remove the numbers (100) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'grams' from scene 4 narration, 
+Newton's Third Law            20.52   0.0  7.60 none    plan        qwen2.5:3b  none   -       0 ok      122
+    ex: Let's apply this to a simple scenario: a person jumping. The person pushes down on the ground, and the ground pushes up with an equal force, propelling the person into the air.
+Binary Search                 36.67   0.0 29.61 none    plan        qwen2.5:3b  none   -       0 ok      126
+    ex: Let's search a sorted list for a target. We check the middle item, see the target is larger, keep only the right half, and find it on the next check.
+Supply and Demand             19.43   0.0  0.30 none    retry       qwen2.5:3b  none   -       6 ok      124
+    rungs: plan qwen2.5:3b 12.64s x -> retry qwen2.5:3b 6.48s ok
+    ex: Let's say you have a certain amount of water. If many people want it, you need to provide more. If fewer people want it, you can reduce the amount provided.
+    ! plan: Remove the numbers (100, 50, 25) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'liters' from scene 4 nar
+DNA Replication               57.66   0.0  7.06 none    retry       qwen2.5:3b  none   -       2 ok      121
+    rungs: plan qwen2.5:3b 13.19s x -> retry qwen2.5:3b 37.42s ok
+    ex: Let's say we have a DNA sequence. During replication, the enzyme replicates each base pair exactly once, ensuring the genetic code is copied accurately.
+    ! plan: Remove the numbers (100) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the numbers (100) from scene 4 label, keep
+Pythagoras Theorem           113.60   3.7  0.31 none    qualitative qwen2.5:7b  none   -      26 ok      125
+    rungs: plan qwen2.5:3b 14.09s x -> retry qwen2.5:3b 16.07s x -> escalate qwen2.5:7b 46.78s x -> qualitative qwen2.5:7b 36.28s ok
+    ex: Let's visualize a right triangle. The longest side, or hypotenuse, is like the diagonal path. The other two sides are like the sides of a rectangle.
+    ! plan: Remove '=' from scene 3 label, keep the text natural. This topic has no formula. | Remove '=' from scene 3 step, keep the text natural. This topic has no 
+    ! retry: Remove '=' from scene 3 label, keep the text natural. This topic has no formula. | Remove '=' from scene 3 step, keep the text natural. This topic has no
+    ! escalate: Remove '=' from scene 3 step, keep the text natural. This topic has no formula. | Remove '=' from scene 4 step, keep the text natural. This topic has 
+Water Cycle                   78.21   3.8  0.28 none    escalate    qwen2.5:7b  none   -      12 ok      120
+    rungs: plan qwen2.5:3b 15.53s x -> retry qwen2.5:3b 16.31s x -> escalate qwen2.5:7b 46.01s ok
+    ex: Water evaporates from the ocean, rises, cools, and condenses into clouds. When the clouds get heavy, they release rain, which collects in rivers and lakes.
+    ! plan: Remove the numbers (100, 50, 50) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'liters' from scene 4 nar
+    ! retry: Remove the numbers (50, 25, 25) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'liters' from scene 4 nar
+Compound Interest             25.82   0.0  0.28 checked retry       qwen2.5:3b  ok     y       1 ok      120
+    rungs: plan qwen2.5:3b 16.57s x -> retry qwen2.5:3b 8.98s ok
+    ex: Let's calculate the amount in a bank account. Suppose you invest one thousand rupees at five percent interest compounded quarterly for five years. The amount after five years is twelve eighty rupees.  [check 1000 * (1 + 0.05/4)^(4*5) = 1276.28]
+    ! plan: Scene 4: narration must say the final answer, about twelve eighty.
+Acid-Base Titration          119.39   3.6  6.09 none    qualitative qwen2.5:7b  none   -       4 ok      120
+    rungs: plan qwen2.5:3b 13.69s x -> retry qwen2.5:3b 36.08s x -> escalate qwen2.5:7b 29.14s x -> qualitative qwen2.5:7b 34.38s ok
+    ex: A scientist adds a few drops of acid to a solution, then carefully mixes it. The solution changes color, showing the acid is reacting.
+    ! plan: Scene 4: narration must say the final answer, thirty. | Remove the numbers (14) from scene 3 label, keep the sentence natural. Only numbers from the check
+    ! retry: Remove the numbers (14) from scene 3 label, keep the sentence natural. Only numbers from the checked worked example may appear.
+    ! escalate: Remove the numbers (100) from scene 4 label, keep the sentence natural. Only numbers from the checked worked example may appear.
+TCP Three-Way Handshake       41.57   0.0  6.87 none    plan        qwen2.5:3b  none   -       0 ok      101
+    ex: Let's simulate a simple TCP handshake. A sender sends SYN, a receiver responds with SYN-ACK, and the sender confirms with ACK.
+Indian Independence Movement  35.61   0.0 27.76 none    plan        qwen2.5:3b  none   -       0 ok      131
+    ex: Let's look at one strategy: the Non-Cooperation Movement. It started in nineteen twenty when people stopped working for the British, much like a batsman refusing to play in a match.
+Monsoon                       74.83  22.3  0.31 none    escalate    qwen2.5:7b  none   -      17 ok      140
+    rungs: plan qwen2.5:3b 13.24s x -> retry qwen2.5:3b 14.0s x -> escalate qwen2.5:7b 47.2s ok
+    ex: Let's see how the monsoon works. In the southwest, the wind brings moisture from the sea, which condenses into rain. This rain fills up the atmosphere like a water tank.
+    ! plan: Remove the numbers (230000) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'liters' from scene 4 narratio
+    ! retry: Remove the numbers (230000) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'liters' from scene 4 narrati
+GST                           49.46   3.6  0.18 none    escalate    qwen2.5:7b  none   -      31 ok      141
+    rungs: plan qwen2.5:3b 9.04s x -> retry qwen2.5:3b 14.99s x -> escalate qwen2.5:7b 25.24s ok
+    ex: GST ensures that taxes are collected at each step, preventing tax evasion and ensuring a fair tax system. It simplifies the tax structure and makes it easier for businesses to comply.
+    ! plan: Remove the numbers (100) from scene 3 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'percentage' from scene 3 narrati
+    ! retry: Remove the numbers (100) from scene 3 narration, keep the sentence natural. This topic is descriptive. | Remove the unit 'percentage' from scene 3 narrat
+Mughal Empire                 21.30   0.0  7.50 none    plan        qwen2.5:3b  none   -       0 ok      123
+    ex: Imagine the Mughal Empire as a garden where the emperor decided to plant crops in the center, leaving the edges untouched.
+Democracy                    148.61  21.6 33.55 none    qualitative qwen2.5:7b  none   -      10 ok      124
+    rungs: plan qwen2.5:3b 33.92s x -> retry qwen2.5:3b 7.43s x -> escalate qwen2.5:7b 38.36s x -> qualitative qwen2.5:7b 35.33s ok
+    ex: Let's see how it works. Citizens gather to vote for a local councilor. They discuss, debate, and cast their ballots. The candidate with the most votes wins and leads the community.
+    ! plan: Remove the numbers (100, 60, 40) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the numbers (100) from scene 4 lab
+    ! retry: Remove the numbers (100, 60, 40) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Remove the numbers (60, 40) from scene 4
+    ! escalate: Remove '=' from scene 2 step, keep the text natural. This topic has no formula. | Remove '=' from scene 2 step, keep the text natural. This topic has 
+Green Revolution               6.78   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      104
+    ex: In the Green Revolution, farmers adopted new technologies like drip irrigation, which is like using a fine nozzle to water plants, ensuring more water reaches the roots.
+Mauryan Empire                59.96   2.8  0.20 none    template    -           none   -      12 ok      110
+    rungs: plan qwen2.5:3b 6.93s x -> retry qwen2.5:3b 6.93s x -> escalate qwen2.5:7b 27.08s x -> qualitative qwen2.5:7b 18.8s x
+    ex: In a practical example of Mauryan Empire, when we change the primary input parameter, the output responds proportionally according to the system constraints.
+    ! plan: Remove the unit 'miles' from scene 4 narration, keep the sentence natural.
+    ! retry: Remove the unit 'miles' from scene 4 narration, keep the sentence natural.
+    ! escalate: Remove the numbers (321, 185) from scene 1 label, keep the sentence natural. This topic is descriptive. | Remove the numbers (230000) from scene 3 nar
+    ! qualitative: Remove the numbers (321, 185) from scene 1 label, keep the sentence natural. This topic is descriptive.
+Fundamental Rights             6.90   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      133
+    ex: Let's say you want to speak your mind freely. You can't be punished for it, just like how you can't be fined for playing cricket in the wrong ground.
+Climate Change                36.70   3.0  0.20 none    escalate    qwen2.5:7b  none   -       4 ok      132
+    rungs: plan qwen2.5:3b 5.95s x -> retry qwen2.5:3b 6.11s x -> escalate qwen2.5:7b 24.42s ok
+    ex: Let's walk through an example. Increased carbon dioxide levels trap more heat, leading to higher temperatures and more extreme weather events. This is observed globally, including in India.
+    ! plan: Remove the numbers (230) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Scene 5 narration is invalid (Value error, narrat
+    ! retry: Remove the numbers (230) from scene 4 narration, keep the sentence natural. This topic is descriptive. | Scene 5 narration is invalid (Value error, narra
+Panchayati Raj                 7.08   0.0  0.18 none    plan        qwen2.5:3b  none   -       0 ok      105
+    ex: Let's look at a simple example. A village panchayat decides to build a new school. They gather community members, discuss, and make the decision.
+
+valid 19/20 (first try 8, retry 3, escalate 5, qualitative 3, template 1) | violations raised 134 | final-plan failures 0 | math ok 1 fixed 0 | unspoken answers 0 | short hooks extended 3 | plan sec P50 39.1 P90 113.6 max 148.6
+acceptance: PASS
+NAME          ID              SIZE      PROCESSOR    CONTEXT    RUNNER      UNTIL   
+qwen2.5:3b    357c53fb659c    2.2 GB    100% GPU     4096       llamacpp    Forever    

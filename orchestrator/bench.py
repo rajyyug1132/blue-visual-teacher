@@ -7,7 +7,9 @@
 
 Bypasses the plan cache so every topic hits the LLM. Columns:
 policy   classify result (checked = has a formula, none = descriptive)
-stage    rung of the ladder that produced the plan: plan · retry · qualitative · template (= fallback)
+stage    rung of the ladder that produced the plan: plan · retry · escalate · qualitative · template (= fallback)
+model    model of that rung (escalate and qualitative run on PLANNER_ESCALATION_MODEL when it is set)
+sec      what the student waits for this plan; swap = extra seconds unloading 7b and re-warming 3b afterwards
 math     ok = the model's own check was right · fixed = wrong result replaced · none = no check
 said     worked example speaks its verified answer (y/n, - when there is no check)
 viol     guard violations raised on the way (each sent back to the model), then the final-plan audit
@@ -54,8 +56,8 @@ def bench(model: str, topics: list[str]) -> dict:
     warm_up_ollama(model)
     print(f"\nmodel {model} | warm-up {time.perf_counter() - t0:.2f}s\n")
 
-    header = (f"{'topic':<28} {'sec':>6} {'cls':>5} {'policy':<7} {'stage':<11} {'math':<6} {'said':<4} "
-              f"{'viol':>4} {'final':<5} {'words':>5}")
+    header = (f"{'topic':<28} {'sec':>6} {'swap':>5} {'cls':>5} {'policy':<7} {'stage':<11} {'model':<11} "
+              f"{'math':<6} {'said':<4} {'viol':>4} {'final':<5} {'words':>5}")
     print(header)
     print("-" * len(header))
     rows = []
@@ -65,9 +67,13 @@ def bench(model: str, topics: list[str]) -> dict:
         raised = sum(e.count(" | ") + 1 for e in tel.get("errors", []))
         row = {"topic": topic, **tel, "said": said, "final_problems": problems, "raised": raised}
         rows.append(row)
-        print(f"{topic[:28]:<28} {tel['total_sec']:>6.2f} {tel.get('classify_sec', 0):>5.2f} "
-              f"{tel.get('policy', '?'):<7} {tel.get('stage', '?'):<11} {tel.get('math', {}).get('status', '-'):<6} "
+        print(f"{topic[:28]:<28} {tel['total_sec']:>6.2f} {tel.get('swap_sec', 0):>5.1f} "
+              f"{tel.get('classify_sec', 0):>5.2f} {tel.get('policy', '?'):<7} {tel.get('stage', '?'):<11} "
+              f"{tel.get('model') or '-':<11} {tel.get('math', {}).get('status', '-'):<6} "
               f"{said:<4} {raised:>4} {'ok' if not problems else 'FAIL':<5} {tel['total_words']:>5}")
+        if len(tel.get("rungs", [])) > 1:
+            print("    rungs: " + " -> ".join(f"{r['stage']} {r['model']} {r['sec']}s {'ok' if r['ok'] else 'x'}"
+                                         for r in tel["rungs"]))
         example = next((s for s in plan.scenes if s.id == 4), None)
         if example:
             check = f"  [check {example.check.expr} = {example.check.result}]" if example.check else ""
@@ -82,21 +88,26 @@ def bench(model: str, topics: list[str]) -> dict:
         "model": model,
         "valid": sum(not r["fallback_used"] for r in rows),
         "templates": sum(r["fallback_used"] for r in rows),
-        "qualitative": sum(r.get("stage") == "qualitative" for r in rows),
-        "retries": sum(r.get("stage") == "retry" for r in rows),
+        "qualitative": sum(str(r.get("stage")).split("+")[0] == "qualitative" for r in rows),
+        "escalated": sum(str(r.get("stage")).split("+")[0] == "escalate" for r in rows),
+        "retries": sum(str(r.get("stage")).split("+")[0] == "retry" for r in rows),
+        "first_try": sum(str(r.get("stage")).split("+")[0] == "plan" for r in rows),
+        "patched": sum(str(r.get("stage")).endswith("+patch") for r in rows),
         "raised": sum(r["raised"] for r in rows),
         "final_fail": sum(bool(r["final_problems"]) for r in rows),
         "math_ok": sum(r.get("math", {}).get("status") == "ok" for r in rows),
         "math_fixed": sum(r.get("math", {}).get("status") == "fixed" for r in rows),
         "unspoken": sum(r["said"] == "n" for r in rows),
+        "hooks": sum(bool(r.get("hook_extended")) for r in rows),
         "p50": statistics.median(secs), "p90": sorted(secs)[max(0, int(len(secs) * 0.9) - 1)], "max": max(secs),
         "n": len(rows),
     }
     s = summary
-    print(f"\nvalid {s['valid']}/{s['n']} (template {s['templates']}, qualitative {s['qualitative']}, "
-          f"retry {s['retries']}) | violations raised {s['raised']} | final-plan failures {s['final_fail']} | "
+    print(f"\nvalid {s['valid']}/{s['n']} (patched {s['patched']}; first try {s['first_try']}, retry {s['retries']}, escalate "
+          f"{s['escalated']}, qualitative {s['qualitative']}, template {s['templates']}) | "
+          f"violations raised {s['raised']} | final-plan failures {s['final_fail']} | "
           f"math ok {s['math_ok']} fixed {s['math_fixed']} | unspoken answers {s['unspoken']} | "
-          f"plan sec P50 {s['p50']:.1f} P90 {s['p90']:.1f} max {s['max']:.1f}")
+          f"short hooks extended {s['hooks']} | plan sec P50 {s['p50']:.1f} P90 {s['p90']:.1f} max {s['max']:.1f}")
     accept = s["valid"] >= s["n"] - max(1, s["n"] // 20) and s["final_fail"] == 0
     print(f"acceptance: {'PASS' if accept else 'FAIL'}")
     return summary

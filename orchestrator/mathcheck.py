@@ -4,13 +4,15 @@ import ast
 import operator
 import re
 
-from orchestrator.numeric_guard import close, digit_number_spans, spoken_number_spans, spoken_numbers
+from orchestrator.numeric_guard import (SUPERSCRIPT, close, digit_number_spans, in_allowed, is_small_int, nfkc,
+                                        spoken_number_spans, spoken_numbers)
 from orchestrator.schema import WORDS_MAX
 from orchestrator.spoken import shorten_narration, to_spoken
 
 TOLERANCE = 0.005  # +-0.5 %
 MAX_EXPONENT = 100
 MAX_MAGNITUDE = 1e12
+VARIABLE_SIDE = re.compile(r"\s*[A-Za-z][A-Za-z_]*\s*(?:[²³]|\^\s*\d)?\s*")
 
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
        ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
@@ -24,7 +26,6 @@ UNIT_NAMES = {"a": "amperes", "amp": "amperes", "amps": "amperes", "v": "volts",
               "%": "percent", "rs": "rupees", "rs.": "rupees", "₹": "rupees", "inr": "rupees", "$": "dollars",
               "n": "newtons", "m": "metres", "km": "kilometres", "kg": "kilograms", "g": "grams", "j": "joules",
               "w": "watts", "s": "seconds", "m/s": "metres per second", "km/h": "kilometres per hour"}
-ANSWER_FILLER = "Let's work through the steps shown on screen one at a time."
 
 
 class MathCheckError(ValueError):
@@ -33,7 +34,27 @@ class MathCheckError(ValueError):
 
 def safe_eval(expr: str) -> float:
     """Evaluate arithmetic with an AST whitelist. Never eval(): names, calls and attributes are rejected."""
-    text = expr.replace("×", "*").replace("÷", "/").replace("^", "**")
+    # "c² = 6² + 8²" or "100 = 36 + 64": evaluate every side that is pure arithmetic; they must agree.
+    sides = []
+    for part in expr.split("="):
+        try:
+            sides.append((bool(re.search(r"[-+*/×÷^√²³]", part.strip().lstrip("-"))), _eval_side(part, expr)))
+        except MathCheckError:
+            if not VARIABLE_SIDE.fullmatch(part):  # only a bare symbol like "c²" or "A" may be skipped
+                raise
+    if not any(has_op for has_op, _ in sides):
+        raise MathCheckError(f"check.expr {expr!r} must contain the calculation itself, not just its answer")
+    values = [v for _, v in sides]
+    if any(abs(v - values[0]) > 1e-6 * max(abs(v), abs(values[0]), 1) for v in values):
+        raise MathCheckError(f"check.expr {expr!r}: the two sides of '=' do not agree")
+    return next((v for has_op, v in reversed(sides) if has_op), values[0])
+
+
+def _eval_side(part: str, expr: str) -> float:
+    # Powers written as superscripts must become ** before anything else: NFKC would turn 6² into "62".
+    text = re.sub(r"([⁰¹²³⁴⁵⁶⁷⁸⁹]+)", lambda m: "**" + m.group(1).translate(SUPERSCRIPT), part)
+    text = re.sub(r"√\s*(\d+(?:\.\d+)?|\([^()]*\))", r"(\1)**0.5", text)  # √100, √(36 + 64)
+    text = text.replace("×", "*").replace("÷", "/").replace("^", "**").strip()
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)  # 10,000 -> 10000
     try:
         tree = ast.parse(text, mode="eval")
@@ -114,7 +135,7 @@ def _check_steps(texts: list[str]) -> tuple[dict[float, float], set[float]]:
     for text in texts:
         left, eq, right = text.rpartition("=")
         shown = _first_number(right) if eq else None
-        if shown is None or not re.search(r"\d\s*%?\s*[×÷*/+^-]", left):
+        if shown is None or not re.search(r"[\d²³]\s*%?\s*[×÷*/+^-]|√", left):
             continue
         left = re.sub(r"^.*:", "", left)  # "Formula: 230 / 46"
         expr = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"(\1/100)", left)
@@ -157,6 +178,7 @@ def verify_plan(data: dict) -> dict:
         if claimed is None:
             raise MathCheckError(f"Scene {scene.get('id')} check.result {check.get('result')!r} has no number")
         params = scene["visual"]["params"]
+        _require_numbers_in_scene(scene, check["expr"])
         # The model may also show a different (wrong) answer on screen than in check.result, e.g.
         # step "100,000 × (1 + 0.05/4)^(4×5) = 130,000" with result "134,685.50": check each step on its own too.
         fixes, verified = _check_steps(params.get("labels", []) + params.get("steps", []))
@@ -191,6 +213,27 @@ def ensure_answer_spoken(scene: dict, value: float, unit: str, repair: bool) -> 
     budget = WORDS_MAX - len(sentence.split())
     body = scene["narration"]
     if len(body.split()) > budget:
-        body = shorten_narration(body, max_words=budget) or ANSWER_FILLER
+        body = shorten_narration(body, max_words=budget)
+        if body is None:  # never swap the example for generic filler: let the ladder move to its next rung
+            raise MathCheckError(f"Scene {scene.get('id')}: narration must say the final answer, "
+                                 f"{sentence[len('So the answer is '):-1]}, within {WORDS_MAX} words.")
     scene["narration"] = f"{body} {sentence}"
     return True
+
+
+def _require_numbers_in_scene(scene: dict, expr: str) -> None:
+    """A check must compute this scene's example: its numbers (beyond small counts) must be shown or spoken here.
+
+    Rejects checks copied from elsewhere, e.g. Ohm's Law "230 / 46" on a titration scene. Rates may appear either
+    way round ("0.05" in the check, "5%" or "five percent" in the scene).
+    """
+    params = scene.get("visual", {}).get("params", {})
+    shown = " ".join(params.get("labels", []) + params.get("steps", []) + [scene.get("narration", "")])
+    present = {v for v, _, _ in digit_number_spans(nfkc(shown))} | set(spoken_numbers(scene.get("narration", "")))
+    if re.search(r"%|percent", shown, re.I):
+        present.add(100.0)  # "5 / 100" is how a percentage is computed
+    missing = [v for v, _, _ in digit_number_spans(expr) if not is_small_int(v) and not in_allowed(v, present)]
+    if missing:
+        nums = ", ".join(_fmt(v) for v in missing)
+        raise MathCheckError(f"Scene {scene.get('id')} check.expr uses {nums}, which this scene never shows or says. "
+                             "The check must compute the example this scene teaches.")

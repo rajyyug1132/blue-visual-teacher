@@ -48,16 +48,27 @@ class FakeClient:
     planning calls. An empty queue behaves like a dead daemon (ConnectionError), so the ladder can run out.
     """
 
-    def __init__(self, *outputs, has_formula=True):
+    def __init__(self, *outputs, has_formula=True, patches=()):
         self.outputs = list(outputs)
         self.calls = []
         self.classify_calls = []
+        self.patch_calls = []
+        self.patches = list(patches)  # replies to single-string patch calls; empty -> patching fails
+        self.generate_calls = []  # warm-ups and keep_alive=0 unloads
         self.has_formula = has_formula
+
+    def generate(self, **kwargs):
+        self.generate_calls.append(kwargs)
 
     def chat(self, **kwargs):
         if "has_formula" in json.dumps(kwargs.get("format")):
             self.classify_calls.append(kwargs)
             return self._response(json.dumps({"has_formula": self.has_formula}))
+        if "scenes" not in json.dumps(kwargs.get("format")):  # a patch call: {"text": ...}
+            self.patch_calls.append(kwargs)
+            if not self.patches:
+                raise ConnectionError("fake daemon: no patch reply queued")
+            return self._response(json.dumps({"text": self.patches.pop(0)}))
         self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
         if not self.outputs:
             raise ConnectionError("fake daemon: no more queued outputs")
@@ -76,9 +87,10 @@ class FakeClient:
 
 @pytest.fixture
 def fake(monkeypatch):
-    def install(*outputs, has_formula=True):
-        client = FakeClient(*outputs, has_formula=has_formula)
+    def install(*outputs, has_formula=True, escalation="", patches=()):
+        client = FakeClient(*outputs, has_formula=has_formula, patches=patches)
         monkeypatch.setattr(planner, "_client", client)
+        monkeypatch.setattr(planner, "ESCALATION_MODEL", escalation)  # off unless a test turns it on
         return client
     return install
 
@@ -161,20 +173,59 @@ def test_model_rejecting_think_is_retried_without_flag(fake):
     assert client.calls[0]["think"] is False and "think" not in client.calls[1]
 
 
-def test_default_model_is_qwen_7b(monkeypatch):
+def test_default_models_are_qwen_3b_then_7b(monkeypatch):
     import importlib
-    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
-    assert importlib.reload(planner).MODEL_NAME == "qwen2.5:7b"
-
-
-def test_model_name_comes_from_env(monkeypatch):
-    import importlib
-    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:3b")
+    for var in ("PLANNER_MODEL", "OLLAMA_MODEL", "PLANNER_ESCALATION_MODEL"):
+        monkeypatch.delenv(var, raising=False)
     try:
-        assert importlib.reload(planner).MODEL_NAME == "llama3.2:3b"
+        reloaded = importlib.reload(planner)
+        assert (reloaded.MODEL_NAME, reloaded.ESCALATION_MODEL) == ("qwen2.5:3b", "qwen2.5:7b")
     finally:
-        monkeypatch.delenv("OLLAMA_MODEL")
         importlib.reload(planner)
+
+
+@pytest.mark.parametrize("env, expected", [
+    ({"PLANNER_MODEL": "llama3.2:3b"}, ("llama3.2:3b", "qwen2.5:7b")),
+    ({"OLLAMA_MODEL": "llama3.2:3b"}, ("llama3.2:3b", "qwen2.5:7b")),  # older name still works
+    ({"PLANNER_ESCALATION_MODEL": ""}, ("qwen2.5:3b", "")),  # escalation disabled
+])
+def test_models_come_from_env(monkeypatch, env, expected):
+    import importlib
+    for var in ("PLANNER_MODEL", "OLLAMA_MODEL", "PLANNER_ESCALATION_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    try:
+        reloaded = importlib.reload(planner)
+        assert (reloaded.MODEL_NAME, reloaded.ESCALATION_MODEL) == expected
+    finally:
+        for k in env:
+            monkeypatch.delenv(k)
+        importlib.reload(planner)
+
+
+def test_escalation_unloads_3b_runs_7b_then_restores_3b(fake):
+    bad = '{"title": "x"}'
+    client = fake(bad, bad, GOOD_JSON, escalation="qwen2.5:7b")
+    plan, tel = planner.plan_lesson("Ohm's Law", model="qwen2.5:3b")
+    assert [c["model"] for c in client.calls] == ["qwen2.5:3b", "qwen2.5:3b", "qwen2.5:7b"]
+    assert tel["stage"] == "escalate" and tel["model"] == "qwen2.5:7b" and tel["fallback_used"] is False
+    assert [(r["stage"], r["model"], r["ok"]) for r in tel["rungs"]] == [
+        ("plan", "qwen2.5:3b", False), ("retry", "qwen2.5:3b", False), ("escalate", "qwen2.5:7b", True)]
+    # 3b unloaded before 7b runs; afterwards 7b unloaded and 3b warmed again: one model in VRAM at a time.
+    assert [(g["model"], g["keep_alive"]) for g in client.generate_calls] == [
+        ("qwen2.5:3b", 0), ("qwen2.5:7b", 0), ("qwen2.5:3b", -1)]
+    # The 7b attempt is a fresh conversation that carries the problem list, not the failed drafts.
+    escalate_msgs = client.calls[2]["messages"]
+    assert "rejected for these problems" in escalate_msgs[-1]["content"]
+    assert all(m["content"] != bad for m in escalate_msgs)
+
+
+def test_full_ladder_with_escalation_ends_on_template(fake):
+    client = fake("{", "{", "{", "{", escalation="qwen2.5:7b")
+    _, tel = planner.plan_lesson("Ohm's Law", model="qwen2.5:3b")
+    assert [c["model"] for c in client.calls] == ["qwen2.5:3b"] * 2 + ["qwen2.5:7b"] * 2  # qualitative stays on 7b
+    assert tel["stage"] == "template" and tel["attempt"] == 5 and tel["fallback_used"] is True
 
 
 def test_lesson_total_below_range_retries_with_total_feedback(fake):
@@ -443,7 +494,7 @@ def test_invented_quantities_retry_then_qualitative_mode(fake):
         "it produces one hundred units of glucose."))
     client = fake(invented, invented, DESCRIPTIVE_JSON, has_formula=False)
     result, tel = planner.plan_lesson("Photosynthesis")
-    assert "has quantities 100, 100, 100" in client.calls[1]["messages"][-1]["content"]
+    assert "Remove the numbers (100, 100, 100) from scene 4 narration" in client.calls[1]["messages"][-1]["content"]
     assert "QUALITATIVE MODE" in client.calls[2]["messages"][-1]["content"]
     assert tel["stage"] == "qualitative" and tel["attempt"] == 3 and tel["fallback_used"] is False
     assert all(s.check is None for s in result.scenes)

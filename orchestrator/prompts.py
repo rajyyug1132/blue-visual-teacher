@@ -19,7 +19,7 @@ STRICT RULES:
 5. Never define every symbol in "narration". State the rule in words and put symbol definitions ("P : Principal") in visual.params.labels. Every narration must end with a complete sentence.
 6. NUMBER POLICY. Every request states one.
    - "checked" (topic with a standard formula): scene 4 uses one or two arithmetic steps with whole numbers below 10,000 and adds "check": {"expr": "<numbers and + - * / ** ( ) only>", "result": "<the answer>"}, e.g. {"expr": "230 / 46", "result": "5"}. Every number anywhere in the lesson must come from that calculation; small counts up to ten are fine. Scene 4's narration must say the final answer in words.
-   - "none" (descriptive topic): no quantities at all. No digits, no number words above ten, no units of measurement (percent, degrees, kilometres) and no "=" in narration, labels or steps. Use qualitative words instead: "heavy rain", "several months", "much larger". Scene 4 walks through the steps in words. Omit "check".
+   - "none" (descriptive topic): no quantities at all. No digits, no number words above ten, no units of measurement and no "=" in narration, labels or steps. Describe what happens and why, not how much. Years are dates, not quantities, so they are allowed: four digits in labels, spoken as words in narration ("nineteen forty-seven"). Scene 4 walks through the steps in words. Omit "check".
 """
 
 CLASSIFY_PROMPT = (
@@ -30,8 +30,8 @@ CLASSIFY_PROMPT = (
 )
 
 QUALITATIVE_MODE = ("QUALITATIVE MODE: explain this concept without any quantities. No digits, no number words "
-                    "above ten, no units of measurement, no formulas and no '=' anywhere. Use qualitative words "
-                    "(heavy rain, several months, much larger). Scene 4 walks through the steps in words.")
+                    "above ten, no units of measurement, no formulas and no '=' anywhere; years are allowed. "
+                    "Describe what happens and why, in natural sentences. Scene 4 walks through the steps in words.")
 
 
 def request(concept: str, policy: str) -> str:
