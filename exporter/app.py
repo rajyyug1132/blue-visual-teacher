@@ -22,9 +22,10 @@ from typing import Dict, Any, Optional, List
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Ensure repo root is on sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -96,6 +97,15 @@ async def lifespan(fastapi_app: FastAPI):
 
 # FastAPI App
 app = FastAPI(title="Blue Visual Teacher", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+# Enable CORS for Next.js frontend (http://localhost:3000, 127.0.0.1:3000, or any dev origin)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def stub_generate_lesson(topic: str, lang: str, progress_cb=None) -> Path:
     """Fallback stub generator if orchestrator.pipeline is not yet available."""
@@ -243,7 +253,19 @@ worker_thread.start()
 
 class GenerateRequest(BaseModel):
     topic: str = Field(..., min_length=2, max_length=120)
-    lang: str = Field(..., min_length=2, max_length=10)
+    lang: Optional[str] = Field(None, min_length=2, max_length=10)
+    language: Optional[str] = Field(None, min_length=2, max_length=10)
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_lang(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Accept either 'lang' or 'language' seamlessly
+            val = data.get("lang") or data.get("language")
+            if val is not None:
+                data["lang"] = str(val).strip().lower()
+                data["language"] = data["lang"]
+        return data
 
 @app.post("/api/generate")
 def generate_endpoint(req: GenerateRequest):

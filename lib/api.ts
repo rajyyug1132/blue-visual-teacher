@@ -147,7 +147,7 @@ function parseJob(body: unknown, fallbackId?: string): Job {
 export async function createLesson(input: { topic: string; language: string }): Promise<Job> {
   const body = await request('/api/generate', {
     method: 'POST',
-    body: JSON.stringify({ topic: input.topic, language: input.language }),
+    body: JSON.stringify({ topic: input.topic, lang: input.language, language: input.language }),
     timeoutMs: 30000,
   })
   return parseJob(body)
