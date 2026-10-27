@@ -139,6 +139,14 @@ Checks: `python -m pytest tests/` (includes `tests/test_e2e_offline.py`, which b
 - Numeric worked examples are arithmetic-checked, but formulas outside a verified bank are not asserted as fact: a
   3B model can still pick a wrong formula for an uncommon topic.
 - Hindi speech needs espeak-ng installed on the machine (Kokoro's Hindi phonemizer); without it Hindi is hidden.
+- The 3B planner writes about 20 words per scene whatever length is asked, so a 90 s request often lands at
+  55-80 s. A plan that comes in short is kept (down to 60% of the request) rather than replaced by the generic
+  fallback lesson.
+- Programming topics get a code walkthrough (code + per-step variable table); the code is drawn, never executed.
+- Uncached Hindi/Kannada lessons need the IndicTrans2 and MMS-TTS weights downloaded once while online.
+- Telugu and Tamil are bonus languages; the demo covers English, Hindi and Kannada.
+- Demo hardware: 16 GB RAM laptop with an RTX 3050 (6 GB). The GPU runs only the planner; translation and speech run
+  on CPU, so the CPU-only path is the same code with a slower planner.
 - Measured numbers live in `logs/` and `STATUS.md`; this README does not claim results the logs don't show.
 
 ## Team

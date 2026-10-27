@@ -43,6 +43,6 @@ try {
 }
 
 $port = if ($env:PORT) { $env:PORT } else { "8000" }
-Write-Host "Open http://127.0.0.1:$port"
-Start-Process "http://127.0.0.1:$port"
+Write-Host "Lesson server (API) on http://127.0.0.1:$port"
+Write-Host "In a second terminal run: npm run dev   then open http://localhost:3000"
 & $py -m uvicorn exporter.app:app --host 127.0.0.1 --port $port

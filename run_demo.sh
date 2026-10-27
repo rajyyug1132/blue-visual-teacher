@@ -40,5 +40,6 @@ if ! "$PY" -c "from orchestrator.pipeline import warmup, available_languages; wa
 fi
 
 PORT="${PORT:-8000}"
-echo "Open http://127.0.0.1:$PORT"
+echo "Lesson server (API) on http://127.0.0.1:$PORT"
+echo "In a second terminal run: npm run dev   then open http://localhost:3000"
 exec "$PY" -m uvicorn exporter.app:app --host 127.0.0.1 --port "$PORT"
