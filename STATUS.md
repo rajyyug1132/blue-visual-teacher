@@ -371,3 +371,9 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
   lastIllustration or the step text instead; BUS/NEXUS boxes removed · review after the freeze · blocking? n
 - CLAUDE (keeper) -> TARUN · assets/fonts/NotoSansTelugu-Regular.ttf · copied from renderer/assets/fonts · blocking? n
 - CLAUDE (keeper) -> ANTIGRAVITY · v1 · push only your branch (antigravity/mode1); the keeper merges · blocking? n
+
+### Pass 8 (Keeper session) · 2026-10-28 06:18
+- `1550354` merged `claude/visuals` (commit `bf838db`) into `v1`: lesson-derived illustrations on title/compare, data scatter with residuals for ML topics, empty pills eliminated. Fast gate PASS (38 renderer tests, 122 python tests). Verified live: "what is regression in AIML" generated scatter plot with residuals and best-fit line.
+- `1738b7f` re-rendered 9 shop-window demo lessons in `public/demo/*` with the fixed renderer.
+- Promoted latest preview of `v1` to Vercel production (`FD37n4ttUQ3erJRCzGHEfY2816dJ`).
+
