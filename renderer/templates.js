@@ -152,6 +152,9 @@ function lessonWords(params) {
 function onlyLessonText(ctx, words) {
   return new Proxy(ctx, {
     get(target, prop) {
+      if (prop === 'lessonText') {
+        return text => !(String(text).toLowerCase().match(/[a-z]{3,}/g) || []).some(w => !words.has(w));
+      }
       if (prop === 'fillText') {
         return (text, x, y, maxWidth) => {
           const used = String(text).toLowerCase().match(/[a-z]{3,}/g) || [];
@@ -309,7 +312,9 @@ const TEMPLATES = {
       );
 
       ctx.save();
-      this.lastIllustration = isCircuitTopic ? 'circuit' : isWaterOrCycleTopic ? 'water' : isBioTopic ? 'cell' : 'neutral';
+      const isDataTopic = !isCircuitTopic && !isWaterOrCycleTopic && !isBioTopic &&
+        /regression|statistic|machine learning|\baiml\b|\bml\b|data ?set|dataset|predict|correlation|best fit|trend line|scatter|linear model/.test(topicStr);
+      this.lastIllustration = isCircuitTopic ? 'circuit' : isWaterOrCycleTopic ? 'water' : isBioTopic ? 'cell' : isDataTopic ? 'data' : 'neutral';
       if (isCircuitTopic) {
         // Circuit Diagram Illustration
         const cLeft = rightX + 60;
@@ -612,158 +617,103 @@ const TEMPLATES = {
           font,
           bracketed: true
         });
-      } else {
-        // Task 2.8: Neutral Scientific Composition (Coordinate framework, concentric telemetry rings, core nexus)
-        const cx = rightX + rightW / 2;
-        const cy = rightY + rightH / 2 + 6;
-
-        // 1. Subtle telemetry grid axes
-        ctx.strokeStyle = '#E2E8F0';
-        ctx.lineWidth = 1.5;
-        if (typeof ctx.setLineDash === 'function') ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(rightX + 30, cy);
-        ctx.lineTo(rightX + rightW - 30, cy);
-        ctx.moveTo(cx, rightY + 50);
-        ctx.lineTo(cx, rightY + rightH - 45);
-        ctx.stroke();
-        if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
-
-        // 2. Concentric measurement orbital rings
-        const rings = [60, 115, 170];
-        rings.forEach((r, rIdx) => {
-          ctx.strokeStyle = rIdx === 1 ? theme.colors.border : '#CBD5E1';
-          ctx.lineWidth = rIdx === 1 ? 2 : 1.5;
-          ctx.beginPath();
-          ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // Calibrated tick marks at 0, 90, 180, 270 deg
-          for (let a = 0; a < 4; a++) {
-            const ang = (a * Math.PI) / 2;
-            ctx.strokeStyle = theme.colors.border;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(cx + Math.cos(ang) * (r - 5), cy + Math.sin(ang) * (r - 5));
-            ctx.lineTo(cx + Math.cos(ang) * (r + 5), cy + Math.sin(ang) * (r + 5));
-            ctx.stroke();
-          }
-        });
-
-        // 3. Central System Core Nexus
-        ctx.fillStyle = '#FFFFFF';
+      } else if (isDataTopic) {
+        // Data topic: scattered observations and the line that fits them, drawn in from the left as the scene plays
+        const ox = rightX + 70, oy = rightY + rightH - 70, w = rightW - 120, h = rightH - 150;
         ctx.strokeStyle = theme.colors.border;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.arc(cx, cy, 32, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(ox, rightY + 60);
+        ctx.lineTo(ox, oy);
+        ctx.lineTo(ox + w, oy);
         ctx.stroke();
+        theme.drawOutlinedArrow(ctx, ox + w - 4, oy, ox + w + 14, oy, 8, theme.colors.border, theme.colors.border, 1);
+        theme.drawOutlinedArrow(ctx, ox, rightY + 64, ox, rightY + 46, 8, theme.colors.border, theme.colors.border, 1);
 
-        ctx.fillStyle = theme.colors.accent;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 20, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        // Core reticle crosshair
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx - 10, cy);
-        ctx.lineTo(cx + 10, cy);
-        ctx.moveTo(cx, cy - 10);
-        ctx.lineTo(cx, cy + 10);
-        ctx.stroke();
-
-        // 4. Dynamic Satellite Nodes along the middle ring (r = 115)
-        const satellites = [
-          { ang: -0.4 * Math.PI, col: theme.colors.amber, r: 12, label: 'NODE A' },
-          { ang: 0.35 * Math.PI, col: theme.colors.coral, r: 10, label: 'NODE B' },
-          { ang: 0.85 * Math.PI, col: theme.colors.green, r: 11, label: 'NODE C' }
-        ];
-
-        satellites.forEach(sat => {
-          const sx = cx + Math.cos(sat.ang) * 115;
-          const sy = cy + Math.sin(sat.ang) * 115;
-
-          ctx.fillStyle = sat.col;
+        // fixed residuals: deterministic, never Math.random
+        const noise = [18, -22, 9, -14, 26, -8, -24, 12, -4, 20, -16, 6, -10, 15];
+        const fitY = u => oy - 30 - u * (h - 60);
+        noise.forEach((dy, i) => {
+          const u = (i + 0.5) / noise.length;
+          const px = ox + 20 + u * (w - 40);
+          const py = fitY(u) + dy;
+          const appear = Math.max(0, Math.min(1, (lt - 0.2 - i * 0.06) / 0.25));
+          if (appear <= 0) return;
+          ctx.globalAlpha = pRight * appear;
+          ctx.strokeStyle = '#94A3B8';
+          ctx.lineWidth = 1.5;
+          if (typeof ctx.setLineDash === 'function') ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px, fitY(u));
+          ctx.stroke();
+          if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
+          ctx.fillStyle = i % 3 === 0 ? theme.colors.amber : theme.colors.accent;
           ctx.strokeStyle = theme.colors.border;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(sx, sy, sat.r, 0, Math.PI * 2);
+          ctx.arc(px, py, 7, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
-
-          // Directed tangent vector arrow
-          const tangAng = sat.ang + Math.PI / 2;
-          const ax1 = sx + Math.cos(tangAng) * 4;
-          const ay1 = sy + Math.sin(tangAng) * 4;
-          const ax2 = sx + Math.cos(tangAng) * 26;
-          const ay2 = sy + Math.sin(tangAng) * 26;
-          theme.drawOutlinedArrow(ctx, ax1, ay1, ax2, ay2, 7, sat.col, theme.colors.border, 1.5);
         });
 
-        // 5. Corner Telemetry & Calibration Ticks
-        theme.drawPill(ctx, 'SYSTEM COORDINATES', rightX + 24, rightY + 44, {
-          bg: '#F8FAFC',
-          color: theme.colors.text,
-          border: theme.colors.border,
-          lineWidth: 1.5,
-          height: 24,
-          fontSize: 10,
-          weight: 700,
-          font,
-          bracketed: true
-        });
-
-        theme.drawPill(ctx, 'ACTIVE DYNAMICS', rightX + rightW - 146, rightY + 44, {
-          bg: '#F8FAFC',
-          color: theme.colors.text,
-          border: theme.colors.border,
-          lineWidth: 1.5,
-          height: 24,
-          fontSize: 10,
-          weight: 700,
-          font,
-          bracketed: true
-        });
-
-        // Bottom measurement calibration scale
-        const scaleX = rightX + 36;
-        const scaleY = rightY + rightH - 42;
-        const scaleW = rightW - 72;
-        ctx.strokeStyle = theme.colors.border;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(scaleX, scaleY);
-        ctx.lineTo(scaleX + scaleW, scaleY);
-        for (let i = 0; i <= 4; i++) {
-          const tx = scaleX + (i / 4) * scaleW;
-          ctx.moveTo(tx, scaleY - 6);
-          ctx.lineTo(tx, scaleY + 6);
+        const pLine = Math.max(0, Math.min(1, (lt - 1.2) / 0.8));
+        if (pLine > 0) {
+          ctx.globalAlpha = pRight;
+          ctx.strokeStyle = theme.colors.coral;
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(ox + 10, fitY(0));
+          ctx.lineTo(ox + 10 + (w - 20) * pLine, fitY(pLine));
+          ctx.stroke();
         }
-        ctx.stroke();
+        ctx.globalAlpha = pRight;
+      } else {
+        // Any other topic: a concept map of the lesson's own terms around its title, no invented imagery
+        const hub = String(labels[0] || mainTitle || '');
+        const terms = [];
+        labels.slice(1).concat(steps).forEach(t => {
+          const v = String(t || '').trim();
+          if (v && v !== hub && !terms.includes(v) && terms.length < 5) terms.push(v);
+        });
+        const cx = rightX + rightW / 2;
+        const cy = rightY + rightH / 2 + 6;
+        const nodeW = 170, nodeH = 64;
+        const spots = [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 1.25]].slice(0, terms.length);
+        const colours = [theme.colors.kickerBg, '#E0F2FE', '#DCFCE7', '#FFE4E6', '#F1F5F9'];
 
-        ctx.font = `700 10px ${font}`;
-        ctx.fillStyle = theme.colors.muted;
+        spots.forEach(([sx, sy], i) => {
+          const appear = Math.max(0, Math.min(1, (lt - 0.3 - i * 0.25) / 0.4));
+          if (appear <= 0) return;
+          const nx = cx + sx * 150, ny = cy + sy * 140;
+          ctx.globalAlpha = pRight * appear;
+          ctx.strokeStyle = theme.colors.border;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(nx, ny);
+          ctx.stroke();
+          theme.drawCard(ctx, nx - nodeW / 2, ny - nodeH / 2, nodeW, nodeH, 12, colours[i], theme.colors.border, 2);
+          const fit = theme.fitText(ctx, terms[i], { width: nodeW - 20, height: nodeH - 12 }, 16, 10, 700, lang, { label: 'title.map' });
+          ctx.font = `700 ${fit.fontSize}px ${font}`;
+          ctx.fillStyle = theme.colors.text;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          const top = ny - (fit.lines.length * fit.lineHeight) / 2;
+          fit.lines.forEach((line, k) => ctx.fillText(line, nx, top + k * fit.lineHeight));
+        });
+
+        ctx.globalAlpha = pRight;
+        const hubW = 210, hubH = 84;
+        theme.drawCard(ctx, cx - hubW / 2, cy - hubH / 2, hubW, hubH, 16, theme.colors.accent, theme.colors.border, 2.5);
+        const fitHub = theme.fitText(ctx, hub, { width: hubW - 24, height: hubH - 14 }, 20, 11, 800, lang, { label: 'title.hub' });
+        ctx.font = `800 ${fitHub.fontSize}px ${font}`;
+        ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText('0.0', scaleX, scaleY + 8);
-        ctx.fillText('0.5', scaleX + scaleW / 2, scaleY + 8);
-        ctx.fillText('1.0 [ RELATIVE SCALE ]', scaleX + scaleW - 20, scaleY + 8);
-
-        // Center badge
-        theme.drawPill(ctx, 'EMPIRICAL OBSERVATIONAL FRAMEWORK', rightX + rightW / 2 - 120, rightY + rightH - 72, {
-          bg: theme.colors.kickerBg,
-          color: theme.colors.text,
-          border: theme.colors.border,
-          lineWidth: 1.5,
-          height: 26,
-          fontSize: 11,
-          weight: 800,
-          font,
-          bracketed: true
-        });
+        const hubTop = cy - (fitHub.lines.length * fitHub.lineHeight) / 2;
+        fitHub.lines.forEach((line, k) => ctx.fillText(line, cx, hubTop + k * fitHub.lineHeight));
       }
       ctx.restore();
 
@@ -1187,66 +1137,15 @@ const TEMPLATES = {
               ctx.fillText('MAGNITUDE + DIR', iCenterX, iCenterY + 48);
             }
           } else {
-            // Case C: Neutral Intentional Comparison Graphic (Scientific Entity Profile)
-            const emblemCol = isLeftCard ? theme.colors.accent : theme.colors.amber;
-            ctx.fillStyle = emblemCol;
-            ctx.strokeStyle = theme.colors.border;
-            ctx.lineWidth = 2;
-
-            if (isLeftCard) {
-              // Dual concentric emblem
-              ctx.beginPath();
-              ctx.arc(iCenterX, iCenterY - 18, 30, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.arc(iCenterX, iCenterY - 18, 18, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-
-              ctx.font = `800 16px ${font}`;
-              ctx.fillStyle = '#FFFFFF';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText('01', iCenterX, iCenterY - 18);
-            } else {
-              // Diamond coordinate emblem
-              ctx.beginPath();
-              ctx.moveTo(iCenterX, iCenterY - 48);
-              ctx.lineTo(iCenterX + 30, iCenterY - 18);
-              ctx.lineTo(iCenterX, iCenterY + 12);
-              ctx.lineTo(iCenterX - 30, iCenterY - 18);
-              ctx.closePath();
-              ctx.fill();
-              ctx.stroke();
-
-              ctx.font = `800 16px ${font}`;
-              ctx.fillStyle = '#0F172A';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText('02', iCenterX, iCenterY - 18);
-            }
-
-            // Parameter level meters below emblem
-            const meterW = 90;
-            const meterY = iCenterY + 30;
-            ctx.fillStyle = '#E2E8F0';
-            ctx.fillRect(iCenterX - meterW / 2, meterY, meterW, 8);
-            ctx.fillStyle = emblemCol;
-            ctx.fillRect(iCenterX - meterW / 2, meterY, isLeftCard ? meterW * 0.75 : meterW * 0.45, 8);
-            ctx.strokeStyle = theme.colors.border;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(iCenterX - meterW / 2, meterY);
-            ctx.lineTo(iCenterX + meterW / 2, meterY);
-            ctx.lineTo(iCenterX + meterW / 2, meterY + 8);
-            ctx.lineTo(iCenterX - meterW / 2, meterY + 8);
-            ctx.closePath();
-            ctx.stroke();
-
-            ctx.font = `700 11px ${font}`;
-            ctx.fillStyle = theme.colors.muted;
+            // Case C: no matching picture, so the box carries the side's own name instead of a stock emblem
+            const side = String(colLabels[c] || '');
+            const fitSide = theme.fitText(ctx, side, { width: illusW - 24, height: illusH - 40 }, 26, 13, 800, lang, { label: 'compare.side' });
+            ctx.font = `800 ${fitSide.fontSize}px ${font}`;
+            ctx.fillStyle = isLeftCard ? theme.colors.accent : '#92400E';
             ctx.textAlign = 'center';
-            ctx.fillText(isLeftCard ? 'PROPERTY SET A' : 'PROPERTY SET B', iCenterX, meterY + 22);
+            ctx.textBaseline = 'top';
+            const sideTop = iCenterY - 10 - (fitSide.lines.length * fitSide.lineHeight) / 2;
+            fitSide.lines.forEach((line, k) => ctx.fillText(line, iCenterX, sideTop + k * fitSide.lineHeight));
           }
           ctx.restore();
 
@@ -1254,7 +1153,7 @@ const TEMPLATES = {
           let curStepY = startY + 68;
           colSteps.forEach((st, sIdx) => {
             const pointTag = `POINT 0${sIdx + 1} ${isLeftCard ? 'A' : 'B'}`;
-            theme.drawPill(ctx, pointTag, textX, curStepY, {
+            const tagW = theme.drawPill(ctx, pointTag, textX, curStepY, {
               bg: isLeftCard ? '#DBEAFE' : '#FEF3C7',
               color: theme.colors.text,
               border: theme.colors.border,
@@ -1272,8 +1171,9 @@ const TEMPLATES = {
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
 
-            theme.drawFittedLines(ctx, fitStep, textX, curStepY + 28);
-            curStepY += 28 + fitStep.lines.length * fitStep.lineHeight + 14;
+            const tagGap = tagW ? 28 : 0;
+            theme.drawFittedLines(ctx, fitStep, textX, curStepY + tagGap);
+            curStepY += tagGap + fitStep.lines.length * fitStep.lineHeight + 14;
           });
         } else {
           // 3-Column layout

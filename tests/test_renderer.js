@@ -822,8 +822,37 @@ engine.initLesson(manifest.title, manifest.scenes, manifest.lang).then(() => {
   assert(theme.getFont('bn').includes('Noto Sans Bengali'), theme.getFont('bn'));
   console.log('✓ bn font stack names Noto Sans Bengali.');
 
+  console.log('\nTest 38: no stock art: data topics plot points, other topics map their own terms, filtered pills leave no shape');
+  const regCtx = new MockCanvasContext();
+  templates.draw(regCtx, 'title', {
+    labels: ['Regression', 'Predicting Continuous Outputs'],
+    steps: ['Scattered points on a graph', 'Best fit line through the data'],
+    topic_en: 'Regression in AIML'
+  }, 3.0, 5.0, theme, 'en');
+  assert.strictEqual(templates.lastIllustration, 'data', 'regression must get the scatter and fit line');
+  const regTexts = regCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(!regTexts.some(op => /"0\.[05]"|NODE/.test(op)), 'no telemetry scale or node chrome');
+  const mapCtx = new MockCanvasContext();
+  templates.draw(mapCtx, 'title', {
+    labels: ['Universal Gravitation', 'Inverse Square'],
+    steps: ['Masses attract each other', 'Force falls with distance']
+  }, 3.0, 5.0, theme, 'en');
+  assert.strictEqual(templates.lastIllustration, 'neutral');
+  const mapTexts = mapCtx.ops.filter(op => op.startsWith('fillText('));
+  assert(mapTexts.some(op => op.includes('Inverse Square')), 'concept map draws the lesson terms');
+  const realPill = theme.drawPill;
+  const pills = [];
+  theme.drawPill = function (c, text, ...rest) { const w = realPill.call(this, c, text, ...rest); pills.push([text, w]); return w; };
+  templates.draw(new MockCanvasContext(), 'compare', {
+    labels: ['Linear', 'Logistic'], steps: ['Predicts a number', 'Predicts a class']
+  }, 3.0, 5.0, theme, 'en');
+  theme.drawPill = realPill;
+  const hollow = pills.filter(([text, w]) => /POINT|CONCEPT/.test(text) && w > 0);
+  assert.deepStrictEqual(hollow, [], 'chrome pills must not draw: ' + JSON.stringify(hollow));
+  console.log('✓ data topics plot points, others map lesson terms, filtered pills draw nothing.');
+
   console.log('\n=======================================');
-  console.log('ALL 37 RENDERER TESTS PASSED CLEANLY');
+  console.log('ALL 38 RENDERER TESTS PASSED CLEANLY');
   console.log('=======================================');
 }).catch(err => {
   console.error('\n❌ TEST RUN FAILED:', err);
