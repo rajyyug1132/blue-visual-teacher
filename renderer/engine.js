@@ -297,7 +297,7 @@
 
       try {
         if (document.fonts) {
-          const families = ['"Noto Sans"', '"Noto Sans Devanagari"', '"Noto Sans Kannada"'];
+          const families = ['"Noto Sans"', '"Noto Sans Devanagari"', '"Noto Sans Kannada"', '"Noto Sans Tamil"', '"Noto Sans Bengali"'];
           await Promise.allSettled(families.flatMap((family) => [
             document.fonts.load(`400 24px ${family}`),
             document.fonts.load(`700 32px ${family}`)

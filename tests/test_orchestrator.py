@@ -746,6 +746,22 @@ def test_fallback_fills_the_requested_length(target):
     assert all(schema.WORDS_MIN <= w <= schema.WORDS_MAX for w in words(plan))
 
 
+def test_available_languages_reports_kannada_tamil_bengali(monkeypatch):
+    """en/hi stay off unless the fake says so; kn, ta, bn come from mms_models. te is not a language."""
+    from orchestrator import pipeline
+
+    class TTS:
+        kokoro_en = None
+        kokoro_hi = None
+        mms_models = {"kn": object(), "ta": object(), "bn": object()}
+
+    class Translator:
+        model = object()
+
+    monkeypatch.setattr(pipeline, "warmup", lambda planner=False: {"tts": TTS(), "translator": Translator()})
+    assert pipeline.available_languages() == ["kn", "ta", "bn"]
+
+
 def test_generate_lesson_fails_on_tone_audio(tmp_path, monkeypatch):
     import numpy as np
     import wave
