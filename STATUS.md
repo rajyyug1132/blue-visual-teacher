@@ -382,6 +382,10 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
 - 06:54: Default English TTS voice set to hf_alpha (was enm -> am_michael) in localization/tts_engine.py; respects VOICE_EN env var. test_tts_and_localization.py 14/14 passed offline without missing cache errors. Fast gate PASS (38 renderer, 131 python).
 - 07:02: End-of-lesson quiz feature (Item 5) implemented across orchestrator/quiz.py, orchestrator/pipeline.py, exporter/app.py, lib/api.ts, components/app/quiz-card.tsx, components/app/lesson-view.tsx. Background thread generation writes quiz.json to artifact dir without blocking TTS or render; Quick check interactive UI card renders 3 MC questions with instant feedback and explanations. 4 new unit tests PASS; fast gate PASS (38 renderer, 135 python).
 - 07:10: Fixed 'use client' directive order in components/app/lesson-view.tsx (placed at line 1 before imports for Next.js SSR). npx tsc --noEmit clean; node tests/test_renderer.js PASS (38/38). Full product verified running in desktop browser.
+- 08:20: Fixed MMS-TTS Kannada/multilingual edge case in `localization/tts_engine.py` (guarded empty tokenizer tensors and ensured input_ids are `torch.long`, routed untranslated Latin text in Indic models to synthetic fallback to prevent truncation). Fast gate PASS (38 renderer, 135 python).
+
+- YYUG (agent) -> TARUN · localization/tts_engine.py · guard empty MMS token tensors and route untranslated Latin text to fallback · fixes test_l7 & multilingual sync crashes · blocking? n
+
 
 
 
