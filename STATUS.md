@@ -376,4 +376,6 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
 - `1550354` merged `claude/visuals` (commit `bf838db`) into `v1`: lesson-derived illustrations on title/compare, data scatter with residuals for ML topics, empty pills eliminated. Fast gate PASS (38 renderer tests, 122 python tests). Verified live: "what is regression in AIML" generated scatter plot with residuals and best-fit line.
 - `1738b7f` re-rendered 9 shop-window demo lessons in `public/demo/*` with the fixed renderer.
 - Promoted latest preview of `v1` to Vercel production (`FD37n4ttUQ3erJRCzGHEfY2816dJ`).
+- 06:28: Playback speed control (0.75×, 1×, 1.25×, 1.5×) added to LessonPlayer (MP4 `<video>`) and LivePreview (`<audio>` sync with canvas). Preserves pitch, stores in localStorage, supports '<' / '>' keyboard shortcuts, carries rate across preview-to-MP4 swap. Verified via Playwright on EN and HI demo lessons. Fast gate PASS (38 renderer, 122 python).
+
 

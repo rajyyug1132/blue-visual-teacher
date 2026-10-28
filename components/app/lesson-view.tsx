@@ -34,6 +34,16 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
   const [regenerating, setRegenerating] = useState(false)
   const [regenError, setRegenError] = useState<string | null>(null)
   const [previewTime, setPreviewTime] = useState<number>(0)
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('bvt-playback-speed')
+      if (saved) {
+        const val = parseFloat(saved)
+        if ([0.75, 1, 1.25, 1.5].includes(val)) return val
+      }
+    } catch {}
+    return 1
+  })
   const showcase = useShowcase()
   const isDemo = id.startsWith('demo_') || showcase
   const showLivePreview = Boolean(!isDemo && job && job.status !== 'completed' && job.manifestUrl && job.audioUrl)
@@ -119,6 +129,8 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
                 title={title}
                 manifestUrl={job.manifestUrl}
                 initialTime={previewTime}
+                initialSpeed={playbackSpeed}
+                onSpeedChange={setPlaybackSpeed}
               />
             ) : job.status === 'completed' ? (
               <Notice

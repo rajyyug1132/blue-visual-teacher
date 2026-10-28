@@ -4,11 +4,24 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Play } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/api'
 
+const SPEEDS = [0.75, 1, 1.25, 1.5] as const
+
+function applySpeed(el: HTMLMediaElement | null, rate: number) {
+  if (!el) return
+  el.playbackRate = rate
+  el.preservesPitch = true
+  const anyEl = el as any
+  if ('mozPreservesPitch' in anyEl) anyEl.mozPreservesPitch = true
+  if ('webkitPreservesPitch' in anyEl) anyEl.webkitPreservesPitch = true
+}
+
 interface LivePreviewProps {
   manifestUrl: string
   audioUrl: string
   stage?: string | null
   onTimeChange?: (t: number) => void
+  initialSpeed?: number
+  onSpeedChange?: (s: number) => void
 }
 
 export function LivePreview({
@@ -16,11 +29,57 @@ export function LivePreview({
   audioUrl,
   stage,
   onTimeChange,
+  initialSpeed,
+  onSpeedChange,
 }: LivePreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const animRef = useRef<number | null>(null)
+  const [speed, setSpeed] = useState<number>(() => {
+    if (initialSpeed && (SPEEDS as readonly number[]).includes(initialSpeed)) return initialSpeed
+    try {
+      const saved = localStorage.getItem('bvt-playback-speed')
+      if (saved) {
+        const val = parseFloat(saved)
+        if ((SPEEDS as readonly number[]).includes(val)) return val
+      }
+    } catch {}
+    return 1
+  })
+
+  function updateSpeed(newSpeed: number) {
+    setSpeed(newSpeed)
+    onSpeedChange?.(newSpeed)
+    try {
+      localStorage.setItem('bvt-playback-speed', String(newSpeed))
+    } catch {}
+    applySpeed(audioRef.current, newSpeed)
+  }
+
+  useEffect(() => {
+    applySpeed(audioRef.current, speed)
+  }, [speed])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return
+      }
+      if (e.key === '<' || (e.shiftKey && e.key === ',')) {
+        e.preventDefault()
+        const idx = SPEEDS.indexOf(speed as (typeof SPEEDS)[number])
+        if (idx > 0) updateSpeed(SPEEDS[idx - 1])
+      } else if (e.key === '>' || (e.shiftKey && e.key === '.')) {
+        e.preventDefault()
+        const idx = SPEEDS.indexOf(speed as (typeof SPEEDS)[number])
+        if (idx !== -1 && idx < SPEEDS.length - 1) updateSpeed(SPEEDS[idx + 1])
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [speed])
 
   const postTime = useCallback((t: number) => {
     if (iframeRef.current?.contentWindow) {
@@ -80,6 +139,7 @@ export function LivePreview({
   }
 
   function handlePlay() {
+    applySpeed(audioRef.current, speed)
     setIsPlaying(true)
     startLoop()
   }
@@ -162,6 +222,30 @@ export function LivePreview({
       </div>
 
       <div className="border-t-2 border-ink bg-cream p-3 sm:p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div
+            role="group"
+            aria-label="Playback speed"
+            className="inline-flex items-center rounded-full border-2 border-ink bg-white p-0.5 text-xs font-bold"
+          >
+            {SPEEDS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => updateSpeed(s)}
+                className={`rounded-full px-2.5 py-1 text-xs font-bold transition-all ${
+                  speed === s
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'text-ink hover:bg-ink/10'
+                }`}
+                aria-pressed={speed === s}
+                aria-label={`${s}x speed`}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
+        </div>
         <audio
           ref={audioRef}
           src={audioUrl}

@@ -19,6 +19,17 @@ interface Scene {
   narration?: string
 }
 
+const SPEEDS = [0.75, 1, 1.25, 1.5] as const
+
+function applySpeed(el: HTMLMediaElement | null, rate: number) {
+  if (!el) return
+  el.playbackRate = rate
+  el.preservesPitch = true
+  const anyEl = el as any
+  if ('mozPreservesPitch' in anyEl) anyEl.mozPreservesPitch = true
+  if ('webkitPreservesPitch' in anyEl) anyEl.webkitPreservesPitch = true
+}
+
 interface Manifest {
   title?: string
   total_sec?: number
@@ -30,11 +41,15 @@ export function LessonPlayer({
   title,
   manifestUrl,
   initialTime = 0,
+  initialSpeed,
+  onSpeedChange,
 }: {
   src: string
   title: string
   manifestUrl?: string | null
   initialTime?: number
+  initialSpeed?: number
+  onSpeedChange?: (s: number) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [failed, setFailed] = useState(false)
@@ -42,6 +57,50 @@ export function LessonPlayer({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [manifest, setManifest] = useState<Manifest | null>(null)
+  const [speed, setSpeed] = useState<number>(() => {
+    if (initialSpeed && (SPEEDS as readonly number[]).includes(initialSpeed)) return initialSpeed
+    try {
+      const saved = localStorage.getItem('bvt-playback-speed')
+      if (saved) {
+        const val = parseFloat(saved)
+        if ((SPEEDS as readonly number[]).includes(val)) return val
+      }
+    } catch {}
+    return 1
+  })
+
+  function updateSpeed(newSpeed: number) {
+    setSpeed(newSpeed)
+    onSpeedChange?.(newSpeed)
+    try {
+      localStorage.setItem('bvt-playback-speed', String(newSpeed))
+    } catch {}
+    applySpeed(videoRef.current, newSpeed)
+  }
+
+  useEffect(() => {
+    applySpeed(videoRef.current, speed)
+  }, [speed])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return
+      }
+      if (e.key === '<' || (e.shiftKey && e.key === ',')) {
+        e.preventDefault()
+        const idx = SPEEDS.indexOf(speed as (typeof SPEEDS)[number])
+        if (idx > 0) updateSpeed(SPEEDS[idx - 1])
+      } else if (e.key === '>' || (e.shiftKey && e.key === '.')) {
+        e.preventDefault()
+        const idx = SPEEDS.indexOf(speed as (typeof SPEEDS)[number])
+        if (idx !== -1 && idx < SPEEDS.length - 1) updateSpeed(SPEEDS[idx + 1])
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [speed])
 
   const fileName = `${title.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'lesson'}.mp4`
 
@@ -152,6 +211,7 @@ export function LessonPlayer({
             }}
             onLoadedMetadata={() => {
               if (videoRef.current) {
+                applySpeed(videoRef.current, speed)
                 setDuration(videoRef.current.duration)
                 if (initialTime > 0 && initialTime < videoRef.current.duration) {
                   videoRef.current.currentTime = initialTime
@@ -205,6 +265,30 @@ export function LessonPlayer({
                 Scene {activeSceneIdx + 1} of {manifest.scenes.length}
               </span>
             )}
+
+            {/* Playback speed selector */}
+            <div
+              role="group"
+              aria-label="Playback speed"
+              className="ml-2 inline-flex items-center rounded-full border-2 border-ink bg-cream p-0.5 text-xs font-bold"
+            >
+              {SPEEDS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => updateSpeed(s)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold transition-all ${
+                    speed === s
+                      ? 'bg-brand-blue text-white shadow-sm'
+                      : 'text-ink hover:bg-ink/10'
+                  }`}
+                  aria-pressed={speed === s}
+                  aria-label={`${s}x speed`}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-ink/70">
