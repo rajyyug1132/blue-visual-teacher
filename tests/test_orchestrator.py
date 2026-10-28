@@ -802,3 +802,108 @@ def test_generate_lesson_fails_on_tone_audio(tmp_path, monkeypatch):
     # Ensure tone audio was not left behind in artifacts
     assert not (tmp_path / "ohm-s-law_en" / "lesson_audio.wav").exists()
     assert not (tmp_path / "ohm-s-law_en" / "manifest.json").exists()
+
+
+# --- Item 3: LLM output sanitization tests ---
+from orchestrator.sanitize import clean_text, sanitize_plan_dict
+
+
+def test_sanitize_nfkc():
+    assert clean_text("Voltage １２") == "Voltage 12"
+
+
+def test_sanitize_special_tokens():
+    text = "<|im_start|>system<|im_end|><s>[INST] What is Ohm's Law? [/INST]</s><|endoftext|><|eot_id|>"
+    assert clean_text(text) == "system What is Ohm's Law?"
+
+
+def test_sanitize_think_blocks():
+    text = "<think>Let me formulate the answer step by step.\nStep 1: define voltage.</think>Voltage is electrical pressure."
+    assert clean_text(text) == "Voltage is electrical pressure."
+
+
+def test_sanitize_markdown():
+    text = "### 1. **Current** is measured in __amperes__ using an `ammeter`."
+    assert clean_text(text) == "Current is measured in amperes using an ammeter."
+    assert clean_text("- A simple bullet") == "A simple bullet"
+    assert clean_text("* Another bullet") == "Another bullet"
+    assert clean_text("2. Numbered item") == "Numbered item"
+
+
+def test_sanitize_emojis_and_control():
+    text = "Electric current ⚡ flows through a wire! 🚀 😊\x00\x1f"
+    assert clean_text(text) == "Electric current flows through a wire!"
+    # Preserve Indic scripts
+    indic = "Hindi: विद्युत धारा, Kannada: ವಿದ್ಯುತ್, Bengali: বাংলা, Tamil: மின்னோட்டம்"
+    assert clean_text(indic) == indic
+
+
+def test_sanitize_prefixes_and_quotes():
+    assert clean_text('Scene 3: "Resistance opposes current."') == "Resistance opposes current."
+    assert clean_text("Narration: Voltage drives the current.") == "Voltage drives the current."
+    assert clean_text("Label: V = I x R") == "V = I x R"
+    assert clean_text("Scene 1: Narration: 'Welcome to physics.'") == "Welcome to physics."
+
+
+def test_sanitize_idempotent():
+    sample = "<think>notes</think>Scene 2: **Ohm's Law** explains V = I * R! 💡"
+    cleaned1 = clean_text(sample)
+    cleaned2 = clean_text(cleaned1)
+    assert cleaned1 == cleaned2 == "Ohm's Law explains V = I * R!"
+
+
+def test_sanitize_golden_fixture_unchanged():
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    
+    def check(val):
+        if isinstance(val, str):
+            assert clean_text(val) == val
+        elif isinstance(val, list):
+            for x in val:
+                check(x)
+        elif isinstance(val, dict):
+            for v in val.values():
+                check(v)
+    check(golden)
+
+
+def test_sanitize_code_walkthrough_params_untouched():
+    raw_plan = {
+        "title": "Scene 1: **Python Loops** 🚀",
+        "scenes": [
+            {
+                "id": 1,
+                "narration": "Narration: <|im_start|>Let's loop through numbers.<|im_end|>",
+                "visual": {
+                    "type": "code_walkthrough",
+                    "params": {
+                        "labels": ["Label: **Loop trace**"],
+                        "steps": ["Step 1: `count` increments"],
+                        "code": [
+                            "for i in range(3):",
+                            "    count += i  # comment with <tag>",
+                            "    print(f'i={i}')"
+                        ],
+                        "trace": [
+                            {"line": 1, "vars": [{"name": "i", "value": "0"}]}
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+    cleaned = sanitize_plan_dict(raw_plan)
+    assert cleaned["title"] == "Python Loops"
+    assert cleaned["scenes"][0]["narration"] == "Let's loop through numbers."
+    assert cleaned["scenes"][0]["visual"]["params"]["labels"] == ["Loop trace"]
+    assert cleaned["scenes"][0]["visual"]["params"]["steps"] == ["count increments"]
+    # code and trace are untouched
+    assert cleaned["scenes"][0]["visual"]["params"]["code"] == [
+        "for i in range(3):",
+        "    count += i  # comment with <tag>",
+        "    print(f'i={i}')"
+    ]
+    assert cleaned["scenes"][0]["visual"]["params"]["trace"] == [
+        {"line": 1, "vars": [{"name": "i", "value": "0"}]}
+    ]

@@ -17,6 +17,7 @@ from orchestrator.prompts import (CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIV
 from orchestrator.schema import (NOT_SPOKEN, WORDS_MAX, WORDS_MIN, LessonPlan,
                                  scenes_for, word_budget)
 from orchestrator.spoken import shorten_narration, to_spoken
+from orchestrator.sanitize import clean_text, sanitize_plan_dict
 
 # Primary planner: fast and resident. OLLAMA_MODEL is the older name, still honoured.
 MODEL_NAME = os.environ.get("PLANNER_MODEL") or os.environ.get("OLLAMA_MODEL") or "qwen2.5:3b"
@@ -158,6 +159,7 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool, level:
             raise PlanRejected(_validation_feedback(exc, target_sec)) from None
         raise PlanRejected(["JSON: scenes must be a list of objects"]) from None
 
+    sanitize_plan_dict(data)
     data["level"], data["target_sec"] = level, target_sec
 
     info = {"policy": policy, "math": {"status": "none"}, "repaired": False, "answer_repaired": False}

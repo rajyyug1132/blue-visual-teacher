@@ -377,5 +377,7 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
 - `1738b7f` re-rendered 9 shop-window demo lessons in `public/demo/*` with the fixed renderer.
 - Promoted latest preview of `v1` to Vercel production (`FD37n4ttUQ3erJRCzGHEfY2816dJ`).
 - 06:28: Playback speed control (0.75×, 1×, 1.25×, 1.5×) added to LessonPlayer (MP4 `<video>`) and LivePreview (`<audio>` sync with canvas). Preserves pitch, stores in localStorage, supports '<' / '>' keyboard shortcuts, carries rate across preview-to-MP4 swap. Verified via Playwright on EN and HI demo lessons. Fast gate PASS (38 renderer, 122 python).
+- 06:33: LLM output sanitization ('token sterilization') in orchestrator/sanitize.py clean_text() wired into orchestrator/planner.py before schema validation. Strips special tokens, <think> blocks, markdown, emojis/control chars, scene/narration prefixes, wrapping quotes; code_walkthrough params (code/trace) untouched. 9 new unit tests PASS; fast gate PASS (38 renderer, 131 python).
+
 
 
