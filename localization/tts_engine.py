@@ -654,14 +654,16 @@ class OfflineTTSEngine:
 
     def __init__(
         self,
-        voice_en: str = "enm",  # 'enm' (am_michael) or 'enf' (af_sarah)
+        voice_en: str = "hf_alpha",  # was 'enm' (am_michael), now defaults to hf_alpha for offline availability
         speed_en: float = 1.0,
         voice_hi: str = "hf_alpha",
         speed_hi: float = 1.0,
         mms_speaking_rate: float = 1.15,
     ):
         self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
-        self.voice_en = resolve_voice(voice_en, "am_michael")
+        env_voice = os.environ.get("VOICE_EN")
+        chosen_en = env_voice if env_voice else voice_en
+        self.voice_en = resolve_voice(chosen_en, "hf_alpha")
         self.speed_en = speed_en
         self.voice_hi = resolve_voice(voice_hi, "hf_alpha")
         self.speed_hi = speed_hi

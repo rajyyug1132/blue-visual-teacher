@@ -47,6 +47,7 @@ qwen2.5:3b Monsoon ("V = Rain / (A × T)" pseudo-formula), llama3.2:3b Monsoon (
 
 ## Handoffs
 
+- YYUG(agent) -> TARUN · localization/tts_engine.py · default voice hf_alpha · am_michael not cached offline · n
 - YYUG -> TARUN · localization/translator.py · add `"bn": "ben_Beng"` to LANG_CODE_MAP on tarun/localization (already patched on v1) · Bengali replaced Telugu everywhere except this map, so IndicTrans2 got the raw tag `bn` and test_multilingual_sync failed with "Invalid target language tag: bn" whenever the real model is loaded · blocking? n (fixed on v1)
 
 - TARUN -> FARHAN, AYUSH · localization/tts_engine.py · Added friendly voice identifiers "enm" (Michael, Male Professor) and "enf" (Sarah, Female Educator) for English Kokoro TTS, selectable via voice="enm"|"enf" in TTS calls and test_voice CLI; web UI / API can expose these as user options · blocking: n
@@ -378,6 +379,8 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
 - Promoted latest preview of `v1` to Vercel production (`FD37n4ttUQ3erJRCzGHEfY2816dJ`).
 - 06:28: Playback speed control (0.75×, 1×, 1.25×, 1.5×) added to LessonPlayer (MP4 `<video>`) and LivePreview (`<audio>` sync with canvas). Preserves pitch, stores in localStorage, supports '<' / '>' keyboard shortcuts, carries rate across preview-to-MP4 swap. Verified via Playwright on EN and HI demo lessons. Fast gate PASS (38 renderer, 122 python).
 - 06:33: LLM output sanitization ('token sterilization') in orchestrator/sanitize.py clean_text() wired into orchestrator/planner.py before schema validation. Strips special tokens, <think> blocks, markdown, emojis/control chars, scene/narration prefixes, wrapping quotes; code_walkthrough params (code/trace) untouched. 9 new unit tests PASS; fast gate PASS (38 renderer, 131 python).
+- 06:54: Default English TTS voice set to hf_alpha (was enm -> am_michael) in localization/tts_engine.py; respects VOICE_EN env var. test_tts_and_localization.py 14/14 passed offline without missing cache errors. Fast gate PASS (38 renderer, 131 python).
+
 
 
 
