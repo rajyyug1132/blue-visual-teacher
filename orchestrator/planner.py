@@ -1,6 +1,7 @@
 # orchestrator/planner.py
 import json
 import os
+import re
 import time
 
 import httpx
@@ -10,17 +11,22 @@ from pydantic import ValidationError
 from orchestrator.cache import load_plan, save_plan
 from orchestrator.fallbacks import build_safe_fallback_lesson
 from orchestrator.mathcheck import MathCheckError, ensure_answer_spoken, verify_plan
-from orchestrator.numeric_guard import NumericPolicy, audit_numbers, nfkc
-from orchestrator.prompts import CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT, request
-from orchestrator.schema import NOT_SPOKEN, TOTAL_MAX, TOTAL_MIN, WORDS_MAX, LessonPlan
+from orchestrator.numeric_guard import NumericPolicy, audit_fields, nfkc
+from orchestrator.prompts import (CLASSIFY_PROMPT, FEW_SHOT_MESSAGES, QUALITATIVE_MODE, SYSTEM_PROMPT,
+                                  is_programming_topic, request)
+from orchestrator.schema import (NOT_SPOKEN, WORDS_MAX, WORDS_MIN, LessonPlan,
+                                 scenes_for, word_budget)
 from orchestrator.spoken import shorten_narration, to_spoken
+from orchestrator.sanitize import clean_text, sanitize_plan_dict
 
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")  # GPU gets the planner; TTS/MT run on CPU (DEVICE)
+# Primary planner: fast and resident. OLLAMA_MODEL is the older name, still honoured.
+MODEL_NAME = os.environ.get("PLANNER_MODEL") or os.environ.get("OLLAMA_MODEL") or "qwen2.5:3b"
+# Bigger model for one escalation attempt after the primary fails twice. PLANNER_ESCALATION_MODEL="" disables it.
+ESCALATION_MODEL = os.environ.get("PLANNER_ESCALATION_MODEL", "qwen2.5:7b")
 THINKING_MODEL_PREFIXES = ("qwen3", "gemma")  # only these get think=False
 KEEP_ALIVE = -1  # must be a number: the string "-1" is rejected by the server ("missing unit in duration")
 NUM_CTX = 4096  # same for every call: a different num_ctx makes Ollama reload the model
 CLASSIFY_SCHEMA = {"type": "object", "properties": {"has_formula": {"type": "boolean"}}, "required": ["has_formula"]}
-STAGES = ("plan", "retry", "qualitative")  # then the safe template
 
 # Pinned to localhost so a stray OLLAMA_HOST can never route planning off the machine.
 _client = ollama.Client(host="http://127.0.0.1:11434", timeout=120)
@@ -29,11 +35,31 @@ LLM_ERRORS = (ollama.ResponseError, ConnectionError, httpx.HTTPError)
 
 
 class PlanRejected(ValueError):
-    """Model output that failed a check; `problems` are fed back to the model on the next rung of the ladder."""
+    """Model output that failed a check; `problems` are fed back to the model on the next rung of the ladder.
 
-    def __init__(self, problems: list[str]):
+    When every problem is a number, unit or '=' in a known string, `data` holds the parsed lesson and `patchable`
+    the located issues, so the planner can rewrite just those strings instead of re-planning the whole lesson.
+    """
+
+    def __init__(self, problems: list[str], data: dict | None = None, patchable: list[dict] | None = None):
         super().__init__("; ".join(problems))
         self.problems = problems
+        self.data = data
+        self.patchable = patchable
+
+
+# Topics that obviously have a standard formula skip the classify call (and 3b's misreads of them).
+FORMULA_TOPIC = re.compile(
+    r"\b(?:theorem|law|laws|interest|equation|formula|speed|velocity|acceleration|momentum|density|pressure|area"
+    r"|volume|perimeter|probability|percentage|ratio|titration|molarity|ohm|voltage|resistance|current|power"
+    r"|energy|force|gravitation|kinetic|potential|pythagor\w*|trigonometr\w*|quadratic|profit|discount|average"
+    r"|simple interest|compound interest)\b", re.I)
+PATCH_SCHEMA = {"type": "object", "properties": {"text": {"type": "string", "maxLength": 320}}, "required": ["text"]}
+PATCH_RULES = {"numbers": "contains no numbers or amounts (small counts up to ten are fine)",
+               "unit": "contains no units of measurement", "equals": "contains no '=' sign and no formula"}
+PATCH_PROMPT = ('Rewrite this {field} from a lesson about "{concept}" so that it {rules}. Keep its meaning{length}. '
+                'Plain, simple English. Reply as JSON {{"text": "..."}}.\n\n{text}')
+MAX_PATCHES = 6
 
 
 def total_words(plan: LessonPlan) -> int:
@@ -53,7 +79,10 @@ def _chat(**kwargs):
 
 
 def classify_topic(concept: str, model: str = MODEL_NAME) -> NumericPolicy:
-    """One tiny schema-constrained call: does this concept have a standard formula? Unsure or failed -> "none"."""
+    """Keyword prior first (Pythagoras Theorem, Compound Interest...), then one tiny schema-constrained call:
+    does this concept have a standard formula? Unsure or failed -> "none"."""
+    if FORMULA_TOPIC.search(concept):
+        return "checked"
     try:
         resp = _chat(model=model, messages=[{"role": "user", "content": CLASSIFY_PROMPT.format(concept=concept.strip())}],
                      format=CLASSIFY_SCHEMA, keep_alive=KEEP_ALIVE,
@@ -63,10 +92,61 @@ def classify_topic(concept: str, model: str = MODEL_NAME) -> NumericPolicy:
         return "none"  # making no numeric claims is the safe side
 
 
-def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tuple[LessonPlan, dict]:
+# A request is not a topic: "teach me java script" must plan, title and cache as "JavaScript".
+_ASK = re.compile(r"^\s*(?:please\s+)?(?:(?:can|could) you\s+)?(?:teach me(?: about)?|explain(?: to me)?|tell me about|"
+                  r"what (?:is|are)|how (?:does|do|is|are)|i want to (?:learn|know)(?: about)?|"
+                  r"help me (?:understand|learn)|show me|(?:a )?lesson (?:on|about)|learn(?: about)?)\s+", re.I)
+_SPELLINGS = ((re.compile(r"\bjava\s+script\b", re.I), "JavaScript"), (re.compile(r"\btype\s+script\b", re.I), "TypeScript"))
+
+
+def clean_topic(concept: str) -> str:
+    topic = _ASK.sub("", concept.strip()).strip(" ?.!")
+    for pattern, spelling in _SPELLINGS:
+        topic = pattern.sub(spelling, topic)
+    return topic or concept.strip()
+
+
+def _repair_code_scenes(scenes: list) -> bool:
+    """Fix the code_walkthrough slips a small model makes instead of rejecting the whole plan for them:
+    0-based or out-of-range trace lines, code_walkthrough without code, code/trace on other scene types,
+    non-string variable values. Returns True if anything changed."""
+    changed = False
+    for scene in scenes:
+        visual = scene.get("visual")
+        params = visual.get("params") if isinstance(visual, dict) else None
+        if not isinstance(params, dict):
+            continue
+        if visual.get("type") != "code_walkthrough":
+            changed |= params.pop("code", None) is not None
+            changed |= params.pop("trace", None) is not None
+            continue
+        code = [line for line in params.get("code") or [] if isinstance(line, str)][:12]
+        if not code:  # chose the type but wrote no program: keep the scene as a plain step flow
+            visual["type"], changed = "flow", True
+            params.pop("code", None), params.pop("trace", None)
+            continue
+        steps = [s for s in params.get("trace") or [] if isinstance(s, dict) and isinstance(s.get("line"), int)]
+        if steps and min(s["line"] for s in steps) == 0:  # 0-based lines
+            for s in steps:
+                s["line"] += 1
+        steps = [s for s in steps if 1 <= s["line"] <= len(code)][:6]
+        if not steps:
+            steps = [{"line": i + 1, "vars": []} for i in range(min(len(code), 6))]
+        for s in steps:
+            s["vars"] = [{"name": str(v.get("name", ""))[:24], "value": str(v.get("value", ""))[:24]}
+                         for v in (s.get("vars") or []) if isinstance(v, dict)][:4]
+        changed |= params.get("code") != code or params.get("trace") != steps
+        params["code"], params["trace"] = code, steps
+    return changed
+
+
+def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool, level: str = "beginner",
+                target_sec: int = 60, programming: bool = False) -> tuple[LessonPlan, dict]:
     """parse -> verify math (digits still present) -> spoken words -> trim -> spoken answer -> audit -> schema.
 
     Returns (plan, info). Raises PlanRejected with every problem found, for the next rung of the ladder.
+    The requested level and length are injected before validation, so the plan is held to the budget it was
+    asked for and a model that omits or contradicts those fields cannot dodge it.
     """
     try:
         data = json.loads(content)
@@ -76,8 +156,11 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
         try:
             LessonPlan.model_validate_json(content)
         except ValidationError as exc:
-            raise PlanRejected(_validation_feedback(exc)) from None
+            raise PlanRejected(_validation_feedback(exc, target_sec)) from None
         raise PlanRejected(["JSON: scenes must be a list of objects"]) from None
+
+    sanitize_plan_dict(data)
+    data["level"], data["target_sec"] = level, target_sec
 
     info = {"policy": policy, "math": {"status": "none"}, "repaired": False, "answer_repaired": False}
     problems = []
@@ -102,6 +185,7 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
             narration = shorten_narration(narration) or narration
         info["repaired"] |= narration != scene["narration"]
         scene["narration"] = narration
+    info["hook_extended"] = _extend_short_hook(data)
 
     math = info["math"]
     if math.get("result") is not None and not problems:
@@ -111,18 +195,92 @@ def _parse_plan(content: str, policy: NumericPolicy, repair_answer: bool) -> tup
         except MathCheckError as exc:
             problems.append(str(exc))
 
-    problems += audit_numbers(data, policy, set(math.get("allowed", [])))
+    info["code_repaired"] = _repair_code_scenes(scenes)
+    issues = audit_fields(data, policy, set(math.get("allowed", [])))
+    if programming:  # "count = 0" is lesson content in a programming topic, not a formula
+        issues = [i for i in issues if i["kind"] != "equals"]
     try:
         plan = LessonPlan.model_validate(data)
     except ValidationError as exc:
-        problems += _validation_feedback(exc)
-    if problems:
-        raise PlanRejected(problems)
+        problems += _validation_feedback(exc, target_sec)
+    if problems or issues:
+        # Only field-level number problems left: the caller can patch those strings instead of re-planning.
+        patchable = issues if issues and not problems else None
+        raise PlanRejected(problems + [i["message"] for i in issues], data=data, patchable=patchable)
     return plan, info
 
 
-def _validation_feedback(exc: ValidationError) -> list[str]:
+def _patch_fields(concept: str, rejected: PlanRejected, model: str, policy: NumericPolicy,
+                  repair_answer: bool, level: str = "beginner",
+                  target_sec: int = 60) -> tuple[LessonPlan, dict] | None:
+    """Rewrite only the strings the audit flagged (one short call each), then re-run every check.
+
+    Returns (plan, info) on success, None if the patch fails or more than MAX_PATCHES strings need it.
+    The prompt states the rule only; it never offers replacement words (small models copy them verbatim).
+    """
+    targets: dict[tuple, set] = {}
+    for issue in rejected.patchable or []:
+        targets.setdefault((issue["scene_index"], issue["field"], issue["idx"]), set()).add(issue["kind"])
+    if not targets or len(targets) > MAX_PATCHES:
+        return None
+    data = json.loads(json.dumps(rejected.data))
+    for (si, field, idx), kinds in targets.items():
+        scene = data["scenes"][si]
+        params = scene["visual"]["params"]
+        text = scene["narration"] if field == "narration" else params[field + "s"][idx]
+        length = " and about the same number of words" if field == "narration" else "; under six words"
+        prompt = PATCH_PROMPT.format(field="sentence" if field == "narration" else "short label", concept=concept,
+                                     rules=" and ".join(PATCH_RULES[k] for k in sorted(kinds)), length=length,
+                                     text=text)
+        try:
+            resp = _chat(model=model, messages=[{"role": "user", "content": prompt}], format=PATCH_SCHEMA,
+                         keep_alive=KEEP_ALIVE, options={"temperature": 0.0, "num_ctx": NUM_CTX, "num_predict": 160})
+            new = str(json.loads(resp.message.content or "{}").get("text", "")).strip()
+        except (*LLM_ERRORS, ValueError):
+            return None
+        if not new:
+            return None
+        if field == "narration":
+            scene["narration"] = new
+        else:
+            params[field + "s"][idx] = new
+    try:
+        return _parse_plan(json.dumps(data, ensure_ascii=False), policy, repair_answer, level, target_sec,
+                           programming=is_programming_topic(concept))
+    except PlanRejected:
+        return None
+
+
+def _extend_short_hook(data: dict) -> bool:
+    """Scene 1 under WORDS_MIN words (common with 3B models) is extended from the title instead of costing a retry.
+
+    "Why does your fan slow down in summer?" + title "Ohm's Law: Voltage and Resistance" ->
+    "... in summer? Today we explore Ohm's Law, voltage and resistance." The result still goes through the
+    numeric audit and schema validation, so a title with digits cannot sneak numbers in.
+    """
+    hook = next((s for s in data["scenes"] if s.get("id") == 1), None)
+    title = data.get("title")
+    if not hook or not isinstance(hook.get("narration"), str) or not isinstance(title, str):
+        return False
+    narration = hook["narration"].strip()
+    if not narration or len(narration.split()) >= WORDS_MIN:
+        return False
+    topic = to_spoken(title)
+    full, short = topic.replace(":", ","), topic.split(":")[0]
+    for subject in (full, short):
+        extended = f"{narration.rstrip()} Today we explore {subject.strip().rstrip('.')}."
+        if len(extended.split()) < WORDS_MIN:
+            extended += " Let's find out how it works."
+        if len(extended.split()) <= WORDS_MAX:
+            hook["narration"] = extended
+            return True
+    return False
+
+
+def _validation_feedback(exc: ValidationError, target_sec: int = 60) -> list[str]:
     """Turn a ValidationError into per-scene instructions; a raw error dump makes 3B models repeat themselves."""
+    scenes = scenes_for(target_sec)
+    budget = word_budget(target_sec, scenes)
     lines = []
     for err in exc.errors():
         loc = err["loc"]
@@ -133,24 +291,51 @@ def _validation_feedback(exc: ValidationError) -> list[str]:
                 "definitions in visual.params.labels, not in narration."
             )
         elif not loc and "total" in err["msg"]:
-            lines.append(f"{err['msg']}. Lengthen or shorten scenes so all narrations add up to "
-                         f"{TOTAL_MIN}-{TOTAL_MAX} words.")
+            lines.append(f"{err['msg']}. Adjust the scenes so all narrations add up to about {budget} words "
+                         f"over {scenes} scenes.")
         else:
             lines.append(f"{'.'.join(map(str, loc)) or 'JSON'}: {err['msg']}")
     return lines
 
 
-def warm_up_ollama(model: str = MODEL_NAME) -> None:
+def warm_up_ollama(model: str | None = None) -> None:
     """Pin model in memory at startup so live demo requests incur near-zero load_duration."""
-    _client.generate(model=model, prompt="ping", keep_alive=KEEP_ALIVE, options={"num_predict": 1, "num_ctx": NUM_CTX})
+    _client.generate(model=model or MODEL_NAME, prompt="ping", keep_alive=KEEP_ALIVE,
+                     options={"num_predict": 1, "num_ctx": NUM_CTX})
 
 
-def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
-                policy: NumericPolicy | None = None) -> tuple[LessonPlan, dict]:
-    """Retry ladder: plan -> retry with the problem list -> regenerate in qualitative mode -> safe template."""
+def _unload(model: str) -> None:
+    """keep_alive=0 evicts the model now, so only one planner model sits in VRAM (6 GB card)."""
+    try:
+        _client.generate(model=model, prompt="", keep_alive=0)
+    except LLM_ERRORS:
+        pass  # daemon down: nothing is loaded anyway
+
+
+def _ladder(primary: str, escalation: str) -> list[tuple[str, str]]:
+    """(stage, model) rungs before the safe template. Qualitative mode reuses whichever model is loaded last."""
+    rungs = [("plan", primary), ("retry", primary)]
+    if escalation and escalation != primary:
+        rungs.append(("escalate", escalation))
+    rungs.append(("qualitative", rungs[-1][1]))
+    return rungs
+
+
+def plan_lesson(concept: str, model: str | None = None, use_cache: bool = True,
+                policy: NumericPolicy | None = None, escalation_model: str | None = None,
+                level: str = "beginner", target_sec: int = 60) -> tuple[LessonPlan, dict]:
+    """Ladder: plan -> retry with the problem list -> escalate to the bigger model (fresh, with the problem list)
+    -> regenerate in qualitative mode -> safe template. Telemetry records every rung's model and seconds.
+
+    level and target_sec are the Stage 1 inputs from the request (CC-2); both are part of the plan cache key.
+    """
+    concept = clean_topic(concept)
+    model = model or MODEL_NAME
+    escalation = ESCALATION_MODEL if escalation_model is None else escalation_model
     t0 = time.perf_counter()
-    if use_cache and (cached := load_plan(concept)) is not None:
+    if use_cache and (cached := load_plan(concept, level=level, target_sec=target_sec)) is not None:
         return cached, {"cache_hit": True, "fallback_used": False, "total_words": total_words(cached),
+                        "level": level, "target_sec": target_sec,
                         "total_sec": round(time.perf_counter() - t0, 4)}
 
     t_classify = time.perf_counter()
@@ -158,27 +343,48 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
         policy = classify_topic(concept, model)
     classify_sec = round(time.perf_counter() - t_classify, 3)
 
+    budget = word_budget(target_sec, scenes_for(target_sec))
     base = [{"role": "system", "content": SYSTEM_PROMPT}] + FEW_SHOT_MESSAGES
-    messages = base + [{"role": "user", "content": request(concept, policy)}]
-    errors = []
-    for attempt, stage in enumerate(STAGES):
+    messages = base + [{"role": "user", "content": request(concept, policy, level, target_sec)}]
+    errors, rungs, problems = [], [], []
+    loaded = model
+    swap_sec = 0.0
+    for attempt, (stage, rung_model) in enumerate(_ladder(model, escalation)):
+        if rung_model != loaded:
+            t_swap = time.perf_counter()
+            _unload(loaded)
+            swap_sec += time.perf_counter() - t_swap
+            loaded = rung_model
         stage_policy: NumericPolicy = "none" if stage == "qualitative" else policy
-        if stage == "qualitative":
+        if stage == "escalate":
+            # Fresh conversation for the bigger model, told what went wrong (no drafts to copy from).
+            note = ("\nA previous draft was rejected for these problems; avoid them:\n- " + "\n- ".join(problems)
+                    if problems else "")
+            messages = base + [{"role": "user",
+                                "content": request(concept, policy, level, target_sec) + note}]
+        elif stage == "qualitative":
             # Fresh conversation: the failed drafts would pull the model back to the same numbers.
-            messages = base + [{"role": "user", "content": request(concept, "none") + "\n" + QUALITATIVE_MODE}]
+            messages = base + [{"role": "user",
+                                "content": request(concept, "none", level, target_sec) + "\n" + QUALITATIVE_MODE}]
         resp = None
+        t_rung = time.perf_counter()
         try:
             resp = _chat(
-                model=model,
+                model=rung_model,
                 messages=messages,
                 format=LessonPlan.model_json_schema(),
                 keep_alive=KEEP_ALIVE,
-                options={"temperature": 0.0 if attempt == 0 else 0.2, "num_ctx": NUM_CTX, "num_predict": 850},
+                options={"temperature": 0.0 if stage in ("plan", "escalate") else 0.2, "num_ctx": NUM_CTX,
+                         "num_predict": 850},
             )
-            plan, info = _parse_plan(resp.message.content or "", stage_policy, repair_answer=stage != "plan")
+            plan, info = _parse_plan(resp.message.content or "", stage_policy, repair_answer=stage != "plan",
+                                     level=level, target_sec=target_sec, programming=is_programming_topic(concept))
+            rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
+                          "ok": True})
             telemetry = {
                 "attempt": attempt + 1,
                 "stage": stage,
+                "model": rung_model,
                 "cache_hit": False,
                 "classify_sec": classify_sec,
                 "prompt_tokens": resp.prompt_eval_count or 0,
@@ -186,33 +392,67 @@ def plan_lesson(concept: str, model: str = MODEL_NAME, use_cache: bool = True,
                 "load_sec": round((resp.load_duration or 0) / 1e9, 3),
                 "eval_sec": round((resp.eval_duration or 0) / 1e9, 3),
                 "total_words": total_words(plan),
+                "level": level,
+                "target_sec": target_sec,
                 "fallback_used": False,
                 "errors": errors,
+                "rungs": rungs,
                 **info,
             }
-            return _finish(concept, plan, telemetry, t0, use_cache)
+            return _finish(concept, plan, telemetry, t0, use_cache, model, loaded, swap_sec)
         except LLM_ERRORS as exc:
             # Daemon down or HTTP error: there is no model output to correct, so go to the next rung.
             errors.append(f"{stage}: {type(exc).__name__}: {exc}")
+            rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
+                          "ok": False})
             continue
         except PlanRejected as exc:
+            problems = exc.problems
             errors.append(f"{stage}: " + " | ".join(exc.problems))
+            if exc.patchable and stage != "qualitative":
+                patched = _patch_fields(concept, exc, rung_model, stage_policy, repair_answer=stage != "plan",
+                                        level=level, target_sec=target_sec)
+                if patched:
+                    plan, info = patched
+                    rungs.append({"stage": stage + "+patch", "model": rung_model,
+                                  "sec": round(time.perf_counter() - t_rung, 2), "ok": True,
+                                  "patched": len({(i["scene_index"], i["field"], i["idx"]) for i in exc.patchable})})
+                    telemetry = {"attempt": attempt + 1, "stage": stage + "+patch", "model": rung_model,
+                                 "cache_hit": False, "classify_sec": classify_sec,
+                                 "total_words": total_words(plan), "level": level, "target_sec": target_sec,
+                                 "fallback_used": False, "errors": errors,
+                                 "rungs": rungs, **info}
+                    return _finish(concept, plan, telemetry, t0, use_cache, model, loaded, swap_sec)
+            rungs.append({"stage": stage, "model": rung_model, "sec": round(time.perf_counter() - t_rung, 2),
+                          "ok": False})
             feedback = "Problems:\n- " + "\n- ".join(exc.problems)
         messages = messages + [
             {"role": "assistant", "content": resp.message.content or "{}"},
-            {"role": "user", "content": f"{feedback}\nReturn the full corrected JSON with 4-6 scenes and 18-30 "
-                                        "words per narration."},
+            {"role": "user", "content": f"{feedback}\nReturn the full corrected JSON with "
+                                        f"{scenes_for(target_sec)} scenes and about {budget} words in total."},
         ]
 
     # Deterministic safe template if every rung failed. Never cached, so a later run can retry the LLM.
-    plan = build_safe_fallback_lesson(concept)
-    return plan, {"attempt": len(STAGES) + 1, "stage": "template", "cache_hit": False, "fallback_used": True,
-                  "policy": policy, "classify_sec": classify_sec, "total_words": total_words(plan),
-                  "math": {"status": "none"}, "errors": errors, "total_sec": round(time.perf_counter() - t0, 3)}
+    plan = build_safe_fallback_lesson(concept, level, target_sec)
+    telemetry = {"attempt": len(rungs) + 1, "stage": "template", "model": None, "cache_hit": False,
+                 "fallback_used": True, "policy": policy, "classify_sec": classify_sec,
+                 "total_words": total_words(plan), "level": level, "target_sec": target_sec,
+                 "math": {"status": "none"}, "errors": errors, "rungs": rungs}
+    return _finish(concept, plan, telemetry, t0, False, model, loaded, swap_sec)
 
 
-def _finish(concept, plan, telemetry, t0, use_cache):
-    telemetry["total_sec"] = round(time.perf_counter() - t0, 3)
+def _finish(concept, plan, telemetry, t0, use_cache, primary, loaded, swap_sec):
+    telemetry["total_sec"] = round(time.perf_counter() - t0, 3)  # time the student waited for this plan
+    if loaded != primary:
+        # Put the fast model back for the next request; this runs after the plan is ready.
+        t_swap = time.perf_counter()
+        _unload(loaded)
+        try:
+            warm_up_ollama(primary)
+        except LLM_ERRORS:
+            pass
+        swap_sec += time.perf_counter() - t_swap
+    telemetry["swap_sec"] = round(swap_sec, 2)
     if use_cache:
-        save_plan(concept, plan)
+        save_plan(concept, plan, level=plan.level, target_sec=plan.target_sec)
     return plan, telemetry

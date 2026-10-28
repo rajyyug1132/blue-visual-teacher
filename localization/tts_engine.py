@@ -1,0 +1,1030 @@
+"""localization/tts_engine.py — Dual-Engine Offline TTS (Kokoro-82M + MMS-TTS).
+
+Features:
+  - Kokoro-82M for English ('a', af_heart) and Hindi ('h', hf_alpha).
+  - Meta MMS-TTS for Kannada ('facebook/mms-tts-kan', VitsModel).
+  - Kannada/Hindi/English number-to-words & symbol expansion (prevents MMS-TTS dropping digits).
+  - Missing espeak-ng guard for Windows (prevents Kokoro-Hindi crashes).
+  - Deterministic duration prediction: torch.manual_seed(42) before forward passes.
+  - Zero double-padding: 0.35s tail silence is included in the audio, and the measured
+    audio length directly forms scene duration in manifest.json.
+  - Standardized 24,000 Hz sample rate output.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import re
+import shutil
+import struct
+import wave
+from pathlib import Path
+from typing import Any, Sequence
+
+if not os.environ.get("HF_HOME"):
+    if os.environ.get("BVT_HF_HOME"):
+        os.environ["HF_HOME"] = os.environ["BVT_HF_HOME"]
+    elif Path(r"D:\git\project requirements\hf_cache").is_dir():
+        os.environ["HF_HOME"] = r"D:\git\project requirements\hf_cache" 
+
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
+try:
+    import torch
+    from transformers import AutoTokenizer, VitsModel
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
+try:
+    from kokoro import KPipeline
+    HAS_KOKORO = True
+except ImportError:
+    HAS_KOKORO = False
+
+try:
+    from scipy.signal import resample_poly, lfilter
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+
+from localization.normalize import (
+    clean_for_mms,
+    expand_stem_acronyms,
+    insert_breath_pauses,
+    kannada_number_to_words,
+    hindi_number_to_words,
+    english_number_to_words,
+    tamil_number_to_words,
+    bengali_number_to_words,
+)
+
+TARGET_SR = 24000
+TAIL_PAD_SEC = 0.35
+WORDS_PER_SEC = 2.3
+
+# ---------------------------------------------------------------------------
+# Math Symbol Expansion (number words come from localization.normalize)
+# ---------------------------------------------------------------------------
+def expand_numbers_and_symbols(text: str, lang: str) -> str:
+    """Expand numbers and mathematical symbols into spoken words for the given language.
+    
+    This is essential for MMS-TTS (Kannada) which silently drops ASCII digits (0-9) and math symbols.
+    """
+    out = expand_stem_acronyms(text, lang)
+
+    # Expand decimals e.g. 0.35, 9.8
+    def _replace_decimal(match: re.Match) -> str:
+        int_part = int(match.group(1))
+        dec_str = match.group(2)
+        if lang == "kn":
+            int_words = kannada_number_to_words(int_part)
+            dec_words = " ".join(kannada_number_to_words(int(d)) for d in dec_str)
+            return f"{int_words} ಬಿಂದು {dec_words}"
+        elif lang in ("hi", "hin_Deva"):
+            int_words = hindi_number_to_words(int_part)
+            dec_words = " ".join(hindi_number_to_words(int(d)) for d in dec_str)
+            return f"{int_words} दशमलव {dec_words}"
+        elif lang in ("ta", "tam_Taml"):
+            int_words = tamil_number_to_words(int_part)
+            dec_words = " ".join(tamil_number_to_words(int(d)) for d in dec_str)
+            return f"{int_words} புள்ளி {dec_words}"
+        elif lang in ("bn", "ben_Beng"):
+            int_words = bengali_number_to_words(int_part)
+            dec_words = " ".join(bengali_number_to_words(int(d)) for d in dec_str)
+            return f"{int_words} দশমিক {dec_words}"
+        else:
+            int_words = english_number_to_words(int_part)
+            dec_words = " ".join(english_number_to_words(int(d)) for d in dec_str)
+            return f"{int_words} point {dec_words}"
+
+    out = re.sub(r"\b(\d+)\.(\d+)\b", _replace_decimal, out)
+
+    # Expand symbols and units
+    if lang == "kn":
+        symbol_map = [
+            (r"\b(\d+)\s*(?:Ω|Ohms?|ಓಮ್)\b", r"\1 ಓಮ್"),
+            (r"\bOhm'?s?\b", "ಓಮ್"),
+            (r"\b(\d+)\s*(?:V|Volts?|ವೋಲ್ಟ್)\b", r"\1 ವೋಲ್ಟ್"),
+            (r"\b(\d+)\s*(?:A|Amperes?|ಆಂಪಿಯರ್)\b", r"\1 ಆಂಪಿಯರ್"),
+            (r"\b(\d+)\s*(?:W|Watts?|ವ್ಯಾಟ್)\b", r"\1 ವ್ಯಾಟ್"),
+            (r"\b(\d+)\s*(?:Hz|Hertz|ಹರ್ಟ್ಜ್)\b", r"\1 ಹರ್ಟ್ಜ್"),
+            (r"\b(\d+)\s*%", r"\1 ಪ್ರತಿಶತ"),
+            (r"\b(\d+)\s*fps\b", r"\1 ಫ್ರೇಮ್ ಪ್ರತಿ ಸೆಕೆಂಡ್"),
+            (r"\b(\d+)\s*(?:s|sec|ಸೆಕೆಂಡ್)\b", r"\1 ಸೆಕೆಂಡ್"),
+            (r"\s*=\s*", " ಸಮಾನ "),
+            (r"\s*(?:×|\*)\s*", " ಗುಣಿಸು "),
+            (r"\s*(?:÷|\/)\s*", " ಭಾಗಿಸು "),
+            (r"\s*\+\s*", " ಪ್ಲಸ್ "),
+            (r"\s*-\s*", " ಮೈನಸ್ "),
+            (r"\s*→\s*", " ಕಾರಣವಾಗುತ್ತದೆ "),
+        ]
+        for pat, repl in symbol_map:
+            out = re.sub(pat, repl, out)
+
+        # Expand remaining integer digits
+        def _replace_int_kn(m: re.Match) -> str:
+            return kannada_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_kn, out)
+
+    elif lang == "hi":
+        symbol_map = [
+            (r"\b(\d+)\s*(?:Ω|Ohms?|ओम)\b", r"\1 ओम"),
+            (r"\bOhm'?s?\b", "ओम"),
+            (r"\b(\d+)\s*(?:V|Volts?|वोल्ट)\b", r"\1 वोल्ट"),
+            (r"\b(\d+)\s*(?:A|Amperes?|एम्पीयर)\b", r"\1 एम्पीयर"),
+            (r"\b(\d+)\s*(?:W|Watts?|वाट)\b", r"\1 वाट"),
+            (r"\b(\d+)\s*(?:Hz|Hertz|हर्ट्ज़)\b", r"\1 हर्ट्ज़"),
+            (r"\b(\d+)\s*%", r"\1 प्रतिशत"),
+            (r"\b(\d+)\s*fps\b", r"\1 फ्रेम प्रति सेकंड"),
+            (r"\b(\d+)\s*(?:s|sec|सेकंड)\b", r"\1 सेकंड"),
+            (r"\s*=\s*", " बराबर "),
+            (r"\s*(?:×|\*)\s*", " गुणा "),
+            (r"\s*(?:÷|\/)\s*", " भागाकार "),
+            (r"\s*\+\s*", " प्लस "),
+            (r"\s*-\s*", " माइनस "),
+            (r"\s*→\s*", " की ओर "),
+        ]
+        for pat, repl in symbol_map:
+            out = re.sub(pat, repl, out)
+
+        def _replace_int_hi(m: re.Match) -> str:
+            return hindi_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_hi, out)
+
+    elif lang in ("ta", "tam_Taml"):
+        symbol_map = [
+            (r"\b(\d+)\s*(?:Ω|Ohms?|ஓம்)\b", r"\1 ஓம்"),
+            (r"\bOhm'?s?\b", "ஓம்"),
+            (r"\b(\d+)\s*(?:V|Volts?|வோல்ட்)\b", r"\1 வோல்ட்"),
+            (r"\b(\d+)\s*(?:A|Amperes?|ஆம்பியர்)\b", r"\1 ஆம்பியர்"),
+            (r"\b(\d+)\s*(?:W|Watts?|வாட்)\b", r"\1 வாட்"),
+            (r"\b(\d+)\s*(?:Hz|Hertz|ஹெர்ட்ஸ்)\b", r"\1 ஹெர்ட்ஸ்"),
+            (r"\b(\d+)\s*%", r"\1 சதவீதம்"),
+            (r"\b(\d+)\s*fps\b", r"\1 பிரேம் பர் வினாடி"),
+            (r"\b(\d+)\s*(?:s|sec|வினாடி)\b", r"\1 வினாடி"),
+            (r"\s*=\s*", " சமம் "),
+            (r"\s*(?:×|\*)\s*", " பெருக்கல் "),
+            (r"\s*(?:÷|\/)\s*", " வகுத்தல் "),
+            (r"\s*\+\s*", " கூட்டல் "),
+            (r"\s*-\s*", " கழித்தல் "),
+            (r"\s*→\s*", " வழிவகுக்கிறது "),
+        ]
+        for pat, repl in symbol_map:
+            out = re.sub(pat, repl, out)
+
+        def _replace_int_ta(m: re.Match) -> str:
+            return tamil_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_ta, out)
+
+    elif lang in ("bn", "ben_Beng"):
+        symbol_map = [
+            (r"\b(\d+)\s*(?:Ω|Ohms?|ওহম)\b", r"\1 ওহম"),
+            (r"\bOhm'?s?\b", "ওহম"),
+            (r"\b(\d+)\s*(?:V|Volts?|ভোল্ট)\b", r"\1 ভোল্ট"),
+            (r"\b(\d+)\s*(?:A|Amperes?|অ্যাম্পিয়ার)\b", r"\1 অ্যাম্পিয়ার"),
+            (r"\b(\d+)\s*(?:W|Watts?|ওয়াট)\b", r"\1 ওয়াট"),
+            (r"\b(\d+)\s*(?:Hz|Hertz|হার্টজ)\b", r"\1 হার্টজ"),
+            (r"\b(\d+)\s*%", r"\1 শতাংশ"),
+            (r"\b(\d+)\s*fps\b", r"\1 ফ্রেম প্রতি সেকেন্ড"),
+            (r"\b(\d+)\s*(?:s|sec|সেকেন্ড)\b", r"\1 সেকেন্ড"),
+            (r"\s*=\s*", " সমান "),
+            (r"\s*(?:×|\*)\s*", " গুণ "),
+            (r"\s*(?:÷|\/)\s*", " ভাগ "),
+            (r"\s*\+\s*", " প্লাস "),
+            (r"\s*-\s*", " মাইনাস "),
+            (r"\s*→\s*", " বোঝায় "),
+        ]
+        for pat, repl in symbol_map:
+            out = re.sub(pat, repl, out)
+
+        def _replace_int_bn(m: re.Match) -> str:
+            return bengali_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_bn, out)
+
+    else:
+        symbol_map = [
+            (r"\b(\d+)\s*(?:Ω|Ohms?)\b", r"\1 ohms"),
+            (r"\b(\d+)\s*(?:V|Volts?)\b", r"\1 volts"),
+            (r"\b(\d+)\s*(?:A|Amperes?)\b", r"\1 amperes"),
+            (r"\b(\d+)\s*(?:W|Watts?)\b", r"\1 watts"),
+            (r"\b(\d+)\s*(?:Hz|Hertz)\b", r"\1 hertz"),
+            (r"\b(\d+)\s*%", r"\1 percent"),
+            (r"\s*=\s*", " equals "),
+            (r"\s*(?:×|\*)\s*", " times "),
+            (r"\s*(?:÷|\/)\s*", " divided by "),
+            (r"\s*\+\s*", " plus "),
+            (r"\s*-\s*", " minus "),
+            (r"\s*→\s*", " leads to "),
+        ]
+        for pat, repl in symbol_map:
+            out = re.sub(pat, repl, out)
+
+        def _replace_int_en(m: re.Match) -> str:
+            return english_number_to_words(int(m.group(0)))
+
+        out = re.sub(r"\b\d+\b", _replace_int_en, out)
+
+    # Collapse extra whitespace
+    return re.sub(r"\s+", " ", out).strip()
+
+
+# ---------------------------------------------------------------------------
+# Offline TTS Engine
+# ---------------------------------------------------------------------------
+def _has_espeakng_loader() -> bool:
+    try:
+        import espeakng_loader
+        return Path(espeakng_loader.get_library_path()).exists()
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Studio-Grade Soft Envelope (Anti-Pop / Anti-Click Filtering)
+# ---------------------------------------------------------------------------
+def apply_soft_envelope(
+    wav: Any,
+    sr: int = TARGET_SR,
+    attack_ms: float = 5.0,
+    release_ms: float = 10.0,
+) -> Any:
+    """Apply raised-cosine (Hann) fade-in and fade-out to eliminate audio boundary clicks.
+    
+    Provides studio-grade smoothness at scene transitions and cuts.
+    Works seamlessly with NumPy ndarray and Python float lists.
+    """
+    try:
+        n_total = len(wav)
+        if n_total == 0:
+            return wav
+
+        attack_samples = int(round(attack_ms * sr / 1000.0))
+        release_samples = int(round(release_ms * sr / 1000.0))
+
+        attack_samples = max(1, min(attack_samples, n_total // 2))
+        release_samples = max(1, min(release_samples, n_total // 2))
+
+        # Check for real NumPy ndarray
+        if HAS_NUMPY and type(wav).__name__ == "ndarray" and hasattr(wav, "dtype") and hasattr(wav, "copy") and hasattr(np, "cos"):
+            out = wav.copy()
+            if attack_samples > 0:
+                in_ramp = 0.5 * (1.0 - np.cos(np.pi * np.arange(attack_samples) / attack_samples))
+                out[:attack_samples] *= in_ramp.astype(out.dtype)
+            if release_samples > 0:
+                out_ramp = 0.5 * (1.0 + np.cos(np.pi * (np.arange(release_samples) + 1) / release_samples))
+                out[-release_samples:] *= out_ramp.astype(out.dtype)
+            return out
+        elif isinstance(wav, list):
+            out = list(wav)
+            if attack_samples > 0:
+                for i in range(attack_samples):
+                    ramp = 0.5 * (1.0 - math.cos(math.pi * i / attack_samples))
+                    out[i] *= ramp
+            if release_samples > 0:
+                for j in range(release_samples):
+                    idx = n_total - release_samples + j
+                    ramp = 0.5 * (1.0 + math.cos(math.pi * (j + 1) / release_samples))
+                    out[idx] *= ramp
+            return type(wav)(out)
+        return wav
+    except Exception:
+        return wav
+
+
+# ---------------------------------------------------------------------------
+# Neural Speech Prosody Compressor (Anti-Stutter & Natural Flow)
+# ---------------------------------------------------------------------------
+def compress_speech_prosody(
+    wav: Any,
+    sr: int = TARGET_SR,
+    max_pause_ms: float = 75.0,
+    lead_ms: float = 140.0,
+    tail_s: float = TAIL_PAD_SEC,
+) -> Any:
+    """Condense unnatural neural pauses between words while preserving natural teacher flow.
+    
+    Guarantees:
+      1. Lead-in of 140ms so hardware DAC / media players never swallow the first word (e.g. 'Ohm').
+      2. Condenses awkward 400-500ms intra-sentence voids down to natural 75ms pauses.
+      3. Appends exact contract tail buffer (0.35s).
+      4. Studio normalized peak (0.95) with zero clipping or pops.
+    """
+    if not (HAS_NUMPY and isinstance(wav, np.ndarray) and len(wav) > 0):
+        return wav
+    max_amp = float(np.max(np.abs(wav)))
+    if max_amp < 1e-4:
+        return wav
+    thresh = max(0.006 * max_amp, 1e-4)
+    hop = int(0.010 * sr)
+    win = int(0.020 * sr)
+    n_frames = (len(wav) - win) // hop + 1
+    energies = np.array([np.max(np.abs(wav[i*hop:i*hop+win])) for i in range(n_frames)])
+    is_speech = energies > thresh
+    speech_idx = np.where(is_speech)[0]
+    if len(speech_idx) == 0:
+        return wav
+    first_sample = max(0, speech_idx[0] * hop)
+    last_sample = min(len(wav), (speech_idx[-1] * hop) + win)
+    core = wav[first_sample:last_sample]
+
+    n_core = (len(core) - win) // hop + 1
+    core_speech = np.array([np.max(np.abs(core[i*hop:i*hop+win])) > thresh for i in range(n_core)])
+    chunks = []
+    i = 0
+    max_sil_samples = int(max_pause_ms * sr / 1000.0)
+    while i < n_core:
+        if core_speech[i]:
+            sf = i
+            while i < n_core and core_speech[i]:
+                i += 1
+            chunks.append(core[sf*hop:min(len(core), i*hop + win)])
+        else:
+            sf = i
+            while i < n_core and not core_speech[i]:
+                i += 1
+            sil_samples = (i - sf) * hop
+            actual_sil = min(sil_samples, max_sil_samples)
+            if actual_sil > 0:
+                chunks.append(np.zeros(actual_sil, dtype=np.float32))
+
+    condensed = np.concatenate(chunks) if chunks else core
+    lead = np.zeros(int(lead_ms * sr / 1000.0), dtype=np.float32)
+    tail = np.zeros(int(tail_s * sr), dtype=np.float32)
+    out = np.concatenate([lead, condensed, tail])
+    max_o = float(np.max(np.abs(out)))
+    if max_o > 1e-5:
+        out = (out / max_o) * 0.95
+    return out
+
+
+def trim_speech_boundaries(
+    wav: Any,
+    sr: int = TARGET_SR,
+    lead_ms: float = 25.0,
+    trail_ms: float = 35.0,
+    thresh_ratio: float = 0.005,
+) -> Any:
+    """Trim excessive neural silence at onset/offset."""
+    return compress_speech_prosody(wav, sr=sr, max_pause_ms=75.0, lead_ms=lead_ms, tail_s=trail_ms / 1000.0)
+
+
+# ---------------------------------------------------------------------------
+# Audio Time Scaling (Expansion & Compression)
+# ---------------------------------------------------------------------------
+def apply_vocal_presence_filter(
+    wav: Any,
+    sr: int = TARGET_SR,
+    freq: float = 3500.0,
+    gain_db: float = 2.0,
+    q: float = 0.8,
+) -> Any:
+    """Apply gentle broadcast vocal presence filter to restore consonant brilliance in resampled audio."""
+    if not (HAS_SCIPY and HAS_NUMPY and isinstance(wav, np.ndarray) and len(wav) > 0):
+        return wav
+    try:
+        A = 10.0 ** (gain_db / 40.0)
+        w0 = 2 * np.pi * freq / sr
+        alpha = np.sin(w0) / (2 * q)
+        b0, b1, b2 = 1 + alpha * A, -2 * np.cos(w0), 1 - alpha * A
+        a0, a1, a2 = 1 + alpha / A, -2 * np.cos(w0), 1 - alpha / A
+        b = np.array([b0, b1, b2], dtype=np.float32) / a0
+        a = np.array([a0, a1, a2], dtype=np.float32) / a0
+        out = lfilter(b, a, wav).astype(np.float32)
+        max_val = float(np.max(np.abs(out)))
+        orig_max = float(np.max(np.abs(wav)))
+        if max_val > 1e-5 and max_val > orig_max:
+            out = (out / max_val) * orig_max
+        return out
+    except Exception:
+        return wav
+
+
+def time_scale_audio(
+    wav: Any,
+    target_samples: int,
+    sr: int = TARGET_SR,
+    tail_pad_samples: int = 8400,
+) -> Any:
+    """Scale audio waveform to exact target_samples using expansion or compression.
+    
+    Preserves 0.35s tail silence padding so speech does not clip before scene cuts.
+    Works seamlessly across NumPy arrays and pure Python lists of floats.
+    """
+    total_len = len(wav)
+    if total_len == target_samples:
+        return wav
+
+    # Extract speech portion and tail pad
+    if total_len > tail_pad_samples:
+        speech = wav[:-tail_pad_samples]
+    else:
+        speech = wav
+        tail_pad_samples = 0
+
+    target_speech_samples = target_samples - tail_pad_samples
+    if target_speech_samples <= 0:
+        target_speech_samples = target_samples
+        tail_pad_samples = 0
+
+    speech_len = len(speech)
+    if speech_len == 0:
+        if HAS_NUMPY and isinstance(wav, np.ndarray):
+            return np.zeros(target_samples, dtype=np.float32)
+        return [0.0] * target_samples
+
+    if HAS_NUMPY and isinstance(wav, np.ndarray):
+        # High performance NumPy linear interpolation resampling
+        old_indices = np.linspace(0, speech_len - 1, target_speech_samples)
+        scaled_speech = np.interp(old_indices, np.arange(speech_len), speech).astype(np.float32)
+        scaled_speech = apply_soft_envelope(scaled_speech, sr=sr)
+        pad = np.zeros(tail_pad_samples, dtype=np.float32)
+        return np.concatenate([scaled_speech, pad])
+    else:
+        # Pure Python linear interpolation fallback
+        scaled_speech = []
+        step = (speech_len - 1) / max(1, target_speech_samples - 1) if target_speech_samples > 1 else 0.0
+        for i in range(target_speech_samples):
+            pos = i * step
+            idx = int(pos)
+            frac = pos - idx
+            s0 = speech[idx]
+            s1 = speech[idx + 1] if idx + 1 < speech_len else s0
+            scaled_speech.append(s0 * (1.0 - frac) + s1 * frac)
+        scaled_speech = apply_soft_envelope(scaled_speech, sr=sr)
+        return scaled_speech + [0.0] * tail_pad_samples
+
+
+# Voices verified present in offline Hugging Face cache (models--hexgrad--Kokoro-82M):
+# 1. hf_alpha.pt (Indian English / Hindi Female)
+# 2. hm_omega.pt (Indian English / Hindi Male)
+# 3. af_sarah.pt (American English Female)
+AVAILABLE_KOKORO_VOICES: set[str] = {"hf_alpha", "hm_omega", "af_sarah"}
+
+VOICE_ALIASES: dict[str, str] = {
+    # English: Michael (Male Teacher/Professor) & Sarah (Female Narrator/Teacher)
+    "enm": "am_michael",
+    "en-m": "am_michael",
+    "michael": "am_michael",
+    "male": "am_michael",
+    "enf": "af_sarah",
+    "en-f": "af_sarah",
+    "sarah": "af_sarah",
+    "female": "af_sarah",
+    # Indian-accented English voices:
+    # Kokoro Hindi checkpoints (hm_omega / hf_alpha) routed through English phonetic pipeline
+    "eni": "hm_omega",          # default Indian English
+    "enim": "hm_omega",        # Indian English Male
+    "eni-m": "hm_omega",
+    "indian-male": "hm_omega",
+    "indian_male": "hm_omega",
+    "enif": "hf_alpha",        # Indian English Female
+    "eni-f": "hf_alpha",
+    "indian-female": "hf_alpha",
+    "indian_female": "hf_alpha",
+    "indian": "hm_omega",
+    # Alternative educator voices
+    "bella": "af_bella",
+    "adam": "am_adam",
+    "george": "bm_george",
+    "emma": "bf_emma",
+    # Hindi: Omega (Male) & Alpha (Female)
+    "him": "hm_omega",
+    "hi-m": "hm_omega",
+    "omega": "hm_omega",
+    "hif": "hf_alpha",
+    "hi-f": "hf_alpha",
+    "alpha": "hf_alpha",
+}
+
+
+def resolve_voice(voice_id: str | None, default: str) -> str:
+    """Resolve friendly voice identifiers (enm, enf, him, hif) to model checkpoint IDs."""
+    if not voice_id:
+        return default
+    v_clean = str(voice_id).strip().lower()
+    return VOICE_ALIASES.get(v_clean, voice_id)
+
+
+class OfflineTTSEngine:
+    """Dual-engine TTS generating synchronized scene audio and timing manifests.
+    
+    Uses Kokoro-82M for English/Hindi and MMS-TTS for Kannada/Indic.
+    Standardizes all output to 24 kHz mono with 0.35s tail padding per scene.
+    """
+
+    def __init__(
+        self,
+        voice_en: str = "hf_alpha",  # was 'enm' (am_michael), now defaults to hf_alpha for offline availability
+        speed_en: float = 1.0,
+        voice_hi: str = "hf_alpha",
+        speed_hi: float = 1.0,
+        mms_speaking_rate: float = 1.15,
+    ):
+        self.device = "cuda" if (HAS_TORCH and torch.cuda.is_available()) else "cpu"
+        env_voice = os.environ.get("VOICE_EN")
+        chosen_en = env_voice if env_voice else voice_en
+        self.voice_en = resolve_voice(chosen_en, "hf_alpha")
+        self.speed_en = speed_en
+        self.voice_hi = resolve_voice(voice_hi, "hf_alpha")
+        self.speed_hi = speed_hi
+        self.mms_speaking_rate = mms_speaking_rate
+        self.kokoro_en = None
+        self.kokoro_hi = None
+        self.mms_models: dict[str, Any] = {}
+        self.mms_tokenizers: dict[str, Any] = {}
+
+        # Discover bundled or system espeak-ng for Hindi Kokoro
+        for ec in [
+            Path(os.environ.get("BVT_TOOLS", "")) / "espeak-ng" / "eSpeak NG",
+            Path(r"D:\git\project requirements\tools\espeak-ng\eSpeak NG"),
+            Path(r"C:\Program Files\eSpeak NG"),
+        ]:
+            dll = ec / "libespeak-ng.dll"
+            if ec.is_dir() and dll.is_file():
+                if str(ec) not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = str(ec) + os.path.pathsep + os.environ.get("PATH", "")
+                os.environ["PHONEMIZER_ESPEAK_PATH"] = str(ec)
+                os.environ["ESPEAK_DATA_PATH"] = str(ec)
+                try:
+                    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+                    EspeakWrapper.set_library(str(dll))
+                    EspeakWrapper.set_data_path(str(ec))
+                except Exception:
+                    pass
+                break
+
+        self.has_espeak = bool(
+            shutil.which("espeak-ng")
+            or shutil.which("espeak")
+            or _has_espeakng_loader()
+            or os.environ.get("PHONEMIZER_ESPEAK_PATH")
+        )
+
+        # Preload Kokoro pipelines if available
+        if HAS_KOKORO:
+            try:
+                self.kokoro_en = KPipeline(lang_code="a")
+            except Exception:
+                self.kokoro_en = None
+
+            # Hindi Kokoro requires espeak-ng; guard to prevent crash on Windows
+            if self.has_espeak:
+                try:
+                    self.kokoro_hi = KPipeline(lang_code="h")
+                except Exception:
+                    self.kokoro_hi = None
+            else:
+                self.kokoro_hi = None
+
+        # Preload MMS-TTS checkpoints for Kannada and bonus Indic languages
+        if HAS_TORCH:
+            for code, repo in [
+                ("kn", "facebook/mms-tts-kan"),
+                ("hi", "facebook/mms-tts-hin"),
+                ("ta", "facebook/mms-tts-tam"),
+                ("bn", "facebook/mms-tts-ben"),
+            ]:
+                try:
+                    self.mms_tokenizers[code] = AutoTokenizer.from_pretrained(
+                        repo, local_files_only=True
+                    )
+                    model = (
+                        VitsModel.from_pretrained(repo, local_files_only=True)
+                        .to(self.device)
+                        .eval()
+                    )
+                    if hasattr(model, "config") and hasattr(model.config, "speaking_rate"):
+                        model.config.speaking_rate = self.mms_speaking_rate
+                    model.speaking_rate = self.mms_speaking_rate
+                    self.mms_models[code] = model
+                except Exception:
+                    pass
+
+    def extract_segment_ratios(self, text: str, lang: str = "en") -> list[float]:
+        """Extract clause-by-clause proportional duration ratios from text or speech."""
+        parts = [p.strip() for p in re.split(r'([,\;:\.\?\!\u0964\u0965]+)', text) if p.strip()]
+        segments = []
+        i = 0
+        while i < len(parts):
+            seg = parts[i]
+            if i + 1 < len(parts) and re.match(r'^[,\;:\.\?\!\u0964\u0965]+$', parts[i+1]):
+                i += 2
+            else:
+                i += 1
+            if seg and not re.match(r'^[,\;:\.\?\!\u0964\u0965]+$', seg):
+                segments.append(seg)
+        if not segments:
+            return [1.0]
+        # Syllable/word based weight profile
+        weights = [max(1.0, len(s.split()) * 1.5 + len(s) * 0.1) for s in segments]
+        total_w = sum(weights)
+        return [w / total_w for w in weights]
+
+    def _synthesize_synthetic(self, text: str, lang: str, target_dur: float | None = None) -> tuple[Any, float]:
+        """Synthetic fallback generating accurate duration audio when neural models are absent."""
+        if target_dur is not None and target_dur > 0:
+            total_dur = round(target_dur, 3)
+            pad_samples = int(round(TAIL_PAD_SEC * TARGET_SR))
+            total_samples = int(round(total_dur * TARGET_SR))
+            n_samples = max(0, total_samples - pad_samples)
+            dur = max(0.1, n_samples / TARGET_SR)
+        else:
+            words = text.split()
+            dur = round(max(2.0, len(words) / WORDS_PER_SEC), 3)
+            n_samples = int(round(dur * TARGET_SR))
+            pad_samples = int(round(TAIL_PAD_SEC * TARGET_SR))
+            total_samples = n_samples + pad_samples
+            total_dur = round(total_samples / TARGET_SR, 3)
+
+        if HAS_NUMPY:
+            t = np.linspace(0, dur, n_samples, endpoint=False)
+            freq = 440.0 if lang == "en" else (554.37 if lang == "hi" else 659.25)
+            # Gentle bell envelope for pleasant synthetic tone
+            env = np.sin(np.pi * np.linspace(0, 1, n_samples))
+            audio = (0.90 * env * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+            pad = np.zeros(pad_samples, dtype=np.float32)
+            wav = np.concatenate([audio, pad])
+        else:
+            freq = 440.0 if lang == "en" else (554.37 if lang == "hi" else 659.25)
+            audio = [
+                0.90 * math.sin(math.pi * i / n_samples) * math.sin(2 * math.pi * freq * i / TARGET_SR)
+                for i in range(n_samples)
+            ]
+            pad = [0.0] * pad_samples
+            wav = audio + pad
+
+        total_dur = round(total_samples / TARGET_SR, 3)
+        return wav, total_dur
+
+    def synthesize_scene(self, text: str, lang: str, target_dur: float | None = None, ref_ratios: Sequence[float] | None = None, voice: str | None = None) -> tuple[Any, float]:
+        """Synthesize scene audio waveform with numbers expanded and tail pad attached.
+        
+        Returns:
+            (waveform_array, measured_duration_sec)
+            Note: measured_duration_sec INCLUDES the 0.35s tail pad.
+        """
+        # Step 1: Preprocess text (expand numbers & math symbols)
+        clean_text = expand_numbers_and_symbols(text, lang)
+
+        # Step 2: Try neural synthesis
+        pad_samples = int(TAIL_PAD_SEC * TARGET_SR)
+
+        chosen_voice_en = resolve_voice(voice, self.voice_en) if voice else self.voice_en
+        chosen_voice_hi = resolve_voice(voice, self.voice_hi) if voice else self.voice_hi
+
+        if lang == "en" and self.kokoro_en is not None and HAS_NUMPY:
+            try:
+                chunks = [
+                    audio
+                    for _, _, audio in self.kokoro_en(clean_text, voice=chosen_voice_en, speed=self.speed_en)
+                    if audio is not None
+                ]
+                if chunks:
+                    speech_wav = np.concatenate(chunks).astype(np.float32)
+                    try:
+                        max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
+                        if max_v > 1e-5:
+                            speech_wav = (speech_wav / max_v) * 0.95
+                    except Exception:
+                        pass
+                    speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
+                    pad = np.zeros(pad_samples, dtype=np.float32)
+                    full_wav = np.concatenate([speech_wav, pad])
+                    if target_dur is not None and target_dur > 0:
+                        target_samples = int(round(target_dur * TARGET_SR))
+                        full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
+                    measured_dur = round(len(full_wav) / TARGET_SR, 3)
+                    return full_wav, measured_dur
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"[TTS ERROR] Kokoro English synthesis failed for voice='{chosen_voice_en}': {e}",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"[TTS Engine Error] Kokoro English synthesis failed for voice='{chosen_voice_en}': {e}"
+                ) from e
+
+        if lang == "hi" and self.kokoro_hi is not None and HAS_NUMPY:
+            try:
+                chunks = [
+                    audio
+                    for _, _, audio in self.kokoro_hi(clean_text, voice=chosen_voice_hi, speed=self.speed_hi)
+                    if audio is not None
+                ]
+                if chunks:
+                    speech_wav = np.concatenate(chunks).astype(np.float32)
+                    try:
+                        max_v = float(np.max(np.abs(speech_wav))) if len(speech_wav) > 0 else 0.0
+                        if max_v > 1e-5:
+                            speech_wav = (speech_wav / max_v) * 0.95
+                    except Exception:
+                        pass
+                    speech_wav = apply_soft_envelope(speech_wav, TARGET_SR)
+                    pad = np.zeros(pad_samples, dtype=np.float32)
+                    full_wav = np.concatenate([speech_wav, pad])
+                    if target_dur is not None and target_dur > 0:
+                        target_samples = int(round(target_dur * TARGET_SR))
+                        full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
+                    measured_dur = round(len(full_wav) / TARGET_SR, 3)
+                    return full_wav, measured_dur
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"[TTS ERROR] Kokoro Hindi synthesis failed for voice='{chosen_voice_hi}': {e}",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"[TTS Engine Error] Kokoro Hindi synthesis failed for voice='{chosen_voice_hi}': {e}"
+                ) from e
+
+        # MMS-TTS path (Kannada, or Hindi fallback if espeak is missing)
+        mms_lang = lang if lang in self.mms_models else ("hi" if lang == "hi" else None)
+        if mms_lang and mms_lang in self.mms_models and HAS_TORCH and HAS_NUMPY:
+            # MMS models only support native Indic scripts, not Latin script
+            words = clean_text.split()
+            latin_words = sum(1 for w in words if re.search(r'[a-zA-Z]', w))
+            if words and (latin_words / len(words)) > 0.5:
+                return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)
+
+            try:
+                # Call clean_for_mms before every MMS-TTS call
+                mms_input_text = clean_for_mms(clean_text, mms_lang)
+                tokenizer = self.mms_tokenizers[mms_lang]
+                model = self.mms_models[mms_lang]
+
+                # Split by punctuation to create natural teacher phrasing and breath pauses
+                parts = re.split(r'([\.\?\!\u0964\u0965]+)', mms_input_text)
+                raw_segments = []
+                pause_durs = []
+                idx = 0
+                while idx < len(parts):
+                    clause = parts[idx].strip()
+                    delim = parts[idx + 1] if idx + 1 < len(parts) else ""
+                    idx += 2
+                    if not clause:
+                        continue
+                    clean_clause = re.sub(r'[\.\?\!\:\;\|\-\—\–\u0964\u0965]', ' ', clause).strip()
+                    if not clean_clause:
+                        continue
+                    inputs = tokenizer(clean_clause, return_tensors="pt").to(self.device)
+                    if "input_ids" not in inputs or inputs["input_ids"].numel() == 0:
+                        continue
+                    inputs["input_ids"] = inputs["input_ids"].long()
+                    model.speaking_rate = self.mms_speaking_rate
+                    torch.manual_seed(42)
+                    with torch.no_grad():
+                        out = model(**inputs).waveform.squeeze().cpu().numpy()
+                    if HAS_SCIPY:
+                        c_wav = resample_poly(out, up=3, down=2).astype(np.float32)
+                    else:
+                        old_len = len(out)
+                        new_len = int(old_len * 1.5)
+                        c_wav = np.interp(np.linspace(0, old_len, new_len), np.arange(old_len), out).astype(np.float32)
+                    c_wav = trim_speech_boundaries(c_wav, TARGET_SR, lead_ms=25.0, trail_ms=35.0)
+                    c_wav = apply_vocal_presence_filter(c_wav, TARGET_SR)
+                    c_wav = apply_soft_envelope(c_wav, TARGET_SR, attack_ms=4.0, release_ms=4.0)
+                    raw_segments.append(c_wav)
+
+                    if any(p in delim for p in [".", "!", "?", "\u0964", "\u0965"]):
+                        pause_durs.append(0.14)  # Natural sentence-end teacher breath pause
+                    elif any(p in delim for p in [",", ";", ":"]):
+                        pause_durs.append(0.06)  # Breath/clause pause
+                    else:
+                        pause_durs.append(0.04)
+
+                if not raw_segments:
+                    return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)
+
+                # Proportional Segment Scaling (matches English reference rhythm ratios)
+                n_seg = len(raw_segments)
+                # Inter-segment pauses exist strictly between segments (count = n_seg - 1)
+                inter_pauses = pause_durs[:n_seg - 1] if n_seg > 1 else []
+                fixed_pauses_sec = sum(inter_pauses) + TAIL_PAD_SEC
+
+                if ref_ratios is not None and len(ref_ratios) > 0:
+                    if len(ref_ratios) == n_seg:
+                        ratios = list(ref_ratios)
+                    else:
+                        cum_ref = np.concatenate([[0.0], np.cumsum(ref_ratios)])
+                        old_x = np.linspace(0, 1, len(cum_ref))
+                        new_x = np.linspace(0, 1, n_seg + 1)
+                        cum_target = np.interp(new_x, old_x, cum_ref)
+                        diffs = np.diff(cum_target)
+                        ratios = (diffs / np.sum(diffs)).tolist()
+                else:
+                    raw_lens = [len(c) for c in raw_segments]
+                    tot = sum(raw_lens) if sum(raw_lens) > 0 else 1
+                    ratios = [l / tot for l in raw_lens]
+
+                final_chunks = []
+                if target_dur is not None and target_dur > 0:
+                    speech_budget_sec = max(0.5, target_dur - fixed_pauses_sec)
+                    for i, (c_wav, r) in enumerate(zip(raw_segments, ratios)):
+                        seg_target_samples = int(round(r * speech_budget_sec * TARGET_SR))
+                        scaled_c = time_scale_audio(c_wav, seg_target_samples, sr=TARGET_SR, tail_pad_samples=0)
+                        final_chunks.append(scaled_c)
+                        if i < len(inter_pauses):
+                            final_chunks.append(np.zeros(int(inter_pauses[i] * TARGET_SR), dtype=np.float32))
+                else:
+                    for i, c_wav in enumerate(raw_segments):
+                        final_chunks.append(c_wav)
+                        if i < len(inter_pauses):
+                            final_chunks.append(np.zeros(int(inter_pauses[i] * TARGET_SR), dtype=np.float32))
+
+                full_raw = np.concatenate(final_chunks)
+                # Apply Neural Prosody Compression: condenses awkward 400ms voids & ensures 140ms lead-in for 'Ohm'
+                full_wav = compress_speech_prosody(full_raw, TARGET_SR, max_pause_ms=75.0, lead_ms=140.0, tail_s=TAIL_PAD_SEC)
+
+                # Exact sample alignment if target_dur is set
+                if target_dur is not None and target_dur > 0:
+                    target_samples = int(round(target_dur * TARGET_SR))
+                    if len(full_wav) != target_samples:
+                        full_wav = time_scale_audio(full_wav, target_samples, sr=TARGET_SR, tail_pad_samples=pad_samples)
+
+                measured_dur = round(len(full_wav) / TARGET_SR, 3)
+                return full_wav, measured_dur
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"[TTS ERROR] MMS-TTS synthesis failed for lang='{mms_lang}': {e}",
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"[TTS Engine Error] MMS-TTS synthesis failed for lang='{mms_lang}': {e}"
+                ) from e
+
+        # Step 3: Fallback synthesis (used only when neural models are uninstalled or in unit testing)
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[TTS WARNING] Neural model unavailable for lang='{lang}'. "
+            f"Generating synthetic verification tone for text: '{clean_text[:60]}...'"
+        )
+        return self._synthesize_synthetic(clean_text, lang, target_dur=target_dur)
+
+    def synthesize_all_scenes(
+        self,
+        scenes: Sequence[Any],
+        lang: str,
+        out_wav_path: str | Path,
+        target_durations: Sequence[float] | Sequence[dict] | None = None,
+        voice: str | None = None,
+    ) -> list[dict]:
+        """Synthesize audio for all scenes and output timing manifest and master WAV.
+        
+        Zero Double-Padding Enforcement:
+          - Each scene audio includes the 0.35s tail pad.
+          - Scene duration in timing_manifest equals the exact length of that audio.
+          - start_sec and end_sec are strictly cumulative.
+        """
+        out_wav_path = Path(out_wav_path)
+        out_wav_path.parent.mkdir(parents=True, exist_ok=True)
+
+        timing_manifest: list[dict] = []
+        cursor_sec = 0.0
+        all_waveforms = []
+
+        for idx, s in enumerate(scenes):
+            text = getattr(s, "narration", None) or (s.get("narration") if isinstance(s, dict) else s["narration"])
+            sid = getattr(s, "id", None) or (s.get("id") if isinstance(s, dict) else s["id"])
+            vis = getattr(s, "visual", None) if hasattr(s, "visual") else (s.get("visual") if isinstance(s, dict) else s["visual"])
+            visual = vis.model_dump() if hasattr(vis, "model_dump") else (vis if isinstance(vis, dict) else dict(vis))
+
+            target_dur = None
+            ref_ratios = None
+            if target_durations is not None and idx < len(target_durations):
+                item = target_durations[idx]
+                if isinstance(item, dict):
+                    target_dur = float(item["duration_sec"])
+                    ref_ratios = item.get("ratios")
+                else:
+                    target_dur = float(item)
+
+            wav, duration_sec = self.synthesize_scene(text, lang, target_dur=target_dur, ref_ratios=ref_ratios, voice=voice)
+            all_waveforms.append(wav)
+
+            scene_ratios = self.extract_segment_ratios(text, lang)
+
+            timing_manifest.append({
+                "id": sid,
+                "start_sec": round(cursor_sec, 3),
+                "end_sec": round(cursor_sec + duration_sec, 3),
+                "duration_sec": round(duration_sec, 3),
+                "narration": text,
+                "visual": visual,
+                "ratios": scene_ratios,
+            })
+            cursor_sec += duration_sec
+
+        # Concatenate and write master WAV
+        self._write_master_wav(all_waveforms, out_wav_path)
+
+        return timing_manifest
+
+    def synthesize_multilingual_all_scenes(
+        self,
+        plans: dict[str, Any],
+        out_base_dir: str | Path,
+        reference_lang: str = "en",
+        voice: str | None = None,
+    ) -> dict[str, list[dict]]:
+        """Synthesize all scenes across multiple localized plans with synchronized timing.
+        
+        The reference_lang (default 'en') establishes the master timing manifest.
+        All other languages apply audio time expansion and compression to match
+        the exact scene durations and total length of the reference language.
+        """
+        out_base_dir = Path(out_base_dir)
+        manifests: dict[str, list[dict]] = {}
+
+        # 1. Synthesize reference language first to establish master timing
+        ref_plan = plans[reference_lang]
+        ref_scenes = getattr(ref_plan, "scenes", ref_plan)
+        ref_dir = out_base_dir / f"{reference_lang}"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+        ref_wav = ref_dir / "lesson_audio.wav"
+        ref_manifest = self.synthesize_all_scenes(ref_scenes, reference_lang, ref_wav, voice=voice)
+        manifests[reference_lang] = ref_manifest
+        target_durations = [{"duration_sec": s["duration_sec"], "ratios": s.get("ratios")} for s in ref_manifest]
+
+        # 2. Synthesize other languages synchronized to reference scene durations
+        for lang, plan in plans.items():
+            if lang == reference_lang:
+                continue
+            scenes = getattr(plan, "scenes", plan)
+            lang_dir = out_base_dir / f"{lang}"
+            lang_dir.mkdir(parents=True, exist_ok=True)
+            lang_wav = lang_dir / "lesson_audio.wav"
+            manifests[lang] = self.synthesize_all_scenes(
+                scenes, lang, lang_wav, target_durations=target_durations
+            )
+
+        return manifests
+
+    def _write_master_wav(self, waveforms: list[Any], out_path: Path) -> None:
+        """Write 24,000 Hz, 16-bit mono master WAV with peak normalization."""
+        if HAS_NUMPY and waveforms and isinstance(waveforms[0], np.ndarray):
+            master = np.concatenate(waveforms)
+            # Peak normalize to -1 dBFS (0.89 amplitude)
+            peak = float(np.max(np.abs(master)))
+            if peak > 0:
+                master = master * (0.90 / peak)
+            int16_data = (master * 32767).astype(np.int16).tobytes()
+        else:
+            # Fallback packing with 0.90 peak normalization
+            frames = []
+            max_val = 0.0
+            for w in waveforms:
+                if isinstance(w, (list, tuple)):
+                    for s in w:
+                        if abs(s) > max_val:
+                            max_val = abs(s)
+            scale = (0.90 / max_val) if max_val > 1e-4 else 1.0
+            for w in waveforms:
+                if isinstance(w, (list, tuple)):
+                    for sample in w:
+                        val = int(max(-1.0, min(1.0, sample * scale)) * 32767)
+                        frames.append(struct.pack("<h", val))
+            int16_data = b"".join(frames) if frames else b"\x00\x00" * int(TARGET_SR * 2)
+
+        with wave.open(str(out_path), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(TARGET_SR)
+            w.writeframes(int16_data)
+
+
+# ---------------------------------------------------------------------------
+# Manifest Builder
+# ---------------------------------------------------------------------------
+def build_manifest(
+    plan: Any,
+    timing_manifest: list[dict],
+    lang: str,
+    audio_filename: str = "lesson_audio.wav",
+    sample_rate: int = TARGET_SR,
+) -> dict:
+    """Build the final manifest dictionary conforming to PLAN.md 4.3."""
+    total_sec = timing_manifest[-1]["end_sec"] if timing_manifest else 0.0
+    title = plan.title if hasattr(plan, "title") else plan.get("title", "")
+    return {
+        "title": title,
+        "lang": lang,
+        "total_sec": total_sec,
+        "audio": audio_filename,
+        "sample_rate": sample_rate,
+        "scenes": timing_manifest,
+    }

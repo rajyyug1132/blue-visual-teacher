@@ -34,16 +34,21 @@ No name given -> [ASK: who are you?]
   Wrong results are replaced only at their result position ("= X", "gives X"), never by global replace.
 - Number policy per topic (orchestrator/numeric_guard.py), from one classify call: "none" = descriptive topic, no digits,
   no number words above ten, no units, no "=" anywhere; "checked" = every number comes from the verified worked example,
-  and its narration must say the answer. Integers up to ten are always fine. All checks run after NFKC (CO₂ -> CO2).
-  Ladder: plan -> retry with the problem list -> regenerate in qualitative mode -> safe template.
+  and its numbers must appear in that scene, and its narration must say the answer. Integers up to ten and years
+  1000-2100 (dates, "nineteen forty-seven") are always fine. All checks run after NFKC (CO₂ -> CO2; 6² stays a power).
+  Retry messages say only what to remove and where; never give sample words, small models copy them verbatim.
+  Ladder: 3b plan -> 3b retry -> 7b escalation (fresh, with the problem list) -> qualitative mode -> safe template.
 - Audio is master: scene duration = speech + 0.35s tail. TTS appends the tail inside the WAV and duration_sec includes it;
   nobody adds it a second time. Total 30–90s, enforced after TTS by orchestrator.pipeline.duration_gate() before rendering.
-- Ollama: model from env OLLAMA_MODEL (default qwen2.5:7b; qwen2.5:3b is the fast fallback). Call warm_up_ollama() once at
-  startup; keep_alive must be the number -1, not the string "-1" (HTTP 400). think=False only for qwen3*/gemma* models.
-- Devices (demo laptop: 16 GB RAM, RTX 3050 6 GB): the GPU belongs to the planner. qwen2.5:7b takes 5.2 GB and still runs
-  ~18% on CPU. Kokoro, IndicTrans2 and MMS-TTS run on CPU in fp32: get the device from orchestrator.device.get_device()
-  (env DEVICE=cpu|cuda, default cpu); never hardcode "cuda". Set DEVICE=cuda only with OLLAMA_MODEL=qwen2.5:3b.
-  Load every model once at startup, never per request. Only one Ollama model resident at a time (`ollama stop <other>`).
+- Ollama models: PLANNER_MODEL (default qwen2.5:3b; OLLAMA_MODEL still honoured) plans and retries;
+  PLANNER_ESCALATION_MODEL (default qwen2.5:7b, "" disables) gets one fresh attempt after two failures, then qualitative
+  mode runs on it too. The planner unloads one model (keep_alive=0) before loading the other, and restores the primary
+  afterwards. Start the Ollama server with OLLAMA_MAX_LOADED_MODELS=1. Call warm_up_ollama() once at startup;
+  keep_alive must be the number -1, not the string "-1" (HTTP 400). think=False only for qwen3*/gemma* models.
+- Devices (demo laptop: 16 GB RAM, RTX 3050 6 GB): the GPU belongs to the planner (3b: 2.2 GB; 7b escalation: 5.2 GB,
+  ~18% spills to CPU). Kokoro, IndicTrans2 and MMS-TTS run on CPU in fp32: get the device from
+  orchestrator.device.get_device() (env DEVICE=cpu|cuda, default cpu); never hardcode "cuda".
+  Load every model once at startup, never per request.
 - Renderer is deterministic: no setInterval, no unseeded Math.random. MMS-TTS: torch.manual_seed(42).
 - Edit only the asker's owned files. Need a change elsewhere -> write a HANDOFF note, don't edit.
 - CONTRACT is frozen. Changing it -> write a CONTRACT CHANGE proposal; all 4 must agree before merge.
@@ -72,3 +77,13 @@ OUT:
 - STATUS.md row updated
 - handoffs or [ASK]s (if any)
 - next step (1 line);
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

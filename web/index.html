@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blue Visual Teacher — Offline Multilingual Lesson Generator</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Local font declarations matching player.html for offline rendering */
+    @font-face {
+      font-family: 'Noto Sans';
+      font-style: normal;
+      font-weight: 400;
+      src: url('../renderer/assets/fonts/NotoSans-Regular.ttf'), local('Noto Sans'), local('Segoe UI'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans';
+      font-style: normal;
+      font-weight: 700;
+      src: url('../renderer/assets/fonts/NotoSans-Bold.ttf'), local('Noto Sans Bold'), local('Segoe UI Bold'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Devanagari';
+      font-style: normal;
+      font-weight: 400;
+      src: url('../renderer/assets/fonts/NotoSansDevanagari-Regular.ttf'), local('Noto Sans Devanagari'), local('Nirmala UI'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Kannada';
+      font-style: normal;
+      font-weight: 400;
+      src: url('../renderer/assets/fonts/NotoSansKannada-Regular.ttf'), local('Noto Sans Kannada'), local('Nirmala UI'), sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 1. Header -->
+    <header>
+      <div class="brand">
+        <div class="logo-badge">BLUE</div>
+        <h1>Blue Visual Teacher</h1>
+      </div>
+      <div class="offline-status" id="offline-badge" title="Live connection status">
+        <span class="status-dot"></span>
+        <span id="offline-text">Running fully offline</span>
+      </div>
+    </header>
+
+    <!-- 2. Input Row & Language Selector -->
+    <section class="input-card" aria-label="Topic and language selection">
+      <div class="search-bar">
+        <input 
+          type="text" 
+          id="topic-input" 
+          placeholder="What do you want to learn? e.g. Ohm's Law, Photosynthesis" 
+          aria-label="Enter concept or topic"
+          autocomplete="off"
+        >
+        <button id="generate-btn" class="generate-btn" aria-label="Generate lesson">
+          <span>Generate</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div id="validation-msg" class="validation-error" role="alert">Please enter a topic between 2 and 120 characters.</div>
+
+      <!-- Language Chips -->
+      <div class="lang-row">
+        <span class="lang-label">Language:</span>
+        <div class="chips-container" id="lang-chips" role="radiogroup" aria-label="Language options">
+          <button class="chip-btn active" data-lang="en" role="radio" aria-checked="true">English</button>
+          <button class="chip-btn" data-lang="hi" role="radio" aria-checked="false">हिन्दी</button>
+          <button class="chip-btn" data-lang="kn" role="radio" aria-checked="false">ಕನ್ನಡ</button>
+          <button class="chip-btn" data-lang="ta" role="radio" aria-checked="false" style="display:none;">தமிழ்</button>
+          <button class="chip-btn" data-lang="te" role="radio" aria-checked="false" style="display:none;">తెలుగు</button>
+        </div>
+      </div>
+
+      <!-- Example Topics -->
+      <div class="example-row" aria-label="Pre-cached example topics">
+        <span class="lang-label">Try:</span>
+        <div class="chips-container" id="example-chips">
+          <button class="example-chip">Ohm's Law</button>
+          <button class="example-chip">Photosynthesis</button>
+          <button class="example-chip">Binary Search</button>
+          <button class="example-chip">Pythagoras Theorem</button>
+          <button class="example-chip">Water Cycle</button>
+          <button class="example-chip">Supply and Demand</button>
+          <button class="example-chip">Newton's Third Law</button>
+          <button class="example-chip">Monsoon</button>
+          <button class="example-chip">DNA Replication</button>
+          <button class="example-chip">GST</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Progress Stepper -->
+    <section class="progress-card" id="progress-card" aria-label="Generation progress">
+      <div class="stepper">
+        <div class="step-item" id="step-plan">
+          <div class="step-circle">1</div>
+          <span class="step-label">Plan</span>
+          <span class="step-time" id="time-plan"></span>
+        </div>
+        <div class="step-item" id="step-translate">
+          <div class="step-circle">2</div>
+          <span class="step-label">Translate</span>
+          <span class="step-time" id="time-translate"></span>
+        </div>
+        <div class="step-item" id="step-tts">
+          <div class="step-circle">3</div>
+          <span class="step-label">Voice</span>
+          <span class="step-time" id="time-tts"></span>
+        </div>
+        <div class="step-item" id="step-render">
+          <div class="step-circle">4</div>
+          <span class="step-label">Render</span>
+          <span class="step-time" id="time-render"></span>
+        </div>
+        <div class="step-item" id="step-encode">
+          <div class="step-circle">5</div>
+          <span class="step-label">Export</span>
+          <span class="step-time" id="time-encode"></span>
+        </div>
+      </div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-bar-container">
+        <div class="progress-fill" id="progress-bar"></div>
+      </div>
+    </section>
+
+    <!-- 4. Player Card -->
+    <main class="player-card" aria-label="Lesson video player">
+      <div class="canvas-wrapper">
+        <canvas id="stage" width="1280" height="720"></canvas>
+      </div>
+      <audio id="audio-player" style="display: none;"></audio>
+
+      <!-- Control Bar -->
+      <div class="control-bar">
+        <button id="play-pause-btn" class="ctrl-btn" aria-label="Play or pause lesson">
+          <span id="play-btn-icon">▶</span>
+          <span id="play-btn-text">Play</span>
+        </button>
+        <button id="replay-btn" class="ctrl-btn" aria-label="Replay lesson">
+          <span>Replay</span>
+        </button>
+        <button id="next-scene-btn" class="ctrl-btn" aria-label="Next scene">
+          <span>Next scene</span>
+        </button>
+
+        <input 
+          type="range" 
+          id="lesson-scrubber" 
+          class="scrubber-slider" 
+          min="0" 
+          max="54.79" 
+          step="0.05" 
+          value="0"
+          aria-label="Seek timeline"
+        >
+
+        <div class="time-display" id="time-display">0.00s / 54.79s</div>
+
+        <button id="captions-btn" class="ctrl-btn" aria-label="Toggle captions">
+          <span>CC</span>
+        </button>
+
+        <button id="mute-btn" class="ctrl-btn" aria-label="Toggle mute">
+          <span id="mute-icon">🔊</span>
+        </button>
+      </div>
+    </main>
+
+    <!-- 5. Actions Card -->
+    <section class="actions-card" aria-label="Lesson actions">
+      <div class="action-buttons">
+        <a id="download-mp4-btn" class="action-btn primary" href="#" download="lesson.mp4" style="pointer-events: none; opacity: 0.6;">
+          <span>⬇ Download MP4</span>
+        </a>
+        <button id="copy-plan-btn" class="action-btn">
+          <span>📋 Copy Plan JSON</span>
+        </button>
+      </div>
+
+      <button id="toggle-timings-btn" class="action-btn">
+        <span>⏱ Show Timings & Telemetry</span>
+      </button>
+    </section>
+
+    <!-- Collapsible Timings Drawer -->
+    <div class="timings-drawer" id="timings-drawer" aria-label="Detailed stage timings">
+      <strong>STAGE SECONDS & TELEMETRY</strong>
+      <div class="timings-grid" id="timings-grid">
+        <div class="timing-item">Plan: <span id="telemetry-plan">-</span></div>
+        <div class="timing-item">Translate: <span id="telemetry-translate">-</span></div>
+        <div class="timing-item">TTS: <span id="telemetry-tts">-</span></div>
+        <div class="timing-item">Render: <span id="telemetry-render">-</span></div>
+        <div class="timing-item">Encode: <span id="telemetry-encode">-</span></div>
+        <div class="timing-item">Model: <span id="telemetry-model">qwen2.5:3b</span></div>
+        <div class="timing-item">Tokens: <span id="telemetry-tokens">576</span></div>
+        <div class="timing-item">Fallback Used: <span id="telemetry-fallback">False</span></div>
+      </div>
+    </div>
+
+    <!-- 6. Error Toast -->
+    <div class="toast" id="error-toast" role="alert" aria-live="assertive">
+      <span id="toast-message">Error message</span>
+      <button class="toast-retry-btn" id="toast-retry-btn">Retry</button>
+    </div>
+
+    <!-- 7. Footer -->
+    <footer>
+      100% Offline Stack: Ollama (Qwen 2.5 3B) + IndicTrans2 + Kokoro / MMS-TTS + Chromium Canvas 2D
+    </footer>
+  </div>
+
+  <!-- Scripts -->
+  <script src="../renderer/theme.js"></script>
+  <script src="../renderer/templates.js"></script>
+  <script src="../renderer/engine.js"></script>
+  <script src="mock.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

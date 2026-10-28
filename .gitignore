@@ -1,9 +1,14 @@
-﻿__pycache__/
+__pycache__/
 .venv/
+.venv311/
 .env
 cache/
 *.mp4
 *.wav
+# Ship pre-made demo lessons as static assets (shop-window mode, lib/showcase.ts).
+# These are committed once and served by Vercel; they are NOT generated at deploy time.
+!public/demo/**/*.mp4
+!public/demo/**/*.vtt
 *.pt
 *.safetensors
 *.onnx
@@ -11,3 +16,9 @@ cache/
 models/
 node_modules/
 reports/
+
+.next/
+artifacts/
+exporter/data/
+next-env.d.ts
+*.tsbuildinfo

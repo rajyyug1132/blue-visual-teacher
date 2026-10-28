@@ -1,0 +1,104 @@
+D7 export 20 topics x en/hi/kn :: PASS ::   warnings.warn( (79.3s)
+
+..sss                                                                    [100%]
+============================== warnings summary ===============================
+.venv\Lib\site-packages\torch\jit\_script.py:1491
+  C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\exporter\app.py:78: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\.venv\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 3 skipped, 190 deselected, 3 warnings in 42.55s
+
+WARNING: Defaulting repo_id to hexgrad/Kokoro-82M. Pass repo_id='hexgrad/Kokoro-82M' to suppress this warning.
+WARNING: Defaulting repo_id to hexgrad/Kokoro-82M. Pass repo_id='hexgrad/Kokoro-82M' to suppress this warning.
+PASS Photosynthesis               en  52.05s gen 0.0s 
+PASS Photosynthesis               hi  52.05s gen 0.0s 
+PASS Photosynthesis               kn  52.05s gen 0.0s 
+PASS Newton's Third Law           en  39.48s gen 0.0s 
+PASS Newton's Third Law           hi  39.48s gen 0.0s 
+PASS Newton's Third Law           kn  39.48s gen 0.0s 
+PASS Binary Search                en  46.83s gen 0.0s 
+PASS Binary Search                hi  63.17s gen 0.0s 
+PASS Binary Search                kn  83.14s gen 0.0s 
+PASS Supply and Demand            en  43.73s gen 0.0s 
+PASS Supply and Demand            hi  66.78s gen 0.0s 
+PASS Supply and Demand            kn  79.16s gen 0.0s 
+PASS DNA Replication              en  51.17s gen 0.0s 
+PASS DNA Replication              hi   71.0s gen 0.0s 
+PASS DNA Replication              kn  84.23s gen 0.0s 
+PASS Pythagoras Theorem           en  45.08s gen 0.0s 
+PASS Pythagoras Theorem           hi   54.6s gen 0.0s 
+PASS Pythagoras Theorem           kn  75.46s gen 0.0s 
+PASS Water Cycle                  en  55.45s gen 0.0s 
+PASS Water Cycle                  hi  64.75s gen 0.0s 
+PASS Water Cycle                  kn  86.58s gen 0.0s 
+PASS Compound Interest            en  45.35s gen 0.0s 
+PASS Compound Interest            hi  58.02s gen 0.0s 
+PASS Compound Interest            kn  73.49s gen 0.0s 
+PASS Acid-Base Titration          en  41.48s gen 0.0s 
+PASS Acid-Base Titration          hi  58.48s gen 0.0s 
+PASS Acid-Base Titration          kn  68.41s gen 0.0s 
+PASS TCP Three-Way Handshake      en  48.25s gen 0.0s 
+PASS TCP Three-Way Handshake      hi  65.75s gen 0.0s 
+PASS TCP Three-Way Handshake      kn   76.9s gen 0.0s 
+PASS Indian Independence Movement en  46.02s gen 0.0s 
+PASS Indian Independence Movement hi  61.92s gen 0.0s 
+PASS Indian Independence Movement kn  78.81s gen 0.0s 
+PASS Monsoon                      en  40.12s gen 0.0s 
+PASS Monsoon                      hi  54.62s gen 0.0s 
+PASS Monsoon                      kn  64.53s gen 0.0s 
+PASS GST                          en  44.92s gen 0.0s 
+PASS GST                          hi  59.65s gen 0.0s 
+PASS GST                          kn   79.4s gen 0.0s 
+PASS Mughal Empire                en  51.38s gen 0.0s 
+PASS Mughal Empire                hi  67.08s gen 0.0s 
+PASS Mughal Empire                kn  80.55s gen 0.0s 
+PASS Democracy                    en  39.98s gen 0.0s 
+PASS Democracy                    hi  56.35s gen 0.0s 
+PASS Democracy                    kn  77.83s gen 0.0s 
+PASS Green Revolution             en   46.3s gen 0.0s 
+PASS Green Revolution             hi  57.23s gen 0.0s 
+PASS Green Revolution             kn  78.42s gen 0.0s 
+PASS Mauryan Empire               en  51.67s gen 0.0s 
+PASS Mauryan Empire               hi  58.08s gen 0.0s 
+PASS Mauryan Empire               kn  73.78s gen 0.0s 
+PASS Fundamental Rights           en  46.35s gen 0.0s 
+PASS Fundamental Rights           hi   63.0s gen 0.0s 
+PASS Fundamental Rights           kn  75.62s gen 0.0s 
+PASS Climate Change               en   38.6s gen 0.0s 
+PASS Climate Change               hi  58.23s gen 0.0s 
+PASS Climate Change               kn  74.77s gen 0.0s 
+PASS Panchayati Raj               en   47.9s gen 0.0s 
+PASS Panchayati Raj               hi  62.55s gen 0.0s 
+PASS Panchayati Raj               kn  81.56s gen 0.0s 
+en: P50 0.0s P90 0.0s
+hi: P50 0.0s P90 0.0s
+kn: P50 0.0s P90 0.0s
+harness: 60/60 pass · fallback topics 1/20 · report C:\PROJECT\reports\stress_20261027_193550.csv
+C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+C:\PROJECT\.venv\Lib\site-packages\torch\nn\modules\rnn.py:1011: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  super().__init__("LSTM", *args, **kwargs)
+C:\PROJECT\.venv\Lib\site-packages\torch\nn\utils\weight_norm.py:145: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+

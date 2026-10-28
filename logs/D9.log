@@ -1,0 +1,60 @@
+D9 pytest incl. offline e2e :: PASS :: 192 passed, 3 skipped, 48 warnings in 1835.38s (0:30:35) (1838.4s)
+
+.....sss................................................................ [ 36%]
+........................................................................ [ 73%]
+...................................................                      [100%]
+============================== warnings summary ===============================
+.venv\Lib\site-packages\torch\jit\_script.py:1491
+tests/test_localization_l1_to_l8.py::test_l1_offline_weight_loading_sockets_blocked
+  C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\exporter\app.py:78: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_e2e_offline.py::test_d7_api_generate_poll_download
+  C:\PROJECT\.venv\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 4 warnings
+tests/test_tts_and_localization.py: 1 warning
+  C:\PROJECT\.venv\Lib\site-packages\torch\nn\modules\rnn.py:1011: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+    super().__init__("LSTM", *args, **kwargs)
+
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 4 warnings
+tests/test_tts_and_localization.py: 1 warning
+  C:\PROJECT\.venv\Lib\site-packages\torch\nn\utils\weight_norm.py:145: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+    WeightNorm.apply(module, name, dim)
+
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 6 warnings
+tests/test_tts_and_localization.py: 1 warning
+  C:\PROJECT\.venv\Lib\site-packages\misaki\en.py:143: DeprecationWarning: open_text is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+    with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_gold.json") as r:
+
+tests/test_localization_l1_to_l8.py: 4 warnings
+tests/test_localization_real.py: 1 warning
+tests/test_multilingual_sync.py: 6 warnings
+tests/test_tts_and_localization.py: 1 warning
+  C:\PROJECT\.venv\Lib\site-packages\misaki\en.py:145: DeprecationWarning: open_text is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+    with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_silver.json") as r:
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+192 passed, 3 skipped, 48 warnings in 1835.38s (0:30:35)
+

@@ -1,0 +1,29 @@
+D8 web UI :: PASS :: 4 passed, 191 deselected, 3 warnings in 30.83s (32.1s)
+
+....                                                                     [100%]
+============================== warnings summary ===============================
+.venv\Lib\site-packages\torch\jit\_script.py:1491
+  C:\PROJECT\.venv\Lib\site-packages\torch\jit\_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/test_ui.py::test_d8_language_selector_offers_en_hi_kn
+  C:\PROJECT\exporter\app.py:78: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_ui.py::test_d8_language_selector_offers_en_hi_kn
+  C:\PROJECT\.venv\Lib\site-packages\fastapi\applications.py:4723: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 passed, 191 deselected, 3 warnings in 30.83s
+

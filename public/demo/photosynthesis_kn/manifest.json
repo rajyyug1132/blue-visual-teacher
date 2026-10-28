@@ -1,0 +1,109 @@
+{
+  "title": "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ : ಸಸ್ಯಗಳು ತಮ್ಮ ಆಹಾರವನ್ನು ತಯಾರಿಸುತ್ತವೆ.",
+  "lang": "kn",
+  "total_sec": 52.05,
+  "audio": "lesson_audio.wav",
+  "sample_rate": 24000,
+  "scenes": [
+    {
+      "id": 1,
+      "start_sec": 0.0,
+      "end_sec": 8.175,
+      "duration_sec": 8.175,
+      "narration": "ಬೆಳಿಗ್ಗೆ ಎಲೆಗಳು ಹಸಿರು ಬಣ್ಣಕ್ಕೆ ಮತ್ತು ಸಂಜೆ ಹಳದಿ ಬಣ್ಣಕ್ಕೆ ಏಕೆ ತಿರುಗುತ್ತವೆ? ಸೂರ್ಯನ ಬೆಳಕು, ನೀರು ಮತ್ತು ಗಾಳಿಯಿಂದ ಸಸ್ಯಗಳು ತಮ್ಮ ಆಹಾರವನ್ನು ಹೇಗೆ ತಯಾರಿಸುತ್ತವೆ?",
+      "visual": {
+        "type": "title",
+        "params": {
+          "labels": [
+            "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ",
+            "ಸಸ್ಯಗಳು ಆಹಾರವನ್ನು ತಯಾರಿಸುತ್ತವೆ.",
+            "ಸೂರ್ಯನ ಬೆಳಕು, ನೀರು, ಗಾಳಿ"
+          ],
+          "steps": [
+            "ಬೆಳಗಿನ ಹಸಿರು, ಸಂಜೆಯ ಹಳದಿ"
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Photosynthesis Plants Make Food Sunlight, Water, Air Morning Green, Evening Yellow"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "start_sec": 8.175,
+      "end_sec": 17.55,
+      "duration_sec": 9.375,
+      "narration": "ನೀರು ಒಳಗೆ ಮತ್ತು ಹೊರಗೆ ಹರಿಯುವ ನೀರಿನ ತೊಟ್ಟಿಯ ಬಗ್ಗೆ ಯೋಚಿಸಿ. ಸಸ್ಯಗಳು ಇದೇ ರೀತಿಯ ವ್ಯವಸ್ಥೆಯನ್ನು ಹೊಂದಿದ್ದು, ಅಲ್ಲಿ ನೀರು ಬೇರುಗಳಿಂದ ಒಳಗೆ ಮತ್ತು ಎಲೆಗಳ ಮೂಲಕ ಹರಿಯುತ್ತದೆ.",
+      "visual": {
+        "type": "compare",
+        "params": {
+          "labels": [
+            "ಬೇರುಗಳು. : ನೀರು ಒಳಗೆ.",
+            "ಎಲೆಗಳು. : ನೀರು ಹೊರಬಿದ್ದಿದೆ."
+          ],
+          "steps": [
+            "ನೀರು ಒಳಗೆ, ನೀರು ಹೊರಗೆ"
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Roots: Water In Leaves: Water Out Water In, Water Out"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "start_sec": 17.55,
+      "end_sec": 31.7,
+      "duration_sec": 14.15,
+      "narration": "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆಯು ನೀರಿನ ತೊಟ್ಟಿಯಂತಿದ್ದು, ಅಲ್ಲಿ ಸಸ್ಯಗಳು ಗಾಳಿಯಿಂದ ಇಂಗಾಲದ ಡೈಆಕ್ಸೈಡ್ (ಇಂಗಾಲದ ಡೈಆಕ್ಸೈಡ್), ಬೇರುಗಳಿಂದ ನೀರು (ನೀರು) ಮತ್ತು ಸೂರ್ಯನ ಬೆಳಕನ್ನು (ಬೆಳಕಿನ ಶಕ್ತಿ) ತೆಗೆದುಕೊಂಡು ಗ್ಲುಕೋಸ್ (ಗ್ಲುಕೋಸ್) ಮತ್ತು ಆಮ್ಲಜನಕವನ್ನು (ಆಮ್ಲಜನಕ) ಉತ್ಪಾದಿಸುತ್ತವೆ.",
+      "visual": {
+        "type": "equation",
+        "params": {
+          "labels": [
+            "Carbon dioxide + water + light energy → glucose + oxygen"
+          ],
+          "steps": [
+            "Carbon Dioxide + Water + Light → Glucose + Oxygen"
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Carbon dioxide + water + light energy → glucose + oxygen Carbon Dioxide + Water + Light → Glucose + Oxygen"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "start_sec": 31.7,
+      "end_sec": 41.525,
+      "duration_sec": 9.825,
+      "narration": "ಒಂದು ಸಸ್ಯವು ಎಷ್ಟು ಗ್ಲುಕೋಸ್ ಅನ್ನು ಉತ್ಪಾದಿಸುತ್ತದೆ ಎಂಬುದನ್ನು ನೋಡೋಣ. ಒಂದು ಸಸ್ಯವು ಇಂಗಾಲದ ಡೈಆಕ್ಸೈಡ್ ಮತ್ತು ನೀರನ್ನು ಸೇವಿಸಿ, ಬೆಳಕಿನ ಶಕ್ತಿಯನ್ನು ಪಡೆದರೆ, ಅದು ಗ್ಲುಕೋಸ್ ಮತ್ತು ಆಮ್ಲಜನಕವನ್ನು ಉತ್ಪಾದಿಸುತ್ತದೆ.",
+      "visual": {
+        "type": "flow",
+        "params": {
+          "labels": [
+            "CO2 + H2O + Light → Glucose + Oxygen"
+          ],
+          "steps": [
+            "CO2 + H2O + Light → Glucose + Oxygen"
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food CO2 + H2O + Light → Glucose + Oxygen CO2 + H2O + Light → Glucose + Oxygen"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "start_sec": 41.525,
+      "end_sec": 52.05,
+      "duration_sec": 10.525,
+      "narration": "ಮರುಕಳಿಸಲು : ಸಸ್ಯಗಳು ತಮ್ಮ ಆಹಾರ, ಗ್ಲುಕೋಸ್ ತಯಾರಿಸಲು ಮತ್ತು ಆಮ್ಲಜನಕವನ್ನು ಬಿಡುಗಡೆ ಮಾಡಲು ಸೂರ್ಯನ ಬೆಳಕು, ನೀರು ಮತ್ತು ಗಾಳಿಯನ್ನು ಬಳಸುತ್ತವೆ. ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆಯು ಭೂಮಿಯ ಮೇಲಿನ ಜೀವನಕ್ಕೆ ಪ್ರಮುಖ ಪ್ರಕ್ರಿಯೆಯಾಗಿದೆ.",
+      "visual": {
+        "type": "bullets",
+        "params": {
+          "labels": [
+            "ಪ್ರಮುಖ ಮಾರ್ಗಗಳು"
+          ],
+          "steps": [
+            "ಸೂರ್ಯನ ಬೆಳಕು, ನೀರು, ಗಾಳಿ : ಇನ್ಪುಟ್ಗಳು",
+            "ಗ್ಲುಕೋಸ್, ಆಮ್ಲಜನಕ : ಉತ್ಪನ್ನಗಳು",
+            "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ : ಜೀವನದ ಎಂಜಿನ್"
+          ],
+          "topic_en": "Photosynthesis: Plants Make Their Food Key Takeaways Sunlight, Water, Air: Inputs Glucose, Oxygen: Outputs Photosynthesis: Life's Engine"
+        }
+      }
+    }
+  ]
+}

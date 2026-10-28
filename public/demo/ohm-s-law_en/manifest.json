@@ -1,0 +1,119 @@
+{
+  "title": "Ohm's Law: Voltage, Current, and Resistance",
+  "lang": "en",
+  "total_sec": 55.275,
+  "audio": "lesson_audio.wav",
+  "sample_rate": 24000,
+  "scenes": [
+    {
+      "id": 1,
+      "start_sec": 0.0,
+      "end_sec": 9.125,
+      "duration_sec": 9.125,
+      "narration": "Why does your phone charger get warm while fast-charging, or a ceiling fan slow down when voltage drops during summer in Bengaluru?",
+      "visual": {
+        "type": "title",
+        "params": {
+          "labels": [
+            "Ohm's Law",
+            "V = I × R",
+            "Voltage, Current & Resistance"
+          ],
+          "steps": [
+            "Everyday Electricity in India"
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Ohm's Law V = I × R Electricity in everyday gadgets"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "start_sec": 9.125,
+      "end_sec": 20.25,
+      "duration_sec": 11.125,
+      "narration": "Compare water tanks: rooftop tank fills kitchen taps. Flow like cricket matches: one tank fills many taps. Table: train schedule, train, station, time.",
+      "visual": {
+        "type": "table",
+        "params": {
+          "labels": [
+            "Train",
+            "Station",
+            "Schedule"
+          ],
+          "steps": [
+            "Train arrives at station",
+            "Station schedules next train",
+            "Train departs"
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Roof Tank Height → Voltage (V) Pipe Water Flow → Current (I) Narrow Tap → Resistance (R) Pressure pushes flow Narrower path restricts flow"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "start_sec": 20.25,
+      "end_sec": 31.875,
+      "duration_sec": 11.625,
+      "narration": "Georg Ohm discovered that Voltage equals Current multiplied by Resistance: V equals I times R. Doubling voltage doubles the current if resistance stays constant.",
+      "visual": {
+        "type": "equation",
+        "params": {
+          "labels": [
+            "V = I × R",
+            "V : Voltage (Volts)",
+            "I : Current (Amperes)",
+            "R : Resistance (Ohms Ω)"
+          ],
+          "steps": [
+            "I = V / R",
+            "R = V / I"
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance V = I × R V : Voltage (Volts) I : Current (Amperes) R : Resistance (Ohms Ω) I = V / R R = V / I"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "start_sec": 31.875,
+      "end_sec": 45.375,
+      "duration_sec": 13.5,
+      "narration": "Let's test a two hundred thirty volt Indian wall socket powering an iron box with forty-six ohms resistance. Two hundred thirty divided by forty-six gives five amperes of current.",
+      "visual": {
+        "type": "flow",
+        "params": {
+          "labels": [
+            "Supply: V = 230 V",
+            "Heater Coil: R = 46 Ω",
+            "Formula: I = V / R",
+            "Result: I = 5 A"
+          ],
+          "steps": [
+            "230 V ÷ 46 Ω = 5 Amperes"
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Supply: V = 230 V Heater Coil: R = 46 Ω Formula: I = V / R Result: I = 5 A 230 V ÷ 46 Ω = 5 Amperes"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "start_sec": 45.375,
+      "end_sec": 55.275,
+      "duration_sec": 9.9,
+      "narration": "To recap: Voltage pushes electrons, Resistance opposes them, and Current is the resulting flow governed by V equals I times R.",
+      "visual": {
+        "type": "bullets",
+        "params": {
+          "labels": [
+            "Key Takeaways: Ohm's Law"
+          ],
+          "steps": [
+            "Voltage (V): Electrical pressure in Volts",
+            "Resistance (R): Opposition to flow in Ohms (Ω)",
+            "Current (I = V / R): Flow rate in Amperes"
+          ],
+          "topic_en": "Ohm's Law: Voltage, Current, and Resistance Key Takeaways: Ohm's Law Voltage (V): Electrical pressure in Volts Resistance (R): Opposition to flow in Ohms (Ω) Current (I = V / R): Flow rate in Amperes"
+        }
+      }
+    }
+  ]
+}

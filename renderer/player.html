@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280, height=720, initial-scale=1.0">
+  <title>Blue Visual Teacher Player</title>
+  <style>
+    /* Local font definitions with local file URLs and system fallbacks (Zero network requests) */
+    @font-face {
+      font-family: 'Noto Sans';
+      font-style: normal;
+      font-weight: 400;
+      src: url('assets/fonts/NotoSans-Regular.ttf'), local('Noto Sans'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans';
+      font-style: normal;
+      font-weight: 700;
+      src: url('assets/fonts/NotoSans-Bold.ttf'), local('Noto Sans Bold'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Devanagari';
+      font-style: normal;
+      font-weight: 400;
+      src: url('assets/fonts/NotoSansDevanagari-Regular.ttf'), local('Noto Sans Devanagari'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Devanagari';
+      font-style: normal;
+      font-weight: 700;
+      src: url('assets/fonts/NotoSansDevanagari-Bold.ttf'), local('Noto Sans Devanagari Bold'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Kannada';
+      font-style: normal;
+      font-weight: 400;
+      src: url('assets/fonts/NotoSansKannada-Regular.ttf'), local('Noto Sans Kannada'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Kannada';
+      font-style: normal;
+      font-weight: 700;
+      src: url('assets/fonts/NotoSansKannada-Bold.ttf'), local('Noto Sans Kannada Bold'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Tamil';
+      font-style: normal;
+      font-weight: 400;
+      src: url('assets/fonts/NotoSansTamil-Regular.ttf'), local('Noto Sans Tamil'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Telugu';
+      font-style: normal;
+      font-weight: 400;
+      src: url('assets/fonts/NotoSansTelugu-Regular.ttf'), local('Noto Sans Telugu'), sans-serif;
+    }
+    @font-face {
+      font-family: 'Noto Sans Bengali';
+      font-style: normal;
+      font-weight: 400;
+      src: url('assets/fonts/NotoSansBengali-Regular.ttf'), local('Noto Sans Bengali'), sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Noto Sans', sans-serif;
+    }
+
+    #stage-container {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+    }
+
+    canvas#stage {
+      display: block;
+      width: 1280px;
+      height: 720px;
+      background-color: #0B1530;
+    }
+
+    /* Full-bleed embed mode */
+    body.is-embed {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    body.is-embed #stage-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    body.is-embed canvas#stage {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    /* Debug Scrubber (visible only with ?debug=1) */
+    #debug-controls {
+      display: none;
+      position: absolute;
+      bottom: 8px;
+      left: 64px;
+      right: 64px;
+      z-index: 100;
+      background: rgba(11, 21, 48, 0.94);
+      border: 1px solid #233876;
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: #F4F7FF;
+      font-family: monospace;
+      font-size: 14px;
+      align-items: center;
+      gap: 16px;
+    }
+
+    #debug-scrubber {
+      flex: 1;
+      accent-color: #3DA5FF;
+      cursor: pointer;
+    }
+
+    #debug-time {
+      min-width: 80px;
+      text-align: right;
+      color: #3DA5FF;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage-container">
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <div id="debug-controls">
+      <button id="debug-play-btn" type="button" style="background: #3DA5FF; color: #0B1530; border: none; border-radius: 4px; padding: 4px 14px; font-weight: bold; cursor: pointer; font-size: 13px;">▶ Play</button>
+      <span>SCRUBBER</span>
+      <input type="range" id="debug-scrubber" min="0" max="100" step="0.05" value="0">
+      <span id="debug-time">0.00s</span>
+    </div>
+  </div>
+
+  <audio id="audio-player" style="display: none;"></audio>
+
+  <script src="theme.js"></script>
+  <script src="templates.js"></script>
+  <script src="engine.js"></script>
+
+  <script>
+    (async function() {
+      const params = new URLSearchParams(window.location.search);
+      const isEmbed = params.get('embed') === '1';
+      const isDebug = !isEmbed && params.get('debug') === '1';
+      let manifestUrl = params.get('manifest');
+
+      if (isEmbed) {
+        document.body.classList.add('is-embed');
+      }
+
+      // Default to golden manifest when in interactive/debug mode if not explicitly provided
+      if (!manifestUrl && (isDebug || params.get('play') === '1' || params.has('autoplay'))) {
+        manifestUrl = '/fixtures/golden_manifest_en.json';
+      }
+
+      if (isDebug) {
+        const controls = document.getElementById('debug-controls');
+        if (controls) controls.style.display = 'flex';
+      }
+
+      // Standalone mode: load manifest via URL if provided or defaulted
+      if (manifestUrl) {
+        try {
+          const res = await fetch(manifestUrl);
+          const manifest = await res.json();
+          await window.initLesson(manifest.title, manifest.scenes, manifest.lang || 'en');
+          window.renderAtTime(0);
+
+          if (isEmbed) {
+            window.addEventListener('message', (e) => {
+              if (e.data && e.data.type === 'bvt:time') {
+                window.renderAtTime(Number(e.data.t) || 0);
+              }
+            });
+            window.parent.postMessage({ type: 'bvt:ready', total: window.totalDuration }, '*');
+            return;
+          }
+
+          const scrubber = document.getElementById('debug-scrubber');
+          const timeDisplay = document.getElementById('debug-time');
+          const audio = document.getElementById('audio-player');
+          const playBtn = document.getElementById('debug-play-btn');
+
+          let isPlaying = false;
+          let playStartTime = null;
+          let pauseOffset = 0;
+          let animId = null;
+
+          function step(now) {
+            if (!playStartTime) playStartTime = now - (pauseOffset * 1000);
+            const elapsed = (now - playStartTime) / 1000;
+            if (elapsed <= window.totalDuration) {
+              window.renderAtTime(elapsed);
+              if (scrubber) scrubber.value = elapsed;
+              if (timeDisplay) timeDisplay.textContent = elapsed.toFixed(2) + 's';
+              animId = requestAnimationFrame(step);
+            } else {
+              window.renderAtTime(window.totalDuration);
+              if (scrubber) scrubber.value = window.totalDuration;
+              if (timeDisplay) timeDisplay.textContent = window.totalDuration.toFixed(2) + 's';
+              isPlaying = false;
+              if (playBtn) playBtn.textContent = '▶ Play';
+            }
+          }
+
+          if (playBtn) {
+            playBtn.addEventListener('click', () => {
+              if (isPlaying) {
+                isPlaying = false;
+                playBtn.textContent = '▶ Play';
+                cancelAnimationFrame(animId);
+                pauseOffset = parseFloat(scrubber.value || 0);
+              } else {
+                if (parseFloat(scrubber.value) >= window.totalDuration) {
+                  pauseOffset = 0;
+                  scrubber.value = 0;
+                } else {
+                  pauseOffset = parseFloat(scrubber.value || 0);
+                }
+                isPlaying = true;
+                playBtn.textContent = '⏸ Pause';
+                playStartTime = null;
+                animId = requestAnimationFrame(step);
+              }
+            });
+          }
+
+          if (scrubber) {
+            scrubber.max = window.totalDuration;
+            scrubber.addEventListener('input', (e) => {
+              const t = parseFloat(e.target.value);
+              window.renderAtTime(t);
+              if (timeDisplay) timeDisplay.textContent = t.toFixed(2) + 's';
+              if (isPlaying) {
+                pauseOffset = t;
+                playStartTime = performance.now() - (t * 1000);
+              } else {
+                pauseOffset = t;
+              }
+            });
+          }
+
+          // Spacebar play/pause shortcut for debugging
+          window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && playBtn && isDebug) {
+              e.preventDefault();
+              playBtn.click();
+            }
+          });
+
+          // Initial frame render
+          window.renderAtTime(0);
+
+          // If not debugging and requested via play/autoplay, start audio-synced playback loop
+          if (!isDebug && (params.get('play') === '1' || params.has('autoplay'))) {
+            let startTime = null;
+            let useAudio = false;
+
+            if (manifest.audio && audio) {
+              const audioUrl = manifestUrl.substring(0, manifestUrl.lastIndexOf('/') + 1) + manifest.audio;
+              audio.src = audioUrl;
+              audio.play().then(() => { useAudio = true; }).catch(() => { useAudio = false; });
+            }
+
+            function frameLoop(now) {
+              if (!startTime) startTime = now;
+              let t = 0;
+              if (useAudio && audio && !audio.paused && !audio.ended) {
+                t = audio.currentTime;
+              } else {
+                t = (now - startTime) / 1000;
+              }
+
+              if (t <= window.totalDuration) {
+                window.renderAtTime(t);
+                requestAnimationFrame(frameLoop);
+              } else {
+                window.renderAtTime(window.totalDuration);
+              }
+            }
+
+            requestAnimationFrame(frameLoop);
+          }
+        } catch (err) {
+          console.error('[Player] Failed to load manifest:', err);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

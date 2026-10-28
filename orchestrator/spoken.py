@@ -42,6 +42,14 @@ def int_to_words(n: int) -> str:
     raise ValueError(n)
 
 
+def _decade(match: re.Match) -> str:
+    n = int(match.group(1))
+    if n % 100 == 0:
+        return f"{int_to_words(n // 100)} hundreds" if n < 2000 else "two thousands"
+    words = f"{int_to_words(n // 100)} {int_to_words(n % 100)}"
+    return words[:-1] + "ies" if words.endswith("y") else words + "s"
+
+
 def _number(match: re.Match) -> str:
     raw = match.group(0)
     whole, _, frac = raw.replace(",", "").partition(".")
@@ -76,6 +84,7 @@ def to_spoken(text: str) -> str:
     t = re.sub(r"(?:Rs\.?|₹)\s?(\d[\d,]*(?:\.\d+)?)", r"\1 rupees", t)
     t = re.sub(r"\$\s?(\d[\d,]*(?:\.\d+)?)", r"\1 dollars", t)
     t = re.sub(r"\b(\d+)(?:st|nd|rd|th)\b", _ordinal, t)
+    t = re.sub(r"\b(1\d\d0|20\d0)'?s\b", _decade, t)  # 1960s -> nineteen sixties
     t = re.sub(r"(?<=\d)-(?=[A-Za-z])", " ", t)  # 230-Volt -> 230 Volt
     t = re.sub(r"(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])", " ", t)  # CO2 -> CO 2, 6CO2 -> 6 CO 2
     t = re.sub(r"\d+(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?", _number, t)  # 12,762.82 and Indian 1,00,000

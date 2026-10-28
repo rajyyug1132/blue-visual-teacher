@@ -48,16 +48,27 @@ class FakeClient:
     planning calls. An empty queue behaves like a dead daemon (ConnectionError), so the ladder can run out.
     """
 
-    def __init__(self, *outputs, has_formula=True):
+    def __init__(self, *outputs, has_formula=True, patches=()):
         self.outputs = list(outputs)
         self.calls = []
         self.classify_calls = []
+        self.patch_calls = []
+        self.patches = list(patches)  # replies to single-string patch calls; empty -> patching fails
+        self.generate_calls = []  # warm-ups and keep_alive=0 unloads
         self.has_formula = has_formula
+
+    def generate(self, **kwargs):
+        self.generate_calls.append(kwargs)
 
     def chat(self, **kwargs):
         if "has_formula" in json.dumps(kwargs.get("format")):
             self.classify_calls.append(kwargs)
             return self._response(json.dumps({"has_formula": self.has_formula}))
+        if "scenes" not in json.dumps(kwargs.get("format")):  # a patch call: {"text": ...}
+            self.patch_calls.append(kwargs)
+            if not self.patches:
+                raise ConnectionError("fake daemon: no patch reply queued")
+            return self._response(json.dumps({"text": self.patches.pop(0)}))
         self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
         if not self.outputs:
             raise ConnectionError("fake daemon: no more queued outputs")
@@ -76,9 +87,10 @@ class FakeClient:
 
 @pytest.fixture
 def fake(monkeypatch):
-    def install(*outputs, has_formula=True):
-        client = FakeClient(*outputs, has_formula=has_formula)
+    def install(*outputs, has_formula=True, escalation="", patches=()):
+        client = FakeClient(*outputs, has_formula=has_formula, patches=patches)
         monkeypatch.setattr(planner, "_client", client)
+        monkeypatch.setattr(planner, "ESCALATION_MODEL", escalation)  # off unless a test turns it on
         return client
     return install
 
@@ -161,20 +173,59 @@ def test_model_rejecting_think_is_retried_without_flag(fake):
     assert client.calls[0]["think"] is False and "think" not in client.calls[1]
 
 
-def test_default_model_is_qwen_7b(monkeypatch):
+def test_default_models_are_qwen_3b_then_7b(monkeypatch):
     import importlib
-    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
-    assert importlib.reload(planner).MODEL_NAME == "qwen2.5:7b"
-
-
-def test_model_name_comes_from_env(monkeypatch):
-    import importlib
-    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:3b")
+    for var in ("PLANNER_MODEL", "OLLAMA_MODEL", "PLANNER_ESCALATION_MODEL"):
+        monkeypatch.delenv(var, raising=False)
     try:
-        assert importlib.reload(planner).MODEL_NAME == "llama3.2:3b"
+        reloaded = importlib.reload(planner)
+        assert (reloaded.MODEL_NAME, reloaded.ESCALATION_MODEL) == ("qwen2.5:3b", "qwen2.5:7b")
     finally:
-        monkeypatch.delenv("OLLAMA_MODEL")
         importlib.reload(planner)
+
+
+@pytest.mark.parametrize("env, expected", [
+    ({"PLANNER_MODEL": "llama3.2:3b"}, ("llama3.2:3b", "qwen2.5:7b")),
+    ({"OLLAMA_MODEL": "llama3.2:3b"}, ("llama3.2:3b", "qwen2.5:7b")),  # older name still works
+    ({"PLANNER_ESCALATION_MODEL": ""}, ("qwen2.5:3b", "")),  # escalation disabled
+])
+def test_models_come_from_env(monkeypatch, env, expected):
+    import importlib
+    for var in ("PLANNER_MODEL", "OLLAMA_MODEL", "PLANNER_ESCALATION_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    try:
+        reloaded = importlib.reload(planner)
+        assert (reloaded.MODEL_NAME, reloaded.ESCALATION_MODEL) == expected
+    finally:
+        for k in env:
+            monkeypatch.delenv(k)
+        importlib.reload(planner)
+
+
+def test_escalation_unloads_3b_runs_7b_then_restores_3b(fake):
+    bad = '{"title": "x"}'
+    client = fake(bad, bad, GOOD_JSON, escalation="qwen2.5:7b")
+    plan, tel = planner.plan_lesson("Ohm's Law", model="qwen2.5:3b")
+    assert [c["model"] for c in client.calls] == ["qwen2.5:3b", "qwen2.5:3b", "qwen2.5:7b"]
+    assert tel["stage"] == "escalate" and tel["model"] == "qwen2.5:7b" and tel["fallback_used"] is False
+    assert [(r["stage"], r["model"], r["ok"]) for r in tel["rungs"]] == [
+        ("plan", "qwen2.5:3b", False), ("retry", "qwen2.5:3b", False), ("escalate", "qwen2.5:7b", True)]
+    # 3b unloaded before 7b runs; afterwards 7b unloaded and 3b warmed again: one model in VRAM at a time.
+    assert [(g["model"], g["keep_alive"]) for g in client.generate_calls] == [
+        ("qwen2.5:3b", 0), ("qwen2.5:7b", 0), ("qwen2.5:3b", -1)]
+    # The 7b attempt is a fresh conversation that carries the problem list, not the failed drafts.
+    escalate_msgs = client.calls[2]["messages"]
+    assert "rejected for these problems" in escalate_msgs[-1]["content"]
+    assert all(m["content"] != bad for m in escalate_msgs)
+
+
+def test_full_ladder_with_escalation_ends_on_template(fake):
+    client = fake("{", "{", "{", "{", escalation="qwen2.5:7b")
+    _, tel = planner.plan_lesson("Ohm's Law", model="qwen2.5:3b")
+    assert [c["model"] for c in client.calls] == ["qwen2.5:3b"] * 2 + ["qwen2.5:7b"] * 2  # qualitative stays on 7b
+    assert tel["stage"] == "template" and tel["attempt"] == 5 and tel["fallback_used"] is True
 
 
 def test_lesson_total_below_range_retries_with_total_feedback(fake):
@@ -186,7 +237,7 @@ def test_lesson_total_below_range_retries_with_total_feedback(fake):
     client = fake(payload, payload)
     _, tel = planner.plan_lesson("Ohm's Law")
     feedback = client.calls[1]["messages"][-1]["content"]
-    assert "total 56 words" in feedback and f"{schema.TOTAL_MIN}-{schema.TOTAL_MAX} words" in feedback
+    assert "total 56 words" in feedback and "does not fill a 60s lesson" in feedback
     assert tel["fallback_used"] is True
 
 
@@ -443,7 +494,7 @@ def test_invented_quantities_retry_then_qualitative_mode(fake):
         "it produces one hundred units of glucose."))
     client = fake(invented, invented, DESCRIPTIVE_JSON, has_formula=False)
     result, tel = planner.plan_lesson("Photosynthesis")
-    assert "has quantities 100, 100, 100" in client.calls[1]["messages"][-1]["content"]
+    assert "Remove the numbers (100, 100, 100) from scene 4 narration" in client.calls[1]["messages"][-1]["content"]
     assert "QUALITATIVE MODE" in client.calls[2]["messages"][-1]["content"]
     assert tel["stage"] == "qualitative" and tel["attempt"] == 3 and tel["fallback_used"] is False
     assert all(s.check is None for s in result.scenes)
@@ -488,7 +539,7 @@ def test_classify_failure_means_policy_none(fake, monkeypatch):
     monkeypatch.setattr(client, "has_formula", "maybe")  # anything but a JSON true
     _, tel = planner.plan_lesson("Monsoon")
     assert tel["policy"] == "none" and len(client.classify_calls) == 1
-    assert client.calls[0]["messages"][-1]["content"].endswith("Number policy: none")
+    assert "Number policy: none" in client.calls[0]["messages"][-1]["content"]
     assert client.classify_calls[0]["options"]["num_ctx"] == client.calls[0]["options"]["num_ctx"]  # no reload
 
 
@@ -509,3 +560,442 @@ def test_answer_shown_in_steps_is_fixed_even_when_check_result_differs(fake):
     assert s.visual.params.labels == ["P = 100,000", "r = 5%", "n = 4", "t = 5", "A = 128203.72"]
     assert s.visual.params.steps == ["100,000 × (1 + 0.05/4)^(4×5) = 128203.72"]
     assert s.check.result == "128203.72"
+
+
+# --- duration fit: over-long (usually Kannada) audio is trimmed, not rejected -----------------------------------
+
+class SlowTTS:
+    """1 second per word + 0.35 s tail: long enough that the Ohm's lesson (123 words) runs ~125 s."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def synthesize_all_scenes(self, scenes, lang, out_wav_path):
+        self.calls += 1
+        timing, cursor = [], 0.0
+        for s in scenes:
+            dur = len(s.narration.split()) + 0.35
+            timing.append({"id": s.id, "start_sec": cursor, "end_sec": cursor + dur, "duration_sec": dur,
+                           "narration": s.narration, "visual": s.visual.model_dump()})
+            cursor += dur
+        return timing
+
+
+def test_fit_duration_trims_ordinary_scenes_then_recap_and_keeps_the_answer(tmp_path):
+    from orchestrator.pipeline import DURATION_MAX_SEC, fit_duration
+
+    plan = LessonPlan.model_validate_json(GOOD_JSON)  # scene 4 carries the check and the spoken answer
+    tts = SlowTTS()
+    timing, trims = fit_duration(plan, tts.synthesize_all_scenes(plan.scenes, "kn", None), tts, "kn", tmp_path)
+    assert timing[-1]["end_sec"] <= DURATION_MAX_SEC, (timing[-1]["end_sec"], trims)
+    assert trims == ["scene 2: dropped last sentence", "scene 3: dropped last sentence", "scene 5: cut (recap)"]
+    assert plan.scenes[3].narration.endswith("gives five amperes of current.")  # the answer survived
+    assert len(plan.scenes) == 4 and [t["narration"] for t in timing] == [s.narration for s in plan.scenes]
+
+
+def test_generate_lesson_fits_long_audio_and_leaves_the_cached_plan_alone(tmp_path, monkeypatch):
+    from orchestrator import pipeline
+
+    monkeypatch.setattr(pipeline, "ARTIFACTS", tmp_path)
+    plan = LessonPlan.model_validate_json(GOOD_JSON)
+    exported = []
+    out = pipeline.generate_lesson("Ohm's Law", "kn", tts=SlowTTS(), translator=type("T", (), {
+        "localize_lesson": lambda self, p, lang: p})(), plan_fn=lambda topic: (plan, {}),
+        export=lambda d, lang, cb: exported.append(d))
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    tel = json.loads((out / "telemetry.json").read_text(encoding="utf-8"))
+    assert manifest["total_sec"] <= 90 and len(manifest["scenes"]) == 4 and exported == [out]
+    assert len(tel["planner"]["duration_trims"]) == 3 and "duration_fit" in tel["stage_sec"]
+    assert len(plan.scenes) == 5  # the shared English plan was not modified
+    english = {s.id: s for s in plan.scenes}
+    for scene in manifest["scenes"]:  # the renderer's English illustration hint, matched by scene id
+        hint = scene["visual"]["params"]["topic_en"]
+        assert hint.startswith(plan.title) and english[scene["id"]].visual.params.labels[0] in hint
+
+
+# --- CC-2 part 2: learner level and target length (Stage 1 inputs) -------------------------------------------
+
+def _narration(words_n: int) -> str:
+    return " ".join(["voltage"] * words_n)
+
+
+def _scenes(lengths: list[int]) -> list[dict]:
+    return [{"id": i + 1, "narration": _narration(n),
+             "visual": {"type": "title", "params": {"labels": ["Ohm's Law"], "steps": ["Voltage and current"]}}}
+            for i, n in enumerate(lengths)]
+
+
+@pytest.mark.parametrize("target,lengths", [(30, [17, 17, 17, 17]), (45, [20] * 5),
+                                            (60, [27] * 5), (75, [29] * 6), (90, [32] * 6)])
+def test_target_sec_sets_the_word_budget(target, lengths):
+    plan = LessonPlan.model_validate({"title": "Voltage and current", "target_sec": target,
+                                      "scenes": _scenes(lengths)})
+    assert plan.target_sec == target and plan.level == "beginner"
+    golden = json.loads(GOLDEN_JSON)  # 123 words, ~55 s
+    if target in (30, 45):  # longer than the request allows: still rejected
+        with pytest.raises(ValidationError, match=rf"does not fill a {target}s lesson"):
+            LessonPlan.model_validate({**golden, "target_sec": target})
+    else:  # at least 60% of the request: a real short lesson is accepted instead of falling back to the template
+        LessonPlan.model_validate({**golden, "target_sec": target})
+
+
+def test_a_short_real_lesson_is_kept_but_a_far_too_short_one_is_not():
+    # 90 s asked: 6 x 20 words (~54 s) passes the 60% floor; 6 x 14 words (~39 s) does not
+    LessonPlan.model_validate({"title": "Voltage and current", "target_sec": 90, "scenes": _scenes([20] * 6)})
+    with pytest.raises(ValidationError, match=r"does not fill a 90s lesson"):
+        LessonPlan.model_validate({"title": "Voltage and current", "target_sec": 90, "scenes": _scenes([14] * 6)})
+
+
+def test_a_request_is_cleaned_down_to_its_topic():
+    assert planner.clean_topic("teach me java script") == "JavaScript"
+    assert planner.clean_topic("Can you explain recursion?") == "recursion"
+    assert planner.clean_topic("What is photosynthesis") == "photosynthesis"
+    assert planner.clean_topic("Ohm's Law") == "Ohm's Law"
+    assert planner.clean_topic("teach me") == "teach me"  # nothing left: keep what was typed
+
+
+def test_code_scene_slips_are_repaired_not_fatal():
+    scenes = [
+        {"visual": {"type": "code_walkthrough", "params": {"code": ["let s = 0", "for (x of xs) s += x", "log(s)"],
+                    "trace": [{"line": 0, "vars": [{"name": "s", "value": 0}]}, {"line": 9, "vars": []}]}}},
+        {"visual": {"type": "code_walkthrough", "params": {"labels": ["Loop"], "steps": ["Repeat"]}}},
+        {"visual": {"type": "bullets", "params": {"labels": ["Recap"], "code": ["x"], "trace": [{"line": 1}]}}},
+    ]
+    assert planner._repair_code_scenes(scenes) is True
+    first = scenes[0]["visual"]["params"]
+    assert [s["line"] for s in first["trace"]] == [1]  # 0-based shifted to 1-based; line 10 dropped
+    assert first["trace"][0]["vars"] == [{"name": "s", "value": "0"}]  # values become strings
+    assert scenes[1]["visual"]["type"] == "flow" and "code" not in scenes[1]["visual"]["params"]
+    assert "code" not in scenes[2]["visual"]["params"] and "trace" not in scenes[2]["visual"]["params"]
+
+
+def test_programming_topics_must_get_a_code_walkthrough():
+    from orchestrator.prompts import is_programming_topic, request
+
+    assert "MUST use visual type \"code_walkthrough\"" in request("Python for loops", "none")
+    assert "code_walkthrough" not in request("Ohm's Law", "checked").splitlines()[-1]
+    assert [is_programming_topic(t) for t in ("Recursion", "Binary Search", "String theory", "Quadratic function")] \
+        == [True, True, False, False]
+
+
+def test_check_result_written_in_words_is_read_as_a_number():
+    from orchestrator import mathcheck
+
+    right = _with_wrong_ohm_result("5")
+    right["scenes"][3]["check"]["result"] = "five"  # the model spelled the answer out
+    assert mathcheck.verify_plan(right)["status"] == "ok"
+    wrong = _with_wrong_ohm_result("6")
+    wrong["scenes"][3]["check"]["result"] = "six"
+    assert mathcheck.verify_plan(wrong)["status"] == "fixed"
+
+
+def test_level_and_length_are_in_the_plan_cache_key(tmp_path):
+    default = LessonPlan.model_validate(json.loads(GOLDEN_JSON))
+    other = LessonPlan.model_validate({"title": "Voltage and current", "level": "intermediate", "target_sec": 45,
+                                       "scenes": _scenes([20] * 5)})
+    path_default = cache.save_plan("Ohm's Law", default, plan_dir=tmp_path)
+    path_other = cache.save_plan("Ohm's Law", other, plan_dir=tmp_path)
+    assert path_default.name == "ohm-s-law.json"
+    assert path_other.name == "ohm-s-law__intermediate__45s.json"
+    assert cache.load_plan("Ohm's Law", plan_dir=tmp_path) == default
+    assert cache.load_plan("Ohm's Law", plan_dir=tmp_path, level="intermediate", target_sec=45) == other
+    assert cache.load_plan("Ohm's Law", plan_dir=tmp_path, level="beginner", target_sec=45) is None
+
+
+def test_request_states_level_and_length():
+    from orchestrator.prompts import request
+
+    beginner = request("Ohm's Law", "checked", "beginner", 30)
+    advanced = request("Ohm's Law", "checked", "intermediate", 90)
+    assert "Learner level: beginner" in beginner and "exactly 4 scenes" in beginner and "30 seconds" in beginner
+    assert "Learner level: intermediate" in advanced and "exactly 6 scenes" in advanced and "90 seconds" in advanced
+
+
+def test_plan_lesson_uses_the_requested_level_and_length(fake):
+    payload = json.dumps({"title": "Voltage and current", "scenes": _scenes([17, 17, 17, 17])})
+    client = fake(payload, has_formula=False)  # no numbers, so the qualitative audit is satisfied
+    plan, tel = planner.plan_lesson("Ohm's Law", level="beginner", target_sec=30)
+    assert (plan.level, plan.target_sec) == ("beginner", 30)
+    assert (tel["level"], tel["target_sec"]) == ("beginner", 30)
+    assert "Lesson length: 30 seconds" in client.calls[0]["messages"][-1]["content"]
+    assert cache.load_plan("Ohm's Law", target_sec=30) == plan  # cached under the 30 s key
+    assert cache.load_plan("Ohm's Law") is None  # and not under the default one
+
+
+def test_artifact_dir_and_cache_are_keyed_by_level_and_length(tmp_path, monkeypatch):
+    from orchestrator import pipeline
+
+    monkeypatch.setattr(pipeline, "ARTIFACTS", tmp_path)
+    assert pipeline.artifact_dir("Ohm's Law", "hi").name == "ohm-s-law_hi"
+    assert pipeline.artifact_dir("Ohm's Law", "hi", "intermediate", 90).name == "ohm-s-law_hi__intermediate__90s"
+    assert pipeline.artifact_dir("Ohm's Law", "hi", "beginner", 45).name == "ohm-s-law_hi__beginner__45s"
+    cached = tmp_path / "ohm-s-law_hi"
+    cached.mkdir()
+    (cached / "manifest.json").write_text("{}", encoding="utf-8")
+    (cached / "lesson.mp4").write_bytes(b"x")
+    assert pipeline.cached_artifact("Ohm's Law", "hi") == cached
+    assert pipeline.cached_artifact("Ohm's Law", "hi", "beginner", 45) is None  # a 60 s lesson is not a 45 s one
+
+
+@pytest.mark.parametrize("target", [30, 45, 60, 75, 90])
+def test_fallback_fills_the_requested_length(target):
+    plan = build_safe_fallback_lesson("Photosynthesis", "beginner", target)
+    lo, hi = schema.word_band(target, len(plan.scenes))
+    assert plan.target_sec == target
+    assert lo <= sum(words(plan)) <= hi
+    assert all(schema.WORDS_MIN <= w <= schema.WORDS_MAX for w in words(plan))
+
+
+def test_available_languages_reports_kannada_tamil_bengali(monkeypatch):
+    """en/hi stay off unless the fake says so; kn, ta, bn come from mms_models. te is not a language."""
+    from orchestrator import pipeline
+
+    class TTS:
+        kokoro_en = None
+        kokoro_hi = None
+        mms_models = {"kn": object(), "ta": object(), "bn": object()}
+
+    class Translator:
+        model = object()
+
+    monkeypatch.setattr(pipeline, "warmup", lambda planner=False: {"tts": TTS(), "translator": Translator()})
+    assert pipeline.available_languages() == ["kn", "ta", "bn"]
+
+
+def test_generate_lesson_fails_on_tone_audio(tmp_path, monkeypatch):
+    import numpy as np
+    import wave
+    from orchestrator import pipeline
+    from orchestrator.schema import LessonPlan
+
+    monkeypatch.setattr(pipeline, "ARTIFACTS", tmp_path)
+    plan = LessonPlan.model_validate_json(GOOD_JSON)
+
+    class ToneTTS:
+        def synthesize_all_scenes(self, scenes, lang, out_wav_path):
+            sr = 24000
+            dur = 35.0
+            n_samples = int(dur * sr)
+            t = np.linspace(0, dur, n_samples, endpoint=False)
+            audio = (0.90 * np.sin(2 * np.pi * 440.0 * t) * 32767).astype(np.int16)
+            with wave.open(str(out_wav_path), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sr)
+                wf.writeframes(audio.tobytes())
+            timing, cursor = [], 0.0
+            for s in scenes:
+                sdur = dur / len(scenes)
+                timing.append({"id": s.id, "start_sec": cursor, "end_sec": cursor + sdur, "duration_sec": sdur,
+                               "narration": s.narration, "visual": s.visual.model_dump()})
+                cursor += sdur
+            return timing
+
+    with pytest.raises(RuntimeError, match="non-speech audio"):
+        pipeline.generate_lesson(
+            "Ohm's Law",
+            "en",
+            tts=ToneTTS(),
+            plan_fn=lambda topic: (plan, {}),
+            export=lambda d, lang, cb: None,
+        )
+    # Ensure tone audio was not left behind in artifacts
+    assert not (tmp_path / "ohm-s-law_en" / "lesson_audio.wav").exists()
+    assert not (tmp_path / "ohm-s-law_en" / "manifest.json").exists()
+
+
+# --- Item 3: LLM output sanitization tests ---
+from orchestrator.sanitize import clean_text, sanitize_plan_dict
+
+
+def test_sanitize_nfkc():
+    assert clean_text("Voltage １２") == "Voltage 12"
+
+
+def test_sanitize_special_tokens():
+    text = "<|im_start|>system<|im_end|><s>[INST] What is Ohm's Law? [/INST]</s><|endoftext|><|eot_id|>"
+    assert clean_text(text) == "system What is Ohm's Law?"
+
+
+def test_sanitize_think_blocks():
+    text = "<think>Let me formulate the answer step by step.\nStep 1: define voltage.</think>Voltage is electrical pressure."
+    assert clean_text(text) == "Voltage is electrical pressure."
+
+
+def test_sanitize_markdown():
+    text = "### 1. **Current** is measured in __amperes__ using an `ammeter`."
+    assert clean_text(text) == "Current is measured in amperes using an ammeter."
+    assert clean_text("- A simple bullet") == "A simple bullet"
+    assert clean_text("* Another bullet") == "Another bullet"
+    assert clean_text("2. Numbered item") == "Numbered item"
+
+
+def test_sanitize_emojis_and_control():
+    text = "Electric current ⚡ flows through a wire! 🚀 😊\x00\x1f"
+    assert clean_text(text) == "Electric current flows through a wire!"
+    # Preserve Indic scripts
+    indic = "Hindi: विद्युत धारा, Kannada: ವಿದ್ಯುತ್, Bengali: বাংলা, Tamil: மின்னோட்டம்"
+    assert clean_text(indic) == indic
+
+
+def test_sanitize_prefixes_and_quotes():
+    assert clean_text('Scene 3: "Resistance opposes current."') == "Resistance opposes current."
+    assert clean_text("Narration: Voltage drives the current.") == "Voltage drives the current."
+    assert clean_text("Label: V = I x R") == "V = I x R"
+    assert clean_text("Scene 1: Narration: 'Welcome to physics.'") == "Welcome to physics."
+
+
+def test_sanitize_idempotent():
+    sample = "<think>notes</think>Scene 2: **Ohm's Law** explains V = I * R! 💡"
+    cleaned1 = clean_text(sample)
+    cleaned2 = clean_text(cleaned1)
+    assert cleaned1 == cleaned2 == "Ohm's Law explains V = I * R!"
+
+
+def test_sanitize_golden_fixture_unchanged():
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    
+    def check(val):
+        if isinstance(val, str):
+            assert clean_text(val) == val
+        elif isinstance(val, list):
+            for x in val:
+                check(x)
+        elif isinstance(val, dict):
+            for v in val.values():
+                check(v)
+    check(golden)
+
+
+def test_sanitize_code_walkthrough_params_untouched():
+    raw_plan = {
+        "title": "Scene 1: **Python Loops** 🚀",
+        "scenes": [
+            {
+                "id": 1,
+                "narration": "Narration: <|im_start|>Let's loop through numbers.<|im_end|>",
+                "visual": {
+                    "type": "code_walkthrough",
+                    "params": {
+                        "labels": ["Label: **Loop trace**"],
+                        "steps": ["Step 1: `count` increments"],
+                        "code": [
+                            "for i in range(3):",
+                            "    count += i  # comment with <tag>",
+                            "    print(f'i={i}')"
+                        ],
+                        "trace": [
+                            {"line": 1, "vars": [{"name": "i", "value": "0"}]}
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+    cleaned = sanitize_plan_dict(raw_plan)
+    assert cleaned["title"] == "Python Loops"
+    assert cleaned["scenes"][0]["narration"] == "Let's loop through numbers."
+    assert cleaned["scenes"][0]["visual"]["params"]["labels"] == ["Loop trace"]
+    assert cleaned["scenes"][0]["visual"]["params"]["steps"] == ["count increments"]
+    # code and trace are untouched
+    assert cleaned["scenes"][0]["visual"]["params"]["code"] == [
+        "for i in range(3):",
+        "    count += i  # comment with <tag>",
+        "    print(f'i={i}')"
+    ]
+    assert cleaned["scenes"][0]["visual"]["params"]["trace"] == [
+        {"line": 1, "vars": [{"name": "i", "value": "0"}]}
+    ]
+
+
+# --- Item 5: End-of-Lesson Quiz tests ---
+from orchestrator.quiz import Quiz, Question, generate_quiz, _fallback_quiz
+
+
+def test_quiz_schema_valid():
+    q = Question(
+        question="What is the unit of resistance?",
+        options=["Ohm", "Volt", "Ampere"],
+        answer=0,
+        explanation="Resistance is measured in Ohms (symbol: Ω)."
+    )
+    quiz = Quiz(questions=[q, q, q])
+    assert len(quiz.questions) == 3
+    assert quiz.questions[0].answer == 0
+    assert len(quiz.questions[0].options) == 3
+
+
+def test_quiz_fallback_generation():
+    from orchestrator.schema import LessonPlan
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    plan = LessonPlan.model_validate(golden)
+    quiz = _fallback_quiz(plan)
+    assert isinstance(quiz, Quiz)
+    assert len(quiz.questions) == 3
+    for q in quiz.questions:
+        assert len(q.options) == 3
+        assert 0 <= q.answer <= 2
+        assert q.explanation
+
+
+def test_quiz_generation_mocked_llm(monkeypatch):
+    from orchestrator.schema import LessonPlan
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    plan = LessonPlan.model_validate(golden)
+
+    class MockResp:
+        class MockMsg:
+            content = json.dumps({
+                "questions": [
+                    {
+                        "question": "What happens when voltage increases in a fixed circuit?",
+                        "options": ["Current increases", "Current decreases", "Resistance becomes zero"],
+                        "answer": 0,
+                        "explanation": "According to Ohm's Law, current is directly proportional to voltage."
+                    },
+                    {
+                        "question": "Which formula expresses Ohm's Law?",
+                        "options": ["V = I * R", "P = V / I", "R = V * I"],
+                        "answer": 0,
+                        "explanation": "Voltage equals current multiplied by resistance."
+                    },
+                    {
+                        "question": "What device measures electric current?",
+                        "options": ["Ammeter", "Voltmeter", "Thermometer"],
+                        "answer": 0,
+                        "explanation": "An ammeter is connected in series to measure current."
+                    }
+                ]
+            })
+        message = MockMsg()
+
+    import ollama
+    monkeypatch.setattr(ollama, "chat", lambda **kwargs: MockResp())
+    quiz = generate_quiz(plan, "en")
+    assert len(quiz.questions) == 3
+    assert quiz.questions[0].question == "What happens when voltage increases in a fixed circuit?"
+    assert quiz.questions[0].answer == 0
+
+
+def test_quiz_translation_pipeline(monkeypatch):
+    from orchestrator.schema import LessonPlan
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    plan = LessonPlan.model_validate(golden)
+
+    from localization.translator import OfflineIndicTranslator
+    monkeypatch.setattr(
+        OfflineIndicTranslator,
+        "translate_texts",
+        lambda self, texts, lang, **kwargs: [f"[{lang}] {t}" for t in texts]
+    )
+    quiz = _fallback_quiz(plan)
+    from orchestrator.quiz import _translate_quiz
+    translated = _translate_quiz(quiz, "hi")
+    assert len(translated.questions) == 3
+    assert translated.questions[0].question.startswith("[hi] ")
+    assert translated.questions[0].options[0].startswith("[hi] ")
+    assert translated.questions[0].explanation.startswith("[hi] ")
