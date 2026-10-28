@@ -381,6 +381,7 @@ until FARHAN's renderer template exists. The three votes remain open for the cod
 - 06:33: LLM output sanitization ('token sterilization') in orchestrator/sanitize.py clean_text() wired into orchestrator/planner.py before schema validation. Strips special tokens, <think> blocks, markdown, emojis/control chars, scene/narration prefixes, wrapping quotes; code_walkthrough params (code/trace) untouched. 9 new unit tests PASS; fast gate PASS (38 renderer, 131 python).
 - 06:54: Default English TTS voice set to hf_alpha (was enm -> am_michael) in localization/tts_engine.py; respects VOICE_EN env var. test_tts_and_localization.py 14/14 passed offline without missing cache errors. Fast gate PASS (38 renderer, 131 python).
 - 07:02: End-of-lesson quiz feature (Item 5) implemented across orchestrator/quiz.py, orchestrator/pipeline.py, exporter/app.py, lib/api.ts, components/app/quiz-card.tsx, components/app/lesson-view.tsx. Background thread generation writes quiz.json to artifact dir without blocking TTS or render; Quick check interactive UI card renders 3 MC questions with instant feedback and explanations. 4 new unit tests PASS; fast gate PASS (38 renderer, 135 python).
+- 07:10: Fixed 'use client' directive order in components/app/lesson-view.tsx (placed at line 1 before imports for Next.js SSR). npx tsc --noEmit clean; node tests/test_renderer.js PASS (38/38). Full product verified running in desktop browser.
 
 
 

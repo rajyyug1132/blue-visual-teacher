@@ -1,5 +1,6 @@
-import { QuizCard } from '@/components/app/quiz-card'
 'use client'
+
+import { QuizCard } from '@/components/app/quiz-card'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
