@@ -1,3 +1,4 @@
+import { QuizCard } from '@/components/app/quiz-card'
 'use client'
 
 import Link from 'next/link'
@@ -28,7 +29,8 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
     audioUrl: resolveArtifactUrl(initialJob.audio_url),
     topic: initialJob.topic || topicParam || null,
     language: initialJob.lang || languageParam || null,
-    pct: initialJob.pct ?? 100
+    pct: initialJob.pct ?? 100,
+    quizUrl: null
   } : undefined)
   if (typeof window !== 'undefined') console.log('[DEBUG LessonView]', { id, job, error: error ? String(error) : null, isLoading })
   const [regenerating, setRegenerating] = useState(false)
@@ -181,6 +183,10 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
               />
             ) : (
               <GeneratingPlaceholder />
+            )}
+
+            {job.quizUrl && (
+              <QuizCard quizUrl={job.quizUrl} />
             )}
           </div>
           <JobStatus job={job} polling={!terminal && !error} />

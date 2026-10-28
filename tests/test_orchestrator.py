@@ -907,3 +907,95 @@ def test_sanitize_code_walkthrough_params_untouched():
     assert cleaned["scenes"][0]["visual"]["params"]["trace"] == [
         {"line": 1, "vars": [{"name": "i", "value": "0"}]}
     ]
+
+
+# --- Item 5: End-of-Lesson Quiz tests ---
+from orchestrator.quiz import Quiz, Question, generate_quiz, _fallback_quiz
+
+
+def test_quiz_schema_valid():
+    q = Question(
+        question="What is the unit of resistance?",
+        options=["Ohm", "Volt", "Ampere"],
+        answer=0,
+        explanation="Resistance is measured in Ohms (symbol: Ω)."
+    )
+    quiz = Quiz(questions=[q, q, q])
+    assert len(quiz.questions) == 3
+    assert quiz.questions[0].answer == 0
+    assert len(quiz.questions[0].options) == 3
+
+
+def test_quiz_fallback_generation():
+    from orchestrator.schema import LessonPlan
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    plan = LessonPlan.model_validate(golden)
+    quiz = _fallback_quiz(plan)
+    assert isinstance(quiz, Quiz)
+    assert len(quiz.questions) == 3
+    for q in quiz.questions:
+        assert len(q.options) == 3
+        assert 0 <= q.answer <= 2
+        assert q.explanation
+
+
+def test_quiz_generation_mocked_llm(monkeypatch):
+    from orchestrator.schema import LessonPlan
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    plan = LessonPlan.model_validate(golden)
+
+    class MockResp:
+        class MockMsg:
+            content = json.dumps({
+                "questions": [
+                    {
+                        "question": "What happens when voltage increases in a fixed circuit?",
+                        "options": ["Current increases", "Current decreases", "Resistance becomes zero"],
+                        "answer": 0,
+                        "explanation": "According to Ohm's Law, current is directly proportional to voltage."
+                    },
+                    {
+                        "question": "Which formula expresses Ohm's Law?",
+                        "options": ["V = I * R", "P = V / I", "R = V * I"],
+                        "answer": 0,
+                        "explanation": "Voltage equals current multiplied by resistance."
+                    },
+                    {
+                        "question": "What device measures electric current?",
+                        "options": ["Ammeter", "Voltmeter", "Thermometer"],
+                        "answer": 0,
+                        "explanation": "An ammeter is connected in series to measure current."
+                    }
+                ]
+            })
+        message = MockMsg()
+
+    import ollama
+    monkeypatch.setattr(ollama, "chat", lambda **kwargs: MockResp())
+    quiz = generate_quiz(plan, "en")
+    assert len(quiz.questions) == 3
+    assert quiz.questions[0].question == "What happens when voltage increases in a fixed circuit?"
+    assert quiz.questions[0].answer == 0
+
+
+def test_quiz_translation_pipeline(monkeypatch):
+    from orchestrator.schema import LessonPlan
+    import json
+    golden = json.loads(Path("fixtures/golden_ohms_law.json").read_text(encoding="utf-8"))
+    plan = LessonPlan.model_validate(golden)
+
+    from localization.translator import OfflineIndicTranslator
+    monkeypatch.setattr(
+        OfflineIndicTranslator,
+        "translate_texts",
+        lambda self, texts, lang, **kwargs: [f"[{lang}] {t}" for t in texts]
+    )
+    quiz = _fallback_quiz(plan)
+    from orchestrator.quiz import _translate_quiz
+    translated = _translate_quiz(quiz, "hi")
+    assert len(translated.questions) == 3
+    assert translated.questions[0].question.startswith("[hi] ")
+    assert translated.questions[0].options[0].startswith("[hi] ")
+    assert translated.questions[0].explanation.startswith("[hi] ")

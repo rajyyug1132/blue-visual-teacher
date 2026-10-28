@@ -115,6 +115,8 @@ def get_current_user(user: Optional[Dict[str, Any]] = Depends(get_current_user_o
 def _urls(job: dict, out: Path) -> None:
     base = f"/artifacts/{out.name}"
     job.update(mp4_url=f"{base}/lesson.mp4", manifest_url=f"{base}/manifest.json", audio_url=f"{base}/lesson_audio.wav")
+    if (out / "quiz.json").exists():
+        job["quiz_url"] = f"{base}/quiz.json" 
 
 
 def _run(job_id: str) -> None:
@@ -142,6 +144,8 @@ def _run(job_id: str) -> None:
                         audio_url=f"/artifacts/{out.name}/lesson_audio.wav",
                         preview_ready=True,
                     )
+                if (out / "quiz.json").exists() and not job.get("quiz_url"):
+                    job["quiz_url"] = f"/artifacts/{out.name}/quiz.json" 
             except Exception as exc:
                 log.warning("failed to set live preview urls: %s", exc)
         # Update SQLite if job belongs to a registered user
@@ -265,7 +269,8 @@ def generate(req: GenerateRequest, current_user: Optional[Dict[str, Any]] = Depe
     job = {
         "job_id": job_id, "user_id": user_id, "topic": topic, "lang": target_lang, "level": req.level or "beginner", "target_sec": req.target_sec or 60,
         "status": "queued", "stage": "queued", "pct": 0, "stage_times": {}, "telemetry": {}, "error": None,
-        "mp4_url": None, "manifest_url": None, "audio_url": None, "preview_ready": False, "cached": False
+        "mp4_url": None, "manifest_url": None, "audio_url": None, "preview_ready": False,
+        "quiz_url": None, "cached": False
     }
     jobs[job_id] = job
 

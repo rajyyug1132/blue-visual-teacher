@@ -200,6 +200,20 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
 
     out = artifact_dir(topic, lang, level, target_sec)
     out.mkdir(parents=True, exist_ok=True)
+
+    # Background quiz generation (never blocks TTS or rendering)
+    import threading
+    def _quiz_worker():
+        try:
+            from orchestrator.quiz import generate_quiz
+            q = generate_quiz(plan, lang)
+            (out / "quiz.json").write_text(q.model_dump_json(indent=2), encoding="utf-8")
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"Background quiz generation error: {exc}")
+
+    quiz_thread = threading.Thread(target=_quiz_worker, daemon=True)
+    quiz_thread.start()
     wav = out / "lesson_audio.wav"
     tts = tts or warmup(planner=False)["tts"]
     timing = stage("tts", lambda: tts.synthesize_all_scenes(localized.scenes, lang, str(wav)))
@@ -240,6 +254,10 @@ def generate_lesson(topic: str, lang: str, progress_cb=None, *, level: str = DEF
                                                     "planner": telemetry}, ensure_ascii=False, indent=2,
                                                    default=str), encoding="utf-8")
     report("done", 100)
+    try:
+        quiz_thread.join(timeout=3.0)
+    except Exception:
+        pass
     return out
 
 

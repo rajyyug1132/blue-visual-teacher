@@ -26,6 +26,7 @@ export type Job = {
   videoUrl: string | null
   manifestUrl?: string | null
   audioUrl?: string | null
+  quizUrl?: string | null
   previewReady?: boolean
   topic: string | null
   language: string | null
@@ -43,6 +44,7 @@ export type LessonRecord = {
   mp4Url: string | null
   manifestUrl: string | null
   audioUrl: string | null
+  quizUrl?: string | null
   error: string | null
   createdAt: number
   updatedAt: number
@@ -195,9 +197,11 @@ function parseJob(body: unknown, fallbackId?: string): Job {
   const videoKeys = ['video_url', 'mp4_url', 'output_url', 'artifact_url', 'download_url', 'url', 'video', 'mp4', 'output_path']
   const manifestKeys = ['manifest_url', 'manifestUrl', 'manifest']
   const audioKeys = ['audio_url', 'audioUrl', 'audio']
+  const quizKeys = ['quiz_url', 'quizUrl', 'quiz']
   const videoUrl = pickString(body, videoKeys) ?? pickString(nested, videoKeys)
   const manifestUrl = pickString(body, manifestKeys) ?? pickString(nested, manifestKeys)
   const audioUrl = pickString(body, audioKeys) ?? pickString(nested, audioKeys)
+  const quizUrl = pickString(body, quizKeys) ?? pickString(nested, quizKeys)
 
   return {
     id,
@@ -209,6 +213,7 @@ function parseJob(body: unknown, fallbackId?: string): Job {
     videoUrl: resolveArtifactUrl(videoUrl),
     manifestUrl: resolveArtifactUrl(manifestUrl),
     audioUrl: resolveArtifactUrl(audioUrl),
+    quizUrl: resolveArtifactUrl(quizUrl),
     previewReady: Boolean((body as any).preview_ready ?? (nested as any)?.preview_ready),
     topic: pickString(body, ['topic', 'title', 'prompt']),
     language: pickString(body, ['language', 'lang', 'language_code']),
