@@ -90,6 +90,8 @@
         bracketed = true
       } = options;
 
+      // inside a lesson template the ctx knows which words are lesson text; chrome it would drop leaves no shape behind
+      if (typeof ctx.lessonText === 'function' && !ctx.lessonText(text)) return 0;
       ctx.save();
       ctx.font = `${weight} ${fontSize}px ${font}`;
       const displayText = bracketed && !text.startsWith('[') ? `[ ${text} ]` : text;
