@@ -202,3 +202,78 @@ def test_one_server_serves_ui_renderer_fonts_fixtures(api):
     assert font.status_code == 200 and len(font.content) > 100_000
     assert client.get("/assets/fonts/NotoSansDevanagari-Regular.ttf").status_code == 200
     assert client.get("/fixtures/golden_ohms_law.json").json()["title"].startswith("Ohm")
+
+
+def test_mode1_live_preview_during_render(monkeypatch):
+    require_exporter()
+    import threading
+    from fastapi.testclient import TestClient
+    from exporter import app as app_module
+    app_module.app.state.skip_warmup = True
+    monkeypatch.setitem(app_module.state, "languages", ["en"])
+
+    render_started = threading.Event()
+    render_can_finish = threading.Event()
+
+    def fake_export(out_dir, lang, report):
+        report("render", 10)
+        render_started.set()
+        render_can_finish.wait(timeout=10)
+        report("encode", 90)
+        (out_dir / "lesson.mp4").write_bytes(b"\x00" * 1024)
+
+    topic = f"Mode1 Preview {uuid.uuid4().hex[:6]}"
+
+    def custom_generate(t, l, cb, **opts):
+        return pipeline.generate_lesson(
+            t, l, cb,
+            tts=WordRateTTS(),
+            plan_fn=golden_plan,
+            export=fake_export,
+            **opts
+        )
+
+    monkeypatch.setattr(app_module.app.state, "generate", custom_generate)
+
+    try:
+        with TestClient(app_module.app) as client:
+            resp = client.post("/api/generate", json={"topic": topic, "lang": "en"})
+            assert resp.status_code == 200
+            job_id = resp.json()["job_id"]
+
+            assert render_started.wait(timeout=10), "fake_export was never called"
+
+            st = None
+            for _ in range(50):
+                st = client.get(f"/api/status/{job_id}").json()
+                if st.get("stage") == "render":
+                    break
+                time.sleep(0.05)
+
+            assert st is not None
+            assert st["stage"] == "render"
+            assert st.get("manifest_url") is not None
+            assert st.get("audio_url") is not None
+            assert st.get("preview_ready") is True
+            assert st.get("mp4_url") is None
+
+            manifest_resp = client.get(st["manifest_url"])
+            assert manifest_resp.status_code == 200
+            audio_resp = client.get(st["audio_url"])
+            assert audio_resp.status_code == 200
+
+            render_can_finish.set()
+
+            done_st = None
+            for _ in range(50):
+                done_st = client.get(f"/api/status/{job_id}").json()
+                if done_st.get("stage") == "done" and done_st.get("mp4_url"):
+                    break
+                time.sleep(0.1)
+
+            assert done_st is not None
+            assert done_st["stage"] == "done"
+            assert done_st.get("mp4_url") is not None
+    finally:
+        render_can_finish.set()
+        shutil.rmtree(pipeline.artifact_dir(topic, "en"), ignore_errors=True)

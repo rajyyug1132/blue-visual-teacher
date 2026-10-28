@@ -25,6 +25,8 @@ export type Job = {
   error: string | null
   videoUrl: string | null
   manifestUrl?: string | null
+  audioUrl?: string | null
+  previewReady?: boolean
   topic: string | null
   language: string | null
   pct?: number
@@ -192,8 +194,10 @@ function parseJob(body: unknown, fallbackId?: string): Job {
   const rawStatus = pickString(body, ['status', 'state', 'stage'])
   const videoKeys = ['video_url', 'mp4_url', 'output_url', 'artifact_url', 'download_url', 'url', 'video', 'mp4', 'output_path']
   const manifestKeys = ['manifest_url', 'manifestUrl', 'manifest']
+  const audioKeys = ['audio_url', 'audioUrl', 'audio']
   const videoUrl = pickString(body, videoKeys) ?? pickString(nested, videoKeys)
   const manifestUrl = pickString(body, manifestKeys) ?? pickString(nested, manifestKeys)
+  const audioUrl = pickString(body, audioKeys) ?? pickString(nested, audioKeys)
 
   return {
     id,
@@ -204,6 +208,8 @@ function parseJob(body: unknown, fallbackId?: string): Job {
     error: pickString(body, ['error', 'error_message', 'detail']),
     videoUrl: resolveArtifactUrl(videoUrl),
     manifestUrl: resolveArtifactUrl(manifestUrl),
+    audioUrl: resolveArtifactUrl(audioUrl),
+    previewReady: Boolean((body as any).preview_ready ?? (nested as any)?.preview_ready),
     topic: pickString(body, ['topic', 'title', 'prompt']),
     language: pickString(body, ['language', 'lang', 'language_code']),
     pct: typeof body.pct === 'number' ? body.pct : undefined,

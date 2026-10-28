@@ -9,6 +9,8 @@ import { ApiError, createLesson, resolveArtifactUrl } from '@/lib/api'
 import { languageLabel } from '@/lib/languages'
 import { JobStatus } from './job-status'
 import { LessonPlayer } from './lesson-player'
+import { LivePreview } from './live-preview'
+import { useShowcase } from '@/hooks/use-showcase'
 import { lessonHref } from './lesson-form'
 
 export function LessonView({ id, topic: topicParam, language: languageParam, initialJob }: { id: string; topic?: string; language?: string; initialJob?: any }) {
@@ -23,6 +25,7 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
     error: initialJob.error || null,
     videoUrl: resolveArtifactUrl(initialJob.mp4_url || initialJob.video_url),
     manifestUrl: resolveArtifactUrl(initialJob.manifest_url),
+    audioUrl: resolveArtifactUrl(initialJob.audio_url),
     topic: initialJob.topic || topicParam || null,
     language: initialJob.lang || languageParam || null,
     pct: initialJob.pct ?? 100
@@ -30,6 +33,10 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
   if (typeof window !== 'undefined') console.log('[DEBUG LessonView]', { id, job, error: error ? String(error) : null, isLoading })
   const [regenerating, setRegenerating] = useState(false)
   const [regenError, setRegenError] = useState<string | null>(null)
+  const [previewTime, setPreviewTime] = useState<number>(0)
+  const showcase = useShowcase()
+  const isDemo = id.startsWith('demo_') || showcase
+  const showLivePreview = Boolean(!isDemo && job && job.status !== 'completed' && job.manifestUrl && job.audioUrl)
 
   const topic = job?.topic ?? topicParam ?? null
   const language = job?.language ?? languageParam ?? null
@@ -107,7 +114,12 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
         <div className="grid items-start gap-6 lg:grid-cols-[1.6fr_1fr]">
           <div className="flex flex-col gap-6">
             {job.status === 'completed' && job.videoUrl ? (
-              <LessonPlayer src={job.videoUrl} title={title} manifestUrl={job.manifestUrl} />
+              <LessonPlayer
+                src={job.videoUrl}
+                title={title}
+                manifestUrl={job.manifestUrl}
+                initialTime={previewTime}
+              />
             ) : job.status === 'completed' ? (
               <Notice
                 title="Lesson finished, but no video link was returned."
@@ -148,6 +160,13 @@ export function LessonView({ id, topic: topicParam, language: languageParam, ini
                   </p>
                 )}
               </div>
+            ) : showLivePreview ? (
+              <LivePreview
+                manifestUrl={job.manifestUrl!}
+                audioUrl={job.audioUrl!}
+                stage={job.stage}
+                onTimeChange={setPreviewTime}
+              />
             ) : (
               <GeneratingPlaceholder />
             )}
